@@ -1,24 +1,27 @@
-# Project instructions
+# Project Instructions & Agent Guidelines
 
-## Product and runtime
+## Product and Runtime
 
-- This is **Bakkal After Dark**, a single-player top-down 2D survival game made in GDScript.
-- Target Godot **4.7.2** and desktop builds for Windows x86_64 and CachyOS/Arch Linux x86_64.
-- Keep the project suitable for a free itch.io release. Do not add ads, online services, accounts, Steam integration, multiplayer, mobile/web targets, plugins, or external packages without a clear project need.
-- Preserve the original grocery-store setting, art direction, names, UI, writing, and audio. Reference games inform general mechanics only; do not copy their code, assets, maps, text, or distinctive presentation.
+- **Game Title:** **Supermarket: The Night**
+- **Repository Description:** A 2D top-down rogue-lite horde-survival game set inside an eerie night-shift supermarket. Hold the aisles, upgrade your gear, manage stockrooms, and survive the 20-wave graveyard shift.
+- **Engine & Version:** Godot **4.7.2** (GDScript)
+- **Target Platforms:** Desktop builds for CachyOS / Arch Linux x86_64 and Windows x86_64.
+- **Release Target:** Free itch.io release (`https://dixtuel.itch.io/supermarket-the-night`). Keep the codebase lean, self-contained, and free of external DRM, accounts, or telemetry.
 
-## Structure and ownership
+## Structure and Ownership
 
-- Keep gameplay responsibilities split among `levels/`, `entities/`, `combat/`, `progression/`, `data/`, and `ui/`; avoid turning the arena into a general-purpose manager.
-- Authored definitions in `data/` are read-only run inputs. Store mutable run state on runtime actors/controllers, not shared `.tres` resources.
-- Use direct references and explicit signals. Add autoloads only for project-wide services with a clear need.
-- Every external asset must have its exact source and license recorded in `ATTRIBUTION.md`; retain its license/provenance files. Project MIT licensing does not relicense art, fonts, audio, or other assets.
-- Before parallel edits, agree on file ownership and shared interfaces. Do not overwrite another contributor's changes.
+- Keep gameplay responsibilities strictly divided:
+  - `levels/`: Arena wave loops, multi-room state machine (`market`, `depot`, `restroom`, `manager_office`), and room events.
+  - `entities/`: Player actor, enemy actors, AI movement, slow patches, and temporary shift helpers.
+  - `combat/`: Weapons, projectile physics, damage calculations, and automatic targeting.
+  - `progression/`: XP orbs, consumable pickups, supply request drops, and upgrade catalog.
+  - `data/`: Read-only definitions (`.tres`) for waves, shifts, upgrades, weapons, and enemies.
+  - `ui/`: Compact HUD, shift shop, pause/settings modals, resolution switcher, and credits.
+- Collision boundaries and room hitboxes must strictly match physical ground-contact footprints with pixel-level precision. Avoid oversized generic rectangular colliders; author non-overlapping, custom collision shapes and polygons that allow natural player navigation.
+- All external assets and pack licenses are documented in `ATTRIBUTION.md`. The MIT code license applies to authored codebase only.
 
-## Verification and reporting
+## Verification and Quality Standards
 
-- For GDScript, scene, resource, or project setting changes, run `godot --headless --path . --editor --quit` and report the result.
-- For gameplay/UI changes, also perform an actual desktop smoke run and inspect the visible result where possible. Headless startup does not establish that controls, audio devices, layout, balance, or the complete run work.
-- For release changes, validate both export presets and test each exported build on its target OS. State explicitly when a target machine is unavailable.
-- Do not claim gameplay balance, full-run completion, visual QA, audio playback, performance, or platform compatibility from static inspection or a short headless launch.
-- Do not add test infrastructure or run optional tests unless the task asks for verification; for this project, the milestone and release acceptance checks in the game plan are required verification.
+- Verify changes using `godot --headless --path . --editor --quit` or dedicated test scenes.
+- Smoke-test full gameplay loops, room portal transitions, and shop interactions on desktop.
+- Before committing and pushing releases, ensure export presets cleanly build and upload to itch.io via Butler and push to GitHub.
