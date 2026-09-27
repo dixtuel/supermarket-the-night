@@ -213,6 +213,8 @@ func _build_shop() -> void:
 
 	var right_header: Control = HBoxContainer.new() if (portrait and not mobile) else VBoxContainer.new()
 	right_header.add_theme_constant_override("separation", 8)
+	if mobile:
+		right_header.size_flags_horizontal = Control.SIZE_SHRINK_END
 	header.add_child(right_header)
 	_round_label = _label("SHOP (WAVE 000)", 18, GOLD)
 	if mobile:
@@ -221,8 +223,9 @@ func _build_shop() -> void:
 	right_header.add_child(_round_label)
 	var balance_panel := PanelContainer.new()
 	balance_panel.custom_minimum_size = Vector2((200 if portrait else 240) * layout_scale if mobile else (200 if portrait else 280), (52 if portrait else 64) * layout_scale if mobile else (52 if portrait else 78))
+	if mobile:
+		balance_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	balance_panel.add_theme_stylebox_override("panel", _style(Color("e4dbb6"), PANEL_EDGE, 0, 1))
-	right_header.add_child(balance_panel)
 	var balance_margins := MarginContainer.new()
 	for side: String in ["left", "top", "right", "bottom"]:
 		balance_margins.add_theme_constant_override("margin_" + side, roundi(8.0 * layout_scale) if mobile else (8 if portrait else 14))
@@ -232,12 +235,22 @@ func _build_shop() -> void:
 		_currency_label.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 22.0)))
 	_currency_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	balance_margins.add_child(_center_control(_currency_label))
+	var currency_controls: Control = HBoxContainer.new() if mobile else right_header
+	if mobile:
+		currency_controls.add_theme_constant_override("separation", 8)
+		currency_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		currency_controls.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		right_header.add_child(currency_controls)
 	_reroll_button = _button("Refresh shelf   /   0", false)
-	_reroll_button.custom_minimum_size = Vector2(148 if mobile else 260, (48 * density_scale) if mobile else 52)
+	_reroll_button.custom_minimum_size = balance_panel.custom_minimum_size if mobile else Vector2(260, 52)
 	_reroll_button.pressed.connect(_on_reroll_pressed)
 	if mobile:
 		_reroll_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_header.add_child(_reroll_button)
+		currency_controls.add_child(_reroll_button)
+		currency_controls.add_child(balance_panel)
+	else:
+		right_header.add_child(balance_panel)
+		right_header.add_child(_reroll_button)
 	if portrait and not mobile:
 		_round_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_round_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -304,6 +317,8 @@ func _build_shop_sidebar() -> VBoxContainer:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var mobile := _is_mobile_platform()
 	sidebar.custom_minimum_size.x = 246 if viewport_size.x <= 1400.0 else 278
+	if mobile:
+		sidebar.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sidebar.add_theme_constant_override("separation", 10)
 	var stats_panel := PanelContainer.new()
 	stats_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -311,7 +326,20 @@ func _build_shop_sidebar() -> VBoxContainer:
 	var stats_content := VBoxContainer.new()
 	stats_content.name = "StatsContent"
 	stats_content.add_theme_constant_override("separation", 6)
-	stats_panel.add_child(_margin(stats_content, 12))
+	if mobile:
+		# The full stat list can be taller than a landscape phone's offer area.
+		# Keep it scrollable so its minimum height cannot push the inventory and
+		# the return-to-aisles action below the visible screen.
+		var stats_scroll := ScrollContainer.new()
+		stats_scroll.name = "StatsScroll"
+		stats_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		stats_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		stats_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		stats_panel.add_child(_margin(stats_scroll, 6))
+		stats_scroll.add_child(_margin(stats_content, 6))
+	else:
+		stats_panel.add_child(_margin(stats_content, 12))
 	var stat_font := roundi(_mobile_shop_font(viewport_size, 19.0)) if mobile else 19
 	var stat_title_font := roundi(_mobile_shop_font(viewport_size, 23.0)) if mobile else 22
 	var stats_title := _label("Shift stats", stat_title_font, TEXT)
