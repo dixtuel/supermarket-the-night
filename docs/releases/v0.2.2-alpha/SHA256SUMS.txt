@@ -1,0 +1,3 @@
+607d227dbbb983649618576b6b3f3b61a07ea3c315b1ec05b3fbfe999934f885  builds/alpha-v0.2.2/SupermarketTheNight-0.2.2-alpha-Linux-x86_64.zip
+c34b685235c921c85e798113729869903b138f9961bd78f9a71094416adbefa5  builds/alpha-v0.2.2/SupermarketTheNight-0.2.2-alpha-Windows-x86_64.zip
+3db52c17f1fae16ca85f4d7a62fd6fa58f25cb95ba0ddb285d0aa3cc2b32e0d3  builds/alpha-v0.2.2/SupermarketTheNight-0.2.2-alpha.apk
