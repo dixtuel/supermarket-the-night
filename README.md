@@ -81,10 +81,13 @@ godot --path .
 
 ### 3. Dışa Aktarım (Export Builds)
 ```bash
-mkdir -p builds/linux builds/windows
+mkdir -p builds/linux builds/windows builds/android
 godot --headless --path . --export-release "Linux/X11" builds/linux/SupermarketTheNight.x86_64
 godot --headless --path . --export-release "Windows Desktop" builds/windows/SupermarketTheNight.exe
+godot --headless --path . --export-release "Android" builds/android/SupermarketTheNight.apk
 ```
+
+Android dışa aktarımı için Godot Android export template'leri ile JDK ve Android SDK kurulu olmalı; SDK/JDK yollarını Godot **Editor Settings → Export → Android** bölümünde ayarlayın. Android preset'i yatay ekran, minimum API 26 ve ARMv7, ARM64 ve x86_64 mimarilerini kullanır. Bu komut tek bir APK üretir. Kendi dağıtımınız için Android preset'inde sürüm numarasını ve imzalama anahtarınızı yapılandırın; anahtar bilgilerini depoya eklemeyin.
 
 ---
 
