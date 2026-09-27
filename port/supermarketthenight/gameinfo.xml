@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<gameList>
+  <game>
+    <path>./Supermarket The Night.sh</path>
+    <name>Supermarket: The Night</name>
+    <desc>Hold the night shift in a top-down supermarket survival game. Stock up between waves, keep the aisles clear, and make it to morning.</desc>
+    <releasedate>20260928T000000</releasedate>
+    <developer>dixtuel</developer>
+    <publisher>Open Source</publisher>
+    <genre>Action, Arcade</genre>
+    <image>./supermarketthenight/screenshot.png</image>
+  </game>
+</gameList>

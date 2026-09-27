@@ -1,0 +1,38 @@
+{
+  "version": 4,
+  "name": "supermarketthenight.zip",
+  "items": [
+    "Supermarket The Night.sh",
+    "supermarketthenight.gptk",
+    "supermarketthenight"
+  ],
+  "items_opt": [],
+  "attr": {
+    "title": "Supermarket: The Night",
+    "porter": [
+      "dixtuel"
+    ],
+    "desc": "Hold the night shift in a top-down supermarket survival game. Stock up between waves, keep the aisles clear, and make it to morning.",
+    "desc_md": null,
+    "inst": "Requires the PortMaster Godot 4.7.1 and Westonpack 0.2 runtimes. Internet access is needed the first time each runtime is installed.",
+    "inst_md": null,
+    "genres": [
+      "action",
+      "arcade"
+    ],
+    "image": null,
+    "rtr": true,
+    "exp": false,
+    "runtime": [
+      "godot_4.7.1.squashfs",
+      "weston_pkg_0.2.squashfs"
+    ],
+    "store": [],
+    "availability": "full",
+    "reqs": [],
+    "arch": [
+      "aarch64"
+    ],
+    "min_glibc": ""
+  }
+}

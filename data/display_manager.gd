@@ -7,6 +7,7 @@ signal display_settings_changed
 signal touch_controls_changed(enabled: bool)
 
 const SETTINGS_PATH := "user://settings.cfg"
+const PORTMASTER_FEATURE := "portmaster"
 
 const RESOLUTIONS: Array[Vector2i] = [
 	Vector2i(1920, 1080),
@@ -36,6 +37,11 @@ var touch_controls_enabled: bool = false
 func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if OS.has_feature(PORTMASTER_FEATURE):
+		current_window_mode = WindowMode.FULLSCREEN
+		touch_controls_enabled = false
+		apply_display()
+		return
 	load_settings()
 	apply_display()
 
@@ -53,6 +59,8 @@ func get_target_size() -> Vector2i:
 
 
 func set_resolution_index(index: int) -> void:
+	if OS.has_feature(PORTMASTER_FEATURE):
+		return
 	if index < 0 or index >= RESOLUTIONS.size():
 		return
 	current_resolution_index = index
@@ -62,6 +70,8 @@ func set_resolution_index(index: int) -> void:
 
 
 func set_window_mode(mode: int) -> void:
+	if OS.has_feature(PORTMASTER_FEATURE):
+		return
 	current_window_mode = clampi(mode, 0, 2)
 	apply_display()
 	save_settings()
@@ -69,6 +79,8 @@ func set_window_mode(mode: int) -> void:
 
 
 func set_touch_controls_enabled(enabled: bool) -> void:
+	if OS.has_feature(PORTMASTER_FEATURE):
+		return
 	if touch_controls_enabled == enabled:
 		return
 	touch_controls_enabled = enabled
@@ -78,6 +90,10 @@ func set_touch_controls_enabled(enabled: bool) -> void:
 
 func apply_display() -> void:
 	if DisplayServer.get_name() == "headless":
+		return
+	if OS.has_feature(PORTMASTER_FEATURE):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
 		return
 
 	var target_size := get_target_size()

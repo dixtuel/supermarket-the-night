@@ -987,7 +987,7 @@ func _responsive_font_size(size: int) -> int:
 
 
 func _is_mobile_platform() -> bool:
-	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
+	return OS.has_feature("portmaster") or OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
 
 
 func _mobile_density_scale(viewport_size: Vector2) -> float:

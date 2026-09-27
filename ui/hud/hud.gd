@@ -597,61 +597,62 @@ func _show_in_game_settings() -> void:
 	var div1 := HSeparator.new()
 	_overlay_body.add_child(div1)
 
-	# Resolution selection row
-	var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 13, GOLD)
-	_overlay_body.add_child(res_label)
+	if not OS.has_feature("portmaster"):
+		# Resolution selection row
+		var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 13, GOLD)
+		_overlay_body.add_child(res_label)
 
-	var res_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
-	if portrait:
-		(res_row as GridContainer).columns = 2
-	res_row.add_theme_constant_override("separation", 8)
-	_overlay_body.add_child(res_row)
+		var res_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
+		if portrait:
+			(res_row as GridContainer).columns = 2
+		res_row.add_theme_constant_override("separation", 8)
+		_overlay_body.add_child(res_row)
 
-	var resolutions := ["1920x1080", "1600x900", "1366x768", "1280x720"]
-	for r_idx: int in range(resolutions.size()):
-		var r_btn := Button.new()
-		r_btn.text = resolutions[r_idx]
-		r_btn.custom_minimum_size = Vector2(110, 34)
-		r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_style_settings_button(r_btn)
-		r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
-		r_btn.pressed.connect(func() -> void:
-			DisplayManager.set_resolution_index(r_idx)
-			BakkalAudio.play_sfx(&"ui_confirm")
-			_show_in_game_settings()
-		)
-		r_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
-		res_row.add_child(r_btn)
+		var resolutions := ["1920x1080", "1600x900", "1366x768", "1280x720"]
+		for r_idx: int in range(resolutions.size()):
+			var r_btn := Button.new()
+			r_btn.text = resolutions[r_idx]
+			r_btn.custom_minimum_size = Vector2(110, 34)
+			r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_style_settings_button(r_btn)
+			r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
+			r_btn.pressed.connect(func() -> void:
+				DisplayManager.set_resolution_index(r_idx)
+				BakkalAudio.play_sfx(&"ui_confirm")
+				_show_in_game_settings()
+			)
+			r_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
+			res_row.add_child(r_btn)
 
-	# Window Mode row
-	var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 13, GOLD)
-	_overlay_body.add_child(mode_label)
+		# Window Mode row
+		var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 13, GOLD)
+		_overlay_body.add_child(mode_label)
 
-	var mode_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
-	if portrait:
-		(mode_row as GridContainer).columns = 2
-	mode_row.add_theme_constant_override("separation", 8)
-	_overlay_body.add_child(mode_row)
+		var mode_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
+		if portrait:
+			(mode_row as GridContainer).columns = 2
+		mode_row.add_theme_constant_override("separation", 8)
+		_overlay_body.add_child(mode_row)
 
-	var mode_names := [
-		I18n.t("WINDOW_FULLSCREEN", "Tam Ekran"),
-		I18n.t("WINDOW_BORDERLESS", "Kenarlıksız"),
-		I18n.t("WINDOW_WINDOWED", "Pencereli")
-	]
-	for m_idx: int in range(mode_names.size()):
-		var m_btn := Button.new()
-		m_btn.text = mode_names[m_idx]
-		m_btn.custom_minimum_size = Vector2(140, 34)
-		m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_style_settings_button(m_btn)
-		m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
-		m_btn.pressed.connect(func() -> void:
-			DisplayManager.set_window_mode(m_idx)
-			BakkalAudio.play_sfx(&"ui_confirm")
-			_show_in_game_settings()
-		)
-		m_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
-		mode_row.add_child(m_btn)
+		var mode_names := [
+			I18n.t("WINDOW_FULLSCREEN", "Tam Ekran"),
+			I18n.t("WINDOW_BORDERLESS", "Kenarlıksız"),
+			I18n.t("WINDOW_WINDOWED", "Pencereli")
+		]
+		for m_idx: int in range(mode_names.size()):
+			var m_btn := Button.new()
+			m_btn.text = mode_names[m_idx]
+			m_btn.custom_minimum_size = Vector2(140, 34)
+			m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_style_settings_button(m_btn)
+			m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
+			m_btn.pressed.connect(func() -> void:
+				DisplayManager.set_window_mode(m_idx)
+				BakkalAudio.play_sfx(&"ui_confirm")
+				_show_in_game_settings()
+			)
+			m_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
+			mode_row.add_child(m_btn)
 
 	if not _is_native_mobile_platform():
 		_add_touch_controls_setting(_overlay_body)
@@ -1009,11 +1010,11 @@ func _mobile_density_scale(viewport_size: Vector2) -> float:
 
 
 func _is_mobile_platform() -> bool:
-	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
+	return OS.has_feature("portmaster") or OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
 
 
 func _is_native_mobile_platform() -> bool:
-	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+	return OS.has_feature("portmaster") or OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
 
 
 func _is_portrait() -> bool:

@@ -1,0 +1,23 @@
+# D-pad navigates Godot UI and maps directly to the game's arrow-key actions.
+up = up
+down = down
+left = left
+right = right
+
+# Left stick maps to the movement keys configured in project.godot.
+left_analog_up = w
+left_analog_down = s
+left_analog_left = a
+left_analog_right = d
+
+a = enter
+b = esc
+x = e
+y = r
+start = enter
+back = esc
+
+deadzone_mode = scaled_radial
+deadzone = 2000
+deadzone_scale = 8
+deadzone_delay = 16
