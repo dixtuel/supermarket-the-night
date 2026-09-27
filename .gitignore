@@ -1,0 +1,33 @@
+# Godot editor, import cache, and binaries
+.godot/
+.gdskills/
+*.translation
+*.import
+
+# Build outputs and distribution packages
+builds/
+exports/
+*.pck
+*.exe
+*.x86_64
+*.zip
+*.tar.gz
+*.tar.zst
+
+# Research, drafts, temporary logs and tests
+research/
+scratch/
+tests/
+*.log
+*.tmp
+*.bak
+*.swp
+*.orig
+
+# OS and IDE caches
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace

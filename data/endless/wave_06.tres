@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/overloaded_cart.tres" id="3_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="5_enemy"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"endless_06"
+display_name = "Overloaded stock"
+purpose = "Heavy carts hold the center while faster customers fill the open lanes."
+duration_seconds = 64.0
+planned_spawn_count = 46
+endless_cycle_spawn_delta = 0
+spawn_interval = 1.62
+max_alive = 34
+enemy_health_multiplier = 1.94
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy"), ExtResource("4_enemy"), ExtResource("5_enemy")])
+spawn_weights = Array[float]([0.34, 0.30, 0.36])
+event_tag = &"endless_pattern_06"
+event_description = "Heavy carts hold the center while faster customers fill the open lanes."
+is_boss_wave = false

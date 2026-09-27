@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_runaway_cart_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"elite_05_cart_rusher"
+display_name = "The Cart Warden"
+combat_read = "Closes in, marks a long lane, then commits to a heavy charge. Move sideways during the warning and punish its recovery."
+role = 4
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 58.0
+max_health = 520
+contact_damage = 16
+contact_range = 48.0
+contact_interval = 1.15
+xp_reward = 14
+attack_type = 1
+attack_range = 300.0
+attack_interval = 3.8
+attack_damage = 20
+charge_speed = 275.0
+telegraph_duration = 0.95
+recovery_duration = 1.15
+spawn_weight = 0.0

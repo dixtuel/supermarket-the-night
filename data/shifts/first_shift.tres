@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ShiftScheduleDefinition" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://data/shift_schedule_definition.gd" id="1_schedule"]
+[ext_resource type="Script" path="res://data/shift_phase_definition.gd" id="2_phase_type"]
+[ext_resource type="Resource" path="res://data/shifts/phase_opening.tres" id="3_opening"]
+[ext_resource type="Resource" path="res://data/shifts/phase_carts.tres" id="4_carts"]
+[ext_resource type="Resource" path="res://data/shifts/phase_freezer_aisle.tres" id="5_freezer"]
+[ext_resource type="Resource" path="res://data/shifts/phase_lights_out.tres" id="6_lights"]
+[ext_resource type="Resource" path="res://data/shifts/phase_open_door.tres" id="7_open_door"]
+[ext_resource type="Resource" path="res://data/enemies/return_cart_boss.tres" id="8_boss"]
+
+[resource]
+script = ExtResource("1_schedule")
+id = &"first_shift"
+display_name = "Bakkal After Dark — First Shift"
+duration_seconds = 300.0
+phases = Array[ExtResource("2_phase_type")]([ExtResource("3_opening"), ExtResource("4_carts"), ExtResource("5_freezer"), ExtResource("6_lights"), ExtResource("7_open_door")])
+boss_spawn_time = 240.0
+boss_definition = ExtResource("8_boss")
+win_requires_boss_defeated = true

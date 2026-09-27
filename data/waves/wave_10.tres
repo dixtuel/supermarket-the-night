@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="4_enemy_runaway_cart"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="5_enemy_leaking_freezer"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="6_enemy_after_hours_shopper"]
+[ext_resource type="Resource" path="res://data/enemies/elite_10_audit_shopper.tres" id="7_elite"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_10"
+display_name = "Night Audit"
+purpose = "Second act capstone: broader roster with a marked pressure test."
+duration_seconds = 70.0
+planned_spawn_count = 49
+spawn_interval = 1.55
+max_alive = 22
+enemy_health_multiplier = 1.20
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_runaway_cart"), ExtResource("5_enemy_leaking_freezer"), ExtResource("6_enemy_after_hours_shopper")])
+spawn_weights = Array[float]([0.42, 0.20, 0.20, 0.18])
+event_tag = &"act_two_milestone"
+event_description = "The Night Auditor arrives mid-shift and marks five-shot fan volleys before firing."
+is_boss_wave = true
+boss_definition = ExtResource("7_elite")
+boss_spawn_seconds = 16.0

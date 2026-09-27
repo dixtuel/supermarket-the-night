@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+
+[ext_resource type="Texture2D" path="res://assets/generated/shop_icons/fresh_apron.png" id="2_icon"]
+[resource]
+icon = ExtResource("2_icon")
+script = ExtResource("1_upgrade")
+id = &"fresh_apron"
+display_name = "Fresh Apron"
+description = "Maximum health +15 and restore 10 health."
+effect = 9
+value = 15.0
+immediate_heal = 10.0
+max_rank = 3
+

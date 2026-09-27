@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RoomEventDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/room_event_definition.gd" id="1_event"]
+
+[resource]
+script = ExtResource("1_event")
+id = &"office_drawer"
+room_id = &"manager_office"
+display_name = "The manager left a first-aid pouch in the desk."
+description = "A health pickup appears at a random time while the office is active."
+kind = 0
+min_delay_seconds = 28.0
+max_delay_seconds = 48.0
+powerup_reward = 0

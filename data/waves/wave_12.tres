@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="4_enemy_leaking_freezer"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="5_enemy_after_hours_shopper"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_12"
+display_name = "Cold Storage"
+purpose = "Feature the freezer threat at higher health while lowering spawn count for contrast."
+duration_seconds = 75.0
+planned_spawn_count = 50
+spawn_interval = 1.65
+max_alive = 23
+enemy_health_multiplier = 1.25
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_leaking_freezer"), ExtResource("5_enemy_after_hours_shopper")])
+spawn_weights = Array[float]([0.42, 0.38, 0.20])
+event_tag = &"cold_storage"
+event_description = "The slower space-control enemy is more common; fewer spawns offset its durability."
+is_boss_wave = false

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_expired_regular_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"expired_regular"
+display_name = "Expired Regular"
+combat_read = "A steady, slow chase with low health and contact damage."
+role = 0
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 62.0
+max_health = 32
+contact_damage = 8
+contact_range = 38.0
+contact_interval = 1.1
+xp_reward = 1
+attack_type = 0
+attack_interval = 1.1
+spawn_weight = 1.0

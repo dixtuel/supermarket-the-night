@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+[ext_resource type="Resource" path="res://data/weapons/receipt_boomerang.tres" id="2_weapon"]
+
+[ext_resource type="Texture2D" path="res://assets/generated/shop_icons/receipt_boomerang.png" id="3_icon"]
+[resource]
+script = ExtResource("1_upgrade")
+id = &"new_receipt_roll"
+display_name = "New Receipt Roll"
+description = "Unlock the returning, piercing Receipt Boomerang."
+effect = 0
+unlocks_weapon = ExtResource("2_weapon")
+icon = ExtResource("3_icon")
+max_rank = 1
+

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_leaking_freezer_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"elite_15_freezer_keeper"
+display_name = "The Cold Storage Keeper"
+combat_read = "Marks a broad slick beneath itself, then follows with an outward grocery scatter. Keep moving and cross the warning edge."
+role = 4
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 31.0
+max_health = 980
+contact_damage = 18
+contact_range = 50.0
+contact_interval = 1.35
+xp_reward = 22
+attack_type = 3
+attack_range = 245.0
+attack_interval = 3.7
+attack_damage = 12
+telegraph_duration = 0.85
+recovery_duration = 0.9
+projectile_speed = 215.0
+projectile_count = 8
+zone_radius = 112.0
+zone_duration = 4.0
+zone_speed_multiplier = 0.62
+spawn_weight = 0.0

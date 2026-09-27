@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ShiftPhaseDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://data/shift_phase_definition.gd" id="1_phase"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Texture2D" path="res://assets/generated/rooms/market_entrance_open.png" id="3_background"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="4_regular"]
+[ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="5_cart"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="6_freezer"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="7_shopper"]
+
+[resource]
+script = ExtResource("1_phase")
+id = &"test_final_rush"
+display_name = "Balance Run — Final Rush"
+start_seconds = 55.0
+end_seconds = 90.0
+store_background = ExtResource("3_background")
+spawn_interval = 1.22
+max_alive = 24
+enemy_health_multiplier = 1.18
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("4_regular"), ExtResource("5_cart"), ExtResource("6_freezer"), ExtResource("7_shopper")])
+spawn_weights = Array[float]([0.45, 0.2, 0.2, 0.15])

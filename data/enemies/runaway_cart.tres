@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_runaway_cart_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"runaway_cart"
+display_name = "Runaway Cart"
+combat_read = "Pause and flash before a straight charge; vulnerable during recovery."
+role = 1
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 44.0
+max_health = 28
+contact_damage = 12
+contact_range = 42.0
+contact_interval = 1.25
+xp_reward = 2
+attack_type = 1
+attack_range = 240.0
+attack_interval = 3.4
+attack_damage = 14
+charge_speed = 235.0
+telegraph_duration = 0.6
+recovery_duration = 0.75
+spawn_weight = 0.4

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RoomEventDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/room_event_definition.gd" id="1_event"]
+
+[resource]
+script = ExtResource("1_event")
+id = &"restroom_vending_can"
+room_id = &"restroom"
+display_name = "A cold drink rolled under the sink."
+description = "An energy pickup appears at a random time in the restroom."
+kind = 0
+min_delay_seconds = 22.0
+max_delay_seconds = 46.0
+powerup_reward = 1

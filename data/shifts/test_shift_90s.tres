@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ShiftScheduleDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://data/shift_schedule_definition.gd" id="1_schedule"]
+[ext_resource type="Script" path="res://data/shift_phase_definition.gd" id="2_phase_type"]
+[ext_resource type="Resource" path="res://data/shifts/phase_test_opening.tres" id="3_opening"]
+[ext_resource type="Resource" path="res://data/shifts/phase_test_carts.tres" id="4_carts"]
+[ext_resource type="Resource" path="res://data/shifts/phase_test_final.tres" id="5_final"]
+[ext_resource type="Resource" path="res://data/enemies/return_cart_boss.tres" id="6_boss"]
+
+[resource]
+script = ExtResource("1_schedule")
+id = &"balance_run_90s"
+display_name = "Bakkal After Dark — 90 Second Balance Run"
+duration_seconds = 90.0
+phases = Array[ExtResource("2_phase_type")]([ExtResource("3_opening"), ExtResource("4_carts"), ExtResource("5_final")])
+boss_spawn_time = 60.0
+boss_definition = ExtResource("6_boss")
+win_requires_boss_defeated = true

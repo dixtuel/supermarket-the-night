@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://entities/helpers/temporary_shift_helper.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/temporary_shift_helper_walk.png" id="2_walk"]
+
+[node name="TemporaryShiftHelper" type="Node2D"]
+z_index = 3
+script = ExtResource("1_script")
+walk_atlas = ExtResource("2_walk")
+
+[node name="Sprite" type="AnimatedSprite2D" parent="."]
+texture_filter = 1

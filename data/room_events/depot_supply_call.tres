@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="RoomEventDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/room_event_definition.gd" id="1_event"]
+
+[resource]
+script = ExtResource("1_event")
+id = &"depot_supply_call"
+room_id = &"depot"
+display_name = "Fill the stock request to call in help."
+description = "Find three to five matching stock bundles this wave, then claim the request at the depot desk."
+kind = 1
+min_delay_seconds = 0.0
+max_delay_seconds = 0.0
+request_minimum = 3
+request_maximum = 5
+requested_supply_id = &"stock_bundle"
+helper_duration = 28.0
+helper_damage = 5
+helper_fire_interval = 0.9

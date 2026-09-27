@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+
+[ext_resource type="Texture2D" path="res://assets/generated/shop_icons/better_wringing.png" id="2_icon"]
+[resource]
+icon = ExtResource("2_icon")
+script = ExtResource("1_upgrade")
+id = &"better_wringing"
+display_name = "Better Wringing"
+description = "Mop Whirl damage +20%."
+effect = 5
+target_weapon_id = &"mop_whirl"
+value = 0.2
+max_rank = 3
+

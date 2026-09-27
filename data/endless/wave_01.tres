@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="5_enemy"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"endless_01"
+display_name = "After-hours regulars"
+purpose = "Familiar aisle pressure returns with a sharper mix of quick and ranged threats."
+duration_seconds = 58.0
+planned_spawn_count = 42
+endless_cycle_spawn_delta = 0
+spawn_interval = 1.50
+max_alive = 30
+enemy_health_multiplier = 1.65
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy"), ExtResource("4_enemy"), ExtResource("5_enemy")])
+spawn_weights = Array[float]([0.50, 0.30, 0.20])
+event_tag = &"endless_pattern_01"
+event_description = "Familiar aisle pressure returns with a sharper mix of quick and ranged threats."
+is_boss_wave = false

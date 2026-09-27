@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://levels/arena/arena.tscn" id="1_arena"]
+[ext_resource type="Resource" path="res://data/shifts/test_shift_90s.tres" id="2_schedule"]
+
+[node name="TestArena" instance=ExtResource("1_arena")]
+shift_schedule = ExtResource("2_schedule")
+use_authored_waves = false

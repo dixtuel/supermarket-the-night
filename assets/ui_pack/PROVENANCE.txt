@@ -1,0 +1,10 @@
+Asset Pack: UI Pack
+Creator: Kenney (Kenney Vleugels - https://kenney.nl)
+Source URL: https://kenney.nl/assets/ui-pack
+License: Creative Commons Zero (CC0 1.0 Universal)
+License URL: http://creativecommons.org/publicdomain/zero/1.0/
+Included Files:
+- xp_orb.png (renamed from PNG/Blue/Default/icon_circle.png)
+- button.png (renamed from PNG/Blue/Default/button_rectangle_depth_flat.png)
+- font_kenney_future.ttf (renamed from Font/Kenney Future.ttf)
+- License.txt (original license from pack)

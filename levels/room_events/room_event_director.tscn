@@ -1,0 +1,12 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://levels/room_events/room_event_director.gd" id="1_director"]
+[ext_resource type="Resource" path="res://data/room_events/market_restock.tres" id="2_market"]
+[ext_resource type="Resource" path="res://data/room_events/depot_supply_call.tres" id="3_depot"]
+[ext_resource type="Resource" path="res://data/room_events/office_drawer.tres" id="4_office"]
+[ext_resource type="Resource" path="res://data/room_events/restroom_vending_can.tres" id="5_restroom"]
+[ext_resource type="Script" path="res://data/room_event_definition.gd" id="6_event_type"]
+
+[node name="RoomEventDirector" type="Node"]
+script = ExtResource("1_director")
+event_definitions = Array[ExtResource("6_event_type")]([ExtResource("2_market"), ExtResource("3_depot"), ExtResource("4_office"), ExtResource("5_restroom")])

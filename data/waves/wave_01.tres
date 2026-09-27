@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_01"
+display_name = "Quiet Aisles"
+purpose = "Teach the steady contact threat and leave space to learn movement."
+duration_seconds = 50.0
+planned_spawn_count = 26
+spawn_interval = 1.95
+max_alive = 12
+enemy_health_multiplier = 1.00
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular")])
+spawn_weights = Array[float]([1.00])
+event_tag = &"orientation"
+event_description = "A sparse opening shift with only familiar aisle pressure."
+is_boss_wave = false

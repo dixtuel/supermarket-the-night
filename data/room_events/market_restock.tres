@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RoomEventDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/room_event_definition.gd" id="1_event"]
+
+[resource]
+script = ExtResource("1_event")
+id = &"market_restock"
+room_id = &"market"
+display_name = "A restock crate slipped open."
+description = "A temporary energy pickup appears at a random point during this wave."
+kind = 0
+min_delay_seconds = 18.0
+max_delay_seconds = 42.0
+powerup_reward = 1

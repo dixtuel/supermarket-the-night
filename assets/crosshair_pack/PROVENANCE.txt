@@ -1,0 +1,8 @@
+Asset Pack: Crosshair Pack
+Creator: Kenney (Kenney Vleugels - https://kenney.nl)
+Source URL: https://kenney.nl/assets/crosshair-pack
+License: Creative Commons Zero (CC0 1.0 Universal)
+License URL: http://creativecommons.org/publicdomain/zero/1.0/
+Included Files:
+- crosshair.png (renamed from PNG/Outline/crosshair-001.png - aim reticle)
+- License.txt (original license from pack)

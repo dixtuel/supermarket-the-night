@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/shop/shift_shop.gd" id="1_script"]
+[ext_resource type="FontFile" path="res://assets/ui_pack/font_kenney_future.ttf" id="2_font"]
+
+[node name="ShiftShop" type="CanvasLayer"]
+layer = 20
+script = ExtResource("1_script")
+display_font = ExtResource("2_font")

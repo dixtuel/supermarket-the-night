@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy_expiry_sprinter"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_03"
+display_name = "Endcap Traffic"
+purpose = "Raise the fast-enemy share but ease the crowd cap to keep dodging readable."
+duration_seconds = 60.0
+planned_spawn_count = 36
+spawn_interval = 1.75
+max_alive = 15
+enemy_health_multiplier = 1.05
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_expiry_sprinter")])
+spawn_weights = Array[float]([0.68, 0.32])
+event_tag = &"mixed_pursuit"
+event_description = "Regulars hold the aisle while occasional sprinters close distance."
+is_boss_wave = false

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+
+[ext_resource type="Texture2D" path="res://assets/generated/shop_icons/bulk_pack.png" id="2_icon"]
+[resource]
+icon = ExtResource("2_icon")
+script = ExtResource("1_upgrade")
+id = &"bulk_pack"
+display_name = "Bulk Pack"
+description = "Can Launcher fires one additional can."
+effect = 3
+target_weapon_id = &"can_launcher"
+value = 1.0
+max_rank = 2
+

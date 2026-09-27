@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_after_hours_shopper_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"after_hours_shopper"
+display_name = "After-Hours Shopper"
+combat_read = "Keeps some distance, then throws a visible grocery projectile."
+role = 3
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 48.0
+max_health = 34
+contact_damage = 6
+contact_range = 34.0
+contact_interval = 1.2
+xp_reward = 2
+attack_type = 2
+attack_range = 265.0
+attack_interval = 2.6
+attack_damage = 10
+telegraph_duration = 0.55
+projectile_speed = 205.0
+projectile_count = 1
+spawn_weight = 0.25

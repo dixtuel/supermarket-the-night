@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="4_enemy_runaway_cart"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="5_enemy_leaking_freezer"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="6_enemy_after_hours_shopper"]
+[ext_resource type="Resource" path="res://data/enemies/overloaded_cart.tres" id="7_enemy_overloaded_cart"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_17"
+display_name = "Stockroom Spill"
+purpose = "Keep the living cap steady while increasing arrivals through varied roles."
+duration_seconds = 80.0
+planned_spawn_count = 51
+spawn_interval = 1.50
+max_alive = 26
+enemy_health_multiplier = 1.35
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_runaway_cart"), ExtResource("5_enemy_leaking_freezer"), ExtResource("6_enemy_after_hours_shopper"), ExtResource("7_enemy_overloaded_cart")])
+spawn_weights = Array[float]([0.32, 0.18, 0.20, 0.20, 0.10])
+event_tag = &"stockroom_spill"
+event_description = "The roster broadens, but its lower cap and heavy share temper screen density."
+is_boss_wave = false

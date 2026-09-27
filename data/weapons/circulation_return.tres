@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/receipt_boomerang.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"circulation_return"
+display_name = "Circulation Return"
+description = "Throws two receipt rolls that turn back after a short lane."
+sprite = ExtResource("2_sprite")
+attack_mode = 2
+damage = 9
+fire_interval = 1.65
+target_range = 310.0
+muzzle_offset = 13.0
+projectile_speed = 420.0
+projectile_lifetime = 1.8
+projectile_count = 2
+pierce_count = 1
+return_distance = 175.0

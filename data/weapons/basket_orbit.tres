@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/basket_orbit_stock_item.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"basket_orbit"
+display_name = "Basket Orbit"
+description = "Three rotating stock items sweep a broad ring around the clerk."
+sprite = ExtResource("2_sprite")
+attack_mode = 1
+damage = 4
+fire_interval = 0.4
+target_range = 104.0
+projectile_count = 3
+area_radius = 104.0
+orbit_speed = 2.15

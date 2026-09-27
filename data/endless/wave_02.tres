@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="3_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="4_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="5_enemy"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"endless_02"
+display_name = "Cart traffic"
+purpose = "Fewer bodies share the floor, but charging carts force cleaner movement."
+duration_seconds = 55.0
+planned_spawn_count = 34
+endless_cycle_spawn_delta = -2
+spawn_interval = 1.70
+max_alive = 28
+enemy_health_multiplier = 1.80
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy"), ExtResource("4_enemy"), ExtResource("5_enemy")])
+spawn_weights = Array[float]([0.42, 0.38, 0.20])
+event_tag = &"endless_pattern_02"
+event_description = "Fewer bodies share the floor, but charging carts force cleaner movement."
+is_boss_wave = false

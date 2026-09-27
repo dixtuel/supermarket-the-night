@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/mop_whirl.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"mop_whirl"
+display_name = "Mop Whirl"
+description = "Sweeps nearby enemies with a rotating mop head."
+sprite = ExtResource("2_sprite")
+attack_mode = 1
+damage = 8
+fire_interval = 0.32
+target_range = 82.0
+projectile_count = 1
+area_radius = 82.0
+orbit_speed = 2.8

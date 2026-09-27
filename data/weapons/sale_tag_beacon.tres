@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/sale_tag_beacon.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"sale_tag_beacon"
+display_name = "Sale-Tag Beacon"
+description = "Drops a bright tag that damages and slows enemies in an area."
+sprite = ExtResource("2_sprite")
+attack_mode = 3
+damage = 16
+fire_interval = 3.5
+target_range = 280.0
+projectile_count = 1
+area_radius = 78.0
+effect_duration = 3.0
+slow_multiplier = 0.58

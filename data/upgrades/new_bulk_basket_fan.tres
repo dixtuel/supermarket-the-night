@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+[ext_resource type="Resource" path="res://data/weapons/bulk_basket_fan.tres" id="2_weapon"]
+
+[ext_resource type="Texture2D" path="res://assets/generated/shop_icons/bulk_basket_fan.png" id="3_icon"]
+[resource]
+script = ExtResource("1_upgrade")
+id = &"new_bulk_basket_fan"
+display_name = "Bulk Basket Fan"
+description = "Unlock a wider three-can volley."
+effect = 0
+unlocks_weapon = ExtResource("2_weapon")
+icon = ExtResource("3_icon")
+max_rank = 1

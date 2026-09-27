@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy_expiry_sprinter"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_02"
+display_name = "Short-Date Rush"
+purpose = "Introduce a fast pursuer while keeping the regular customer dominant."
+duration_seconds = 55.0
+planned_spawn_count = 31
+spawn_interval = 1.85
+max_alive = 14
+enemy_health_multiplier = 1.00
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_expiry_sprinter")])
+spawn_weights = Array[float]([0.78, 0.22])
+event_tag = &"sprinter_intro"
+event_description = "Quick runners begin appearing in small groups."
+is_boss_wave = false

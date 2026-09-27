@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/receipt_boomerang.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"receipt_boomerang"
+display_name = "Receipt Boomerang"
+description = "A receipt roll travels through enemies and returns."
+sprite = ExtResource("2_sprite")
+attack_mode = 2
+damage = 18
+fire_interval = 2.0
+target_range = 380.0
+projectile_speed = 360.0
+projectile_lifetime = 2.2
+projectile_count = 1
+pierce_count = 2
+return_distance = 260.0

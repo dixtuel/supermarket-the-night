@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_overloaded_cart_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"overloaded_cart"
+display_name = "Overloaded Stock Cart"
+combat_read = "Holds distance, then telegraphs a wide fan of slow, heavy cartons."
+role = 3
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 36.0
+max_health = 92
+contact_damage = 16
+contact_range = 40.0
+contact_interval = 1.35
+xp_reward = 4
+attack_type = 2
+attack_range = 310.0
+attack_interval = 4.8
+attack_damage = 8
+telegraph_duration = 0.95
+recovery_duration = 0.8
+projectile_speed = 150.0
+projectile_count = 3
+spawn_weight = 0.12

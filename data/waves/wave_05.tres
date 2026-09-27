@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="4_enemy_runaway_cart"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="5_enemy_leaking_freezer"]
+[ext_resource type="Resource" path="res://data/enemies/elite_05_cart_rusher.tres" id="6_elite"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_05"
+display_name = "First Stock Check"
+purpose = "First act capstone: combine charger pressure with a few durable blockers."
+duration_seconds = 65.0
+planned_spawn_count = 39
+spawn_interval = 1.65
+max_alive = 17
+enemy_health_multiplier = 1.10
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_runaway_cart"), ExtResource("5_enemy_leaking_freezer")])
+spawn_weights = Array[float]([0.58, 0.27, 0.15])
+event_tag = &"act_one_milestone"
+event_description = "The Cart Warden arrives after the opening skirmish. Break its long charge lane, then punish the recovery."
+is_boss_wave = true
+boss_definition = ExtResource("6_elite")
+boss_spawn_seconds = 13.0

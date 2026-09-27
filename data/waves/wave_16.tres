@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy_expiry_sprinter"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="5_enemy_after_hours_shopper"]
+[ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="6_enemy_runaway_cart"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_16"
+display_name = "Doorway Surge"
+purpose = "Start final act with a substantial ranged/sprinter mix and a short cadence."
+duration_seconds = 75.0
+planned_spawn_count = 56
+spawn_interval = 1.45
+max_alive = 26
+enemy_health_multiplier = 1.35
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_expiry_sprinter"), ExtResource("5_enemy_after_hours_shopper"), ExtResource("6_enemy_runaway_cart")])
+spawn_weights = Array[float]([0.30, 0.25, 0.30, 0.15])
+event_tag = &"doorway_surge"
+event_description = "Fast flankers and ranged throws test a build after the previous count relief."
+is_boss_wave = false

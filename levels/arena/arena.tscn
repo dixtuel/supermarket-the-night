@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://levels/arena/arena.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://entities/player/player.tscn" id="2_player_scene"]
+[ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="3_hud_scene"]
+
+[node name="Arena" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="RoomLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="PickupLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="ActorLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+y_sort_enabled = true
+
+[node name="Player" parent="ActorLayer" instance=ExtResource("2_player_scene")]
+unique_name_in_owner = true
+
+[node name="ProjectileLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="HUD" parent="." instance=ExtResource("3_hud_scene")]
+unique_name_in_owner = true

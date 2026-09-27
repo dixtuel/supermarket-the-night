@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://df2play3r7tscn"]
+
+[ext_resource type="Script" uid="uid://bk11xcvuih3l4" path="res://entities/player/player.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/player_night_clerk_walk.png" id="2_texture"]
+[ext_resource type="Script" uid="uid://dgrq8wih2ofqc" path="res://combat/auto_weapon.gd" id="3_weapon_script"]
+[ext_resource type="PackedScene" uid="uid://cwtxs56m1proj" path="res://combat/projectile/projectile.tscn" id="4_projectile_scene"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 18.0
+
+[node name="Player" type="CharacterBody2D" groups=["player"]]
+collision_layer = 2
+collision_mask = 5
+motion_mode = 1
+script = ExtResource("1_script")
+walk_atlas = ExtResource("2_texture")
+
+[node name="Shadow" type="Polygon2D" parent="."]
+z_index = -1
+polygon = PackedVector2Array(-17, -6, -12, -10, 7, -10, 17, -4, 15, 4, 8, 8, -11, 8, -18, 3)
+color = Color(0.04, 0.07, 0.06, 0.58)
+
+[node name="Sprite2D" type="AnimatedSprite2D" parent="."]
+offset = Vector2(0, -152)
+texture_filter = 2
+scale = Vector2(0.2, 0.2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+
+[node name="AutoWeapon" type="Node2D" parent="."]
+script = ExtResource("3_weapon_script")
+projectile_scene = ExtResource("4_projectile_scene")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(1.15, 1.15)
+position_smoothing_enabled = false
+limit_left = -836
+limit_top = -470
+limit_right = 836
+limit_bottom = 470
+editor_draw_limits = true

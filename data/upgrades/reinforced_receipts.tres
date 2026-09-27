@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+
+[ext_resource type="Texture2D" path="res://assets/generated/shop_icons/reinforced_receipts.png" id="2_icon"]
+[resource]
+icon = ExtResource("2_icon")
+script = ExtResource("1_upgrade")
+id = &"reinforced_receipts"
+display_name = "Reinforced Receipt Rolls"
+description = "Circulation Return passes through one additional target."
+effect = 6
+target_weapon_id = &"circulation_return"
+value = 1.0
+max_rank = 2

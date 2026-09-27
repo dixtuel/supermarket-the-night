@@ -1,0 +1,11 @@
+Asset Pack: Top-down Shooter
+Creator: Kenney (Kenney Vleugels - https://kenney.nl)
+Source URL: https://kenney.nl/assets/top-down-shooter
+License: Creative Commons Zero (CC0 1.0 Universal)
+License URL: http://creativecommons.org/publicdomain/zero/1.0/
+Included Files:
+- survivor.png (renamed from PNG/Survivor 1/survivor1_stand.png)
+- zombie.png (renamed from PNG/Zombie 1/zoimbie1_hold.png)
+- gun.png (renamed from PNG/weapon_gun.png)
+- tile_floor.png (renamed from PNG/Tiles/tile_01.png)
+- License.txt (original license from pack)

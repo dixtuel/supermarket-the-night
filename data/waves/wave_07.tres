@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="4_enemy_leaking_freezer"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_07"
+display_name = "Freezer Drip"
+purpose = "Focus the slippery area-denial role and reduce the planned crowd count."
+duration_seconds = 65.0
+planned_spawn_count = 38
+spawn_interval = 1.80
+max_alive = 18
+enemy_health_multiplier = 1.10
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_leaking_freezer")])
+spawn_weights = Array[float]([0.62, 0.38])
+event_tag = &"area_denial_focus"
+event_description = "Fewer arrivals create room to read and route around short-lived slicks."
+is_boss_wave = false

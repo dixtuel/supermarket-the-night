@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_leaking_freezer_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"leaking_freezer"
+display_name = "Leaking Freezer"
+combat_read = "A slow, sturdy blocker that leaves a small, short-lived slick."
+role = 2
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 38.0
+max_health = 105
+contact_damage = 14
+contact_range = 44.0
+contact_interval = 1.4
+xp_reward = 3
+attack_type = 3
+attack_interval = 4.0
+attack_damage = 4
+zone_radius = 58.0
+zone_duration = 3.0
+zone_speed_multiplier = 0.72
+spawn_weight = 0.3

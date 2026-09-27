@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
+[ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
+[ext_resource type="Resource" path="res://data/enemies/overloaded_cart.tres" id="4_enemy_overloaded_cart"]
+[ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="5_enemy_leaking_freezer"]
+[ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="6_enemy_after_hours_shopper"]
+
+[resource]
+script = ExtResource("1_wave")
+id = &"wave_14"
+display_name = "Returns Queue"
+purpose = "Introduce the heavy cart as an uncommon durable contact threat."
+duration_seconds = 75.0
+planned_spawn_count = 54
+spawn_interval = 1.60
+max_alive = 24
+enemy_health_multiplier = 1.30
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_overloaded_cart"), ExtResource("5_enemy_leaking_freezer"), ExtResource("6_enemy_after_hours_shopper")])
+spawn_weights = Array[float]([0.40, 0.10, 0.25, 0.25])
+event_tag = &"heavy_intro"
+event_description = "The overloaded cart is rare; the lower arrival tempo gives it room to matter."
+is_boss_wave = false
