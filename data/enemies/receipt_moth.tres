@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/receipt_moth.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"receipt_moth"
+display_name = "Receipt Moth"
+combat_read = "A brittle fluttering pursuer that closes gaps quickly. Keep moving and clear it before it reaches you."
+role = 0
+move_speed = 76.0
+max_health = 46
+contact_damage = 7
+contact_range = 34.0
+contact_interval = 1.05
+xp_reward = 2
+attack_type = 0
+spawn_weight = 0.14
+sprite = ExtResource("2_sprite")

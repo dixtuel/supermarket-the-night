@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/quiet_shift_shoe.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_upgrade")
+id = &"quiet_shift_footwork"
+display_name = "Quiet-Shift Footwork"
+description = "Dodge chance +3%."
+effect = 11
+value = 0.03
+max_rank = 3
+icon = ExtResource("2_icon")

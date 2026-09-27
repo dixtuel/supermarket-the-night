@@ -88,6 +88,59 @@ func get_weapon_tier(weapon_id: StringName) -> int:
 	return int((_weapon_states[weapon_id] as Dictionary).get("tier", 1))
 
 
+func get_level_choice_weapon_targets() -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		if state.is_empty():
+			continue
+		targets.append({
+			"id": String(weapon_id),
+			"name": String(state.get("display_name", String(weapon_id))),
+			"damage_type": int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
+			"engineering_coefficient": float(state.get("engineering_coefficient", 0.0)),
+			"is_structure": int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE],
+			"supports_fire_rate": int(state.get("attack_mode", -1)) != WeaponDefinition.AttackMode.ORBITAL_CONTACT,
+			"tier": int(state.get("tier", 1)),
+			"level_damage_add": int(state.get("level_damage_add", 0)),
+			"level_fire_rate_bonus": float(state.get("level_fire_rate_bonus", 0.0)),
+		})
+	return targets
+
+
+func can_apply_level_weapon_effect(effect: Dictionary) -> bool:
+	var weapon_id := StringName(String(effect.get("weapon_id", "")))
+	if weapon_id == &"" or not _weapon_states.has(weapon_id):
+		return false
+	var state: Dictionary = _weapon_states[weapon_id]
+	var stat_id := StringName(String(effect.get("stat", "")))
+	var value := float(effect.get("value", 0.0))
+	match stat_id:
+		&"weapon_damage":
+			var current_damage_add := int(state.get("level_damage_add", 0))
+			var next_damage_add := current_damage_add + roundi(value)
+			var current_effective_base := maxi(1, int(state.get("damage", 1)) + current_damage_add)
+			var next_effective_base := maxi(1, int(state.get("damage", 1)) + next_damage_add)
+			return roundi(value) != 0 and next_damage_add >= -20 and next_damage_add <= 20 and current_effective_base != next_effective_base
+		&"weapon_fire_rate":
+			return int(state.get("attack_mode", -1)) != WeaponDefinition.AttackMode.ORBITAL_CONTACT and value > 0.0 and float(state.get("level_fire_rate_bonus", 0.0)) + value <= 0.3
+	return false
+
+
+func apply_level_weapon_effect(effect: Dictionary) -> bool:
+	if not can_apply_level_weapon_effect(effect):
+		return false
+	var weapon_id := StringName(String(effect.get("weapon_id", "")))
+	var state: Dictionary = _weapon_states[weapon_id]
+	match StringName(String(effect.get("stat", ""))):
+		&"weapon_damage":
+			state["level_damage_add"] = clampi(int(state.get("level_damage_add", 0)) + roundi(float(effect.get("value", 0.0))), -20, 20)
+		&"weapon_fire_rate":
+			state["level_fire_rate_bonus"] = minf(0.3, float(state.get("level_fire_rate_bonus", 0.0)) + maxf(0.0, float(effect.get("value", 0.0))))
+	_weapon_states[weapon_id] = state
+	return true
+
+
 func purchase_weapon_offer(offer: WeaponDefinition) -> bool:
 	if offer == null:
 		return false
@@ -175,6 +228,72 @@ func get_unlocked_weapon_names() -> PackedStringArray:
 	return names
 
 
+func get_shop_inventory_summary() -> Dictionary:
+	var weapons: Array[Dictionary] = []
+	var deployable_indices: Dictionary = {}
+	var deployables: Array[Dictionary] = []
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		if state.is_empty():
+			continue
+		var tier := int(state.get("tier", 1))
+		var name := String(state.get("display_name", String(weapon_id)))
+		var definition := _weapon_catalog.get(weapon_id) as WeaponDefinition
+		weapons.append({
+			"id": String(weapon_id),
+			"name": name,
+			"tier": tier,
+			"damage": _effective_weapon_damage(state),
+			"fire_interval": float(state.get("fire_interval", 0.0)),
+			"projectile_count": int(state.get("projectile_count", 1)),
+			"range": roundi(float(state.get("target_range", 0.0))),
+			"area": roundi(float(state.get("area_radius", 0.0))),
+			"pierce": int(state.get("pierce_count", 0)),
+			"icon": definition.sprite if definition != null else null,
+		})
+		var mode := int(state.get("attack_mode", -1))
+		if mode not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			continue
+		var kind := "turret" if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else "mine"
+		var key := "%s:%d" % [String(weapon_id), tier]
+		deployable_indices[key] = deployables.size()
+		deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
+	for structure: Node in get_tree().get_nodes_in_group("deployed_structures"):
+		if not is_instance_valid(structure) or structure.is_queued_for_deletion():
+			continue
+		if StringName(structure.get_meta("room_id", _current_room_id)) != _current_room_id:
+			continue
+		var weapon_id := StringName(structure.get_meta("weapon_id", &""))
+		var tier := int(structure.get_meta("weapon_tier", 1))
+		var key := "%s:%d" % [String(weapon_id), tier]
+		if not deployable_indices.has(key):
+			var name := String(structure.get_meta("weapon_name", String(weapon_id)))
+			var kind := "turret" if structure.is_in_group("deployed_turrets") else "mine"
+			var definition := _weapon_catalog.get(weapon_id) as WeaponDefinition
+			deployable_indices[key] = deployables.size()
+			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
+		var record_index := int(deployable_indices[key])
+		deployables[record_index]["count"] = int(deployables[record_index].get("count", 0)) + 1
+	return {"weapons": weapons, "deployables": deployables}
+
+
+func sell_weapon(weapon_id: StringName) -> Dictionary:
+	if not _weapon_states.has(weapon_id) or _weapon_order.size() <= 1:
+		return {}
+	var state: Dictionary = _weapon_states[weapon_id]
+	var tier := clampi(int(state.get("tier", 1)), 1, 4)
+	var payout := 4 + tier * 3
+	var sold := {
+		"id": String(weapon_id),
+		"name": String(state.get("display_name", String(weapon_id))),
+		"tier": tier,
+		"payout": payout,
+	}
+	_weapon_states.erase(weapon_id)
+	_weapon_order.erase(weapon_id)
+	return sold
+
+
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(_owner_actor):
 		_owner_actor = get_parent() as Node2D
@@ -195,7 +314,7 @@ func _physics_process(delta: float) -> void:
 			global_rotation = direction.angle()
 		if float(state["cooldown"]) <= 0.0 and is_instance_valid(_projectile_layer):
 			if _fire_weapon(state, target, direction):
-				state["cooldown"] = maxf(0.05, float(state["fire_interval"]))
+				state["cooldown"] = _effective_fire_interval(state)
 		_weapon_states[weapon_id] = state
 
 
@@ -204,13 +323,37 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 		return false
 	var mode: int = int(state["attack_mode"])
 	var count: int = maxi(1, int(state["projectile_count"]))
+	if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+		var turret := _create_projectile(global_position) as SurvivorProjectile
+		if turret == null:
+			return false
+		turret.set_life_steal_source(_owner_actor)
+		turret.launch_turret(
+			_effective_structure_damage(state), float(state["target_range"]), float(state["fire_interval"]),
+			float(state["effect_duration"]), _owner_actor, _current_room_id,
+			StringName(state.get("id", &"")), String(state.get("display_name", "Turret")), int(state.get("tier", 1))
+		)
+		turret.set_weapon_visual(state.get("sprite") as Texture2D)
+		return true
+	if mode == WeaponDefinition.AttackMode.DEPLOYED_MINE:
+		var mine := _create_projectile(global_position) as SurvivorProjectile
+		if mine == null:
+			return false
+		mine.set_life_steal_source(_owner_actor)
+		mine.launch_mine(
+			_effective_structure_damage(state), float(state["area_radius"]), float(state["effect_duration"]),
+			_owner_actor, _current_room_id,
+			StringName(state.get("id", &"")), String(state.get("display_name", "Mine")), int(state.get("tier", 1))
+		)
+		mine.set_weapon_visual(state.get("sprite") as Texture2D)
+		return true
 	if mode == WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE:
 		var beacon := _create_projectile(target.global_position) as SurvivorProjectile
 		if beacon == null:
 			return false
 		beacon.set_life_steal_source(_owner_actor)
 		beacon.launch_zone(
-			int(state["damage"]),
+			_effective_weapon_damage(state),
 			float(state["area_radius"]),
 			float(state["effect_duration"]),
 			float(state["slow_multiplier"])
@@ -228,7 +371,7 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 		if mode == WeaponDefinition.AttackMode.RETURNING_PROJECTILE:
 			projectile.launch_returning(
 				shot_direction,
-				int(state["damage"]),
+				_effective_weapon_damage(state),
 				float(state["projectile_speed"]),
 				float(state["projectile_lifetime"]),
 				int(state["pierce_count"]),
@@ -238,7 +381,7 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 		else:
 			projectile.launch_with_stats(
 				shot_direction,
-				int(state["damage"]),
+				_effective_weapon_damage(state),
 				float(state["projectile_speed"]),
 				float(state["projectile_lifetime"]),
 				int(state["pierce_count"])
@@ -267,7 +410,7 @@ func _ensure_orbitals(weapon_id: StringName, state: Dictionary) -> void:
 			_owner_actor,
 			float(state["area_radius"]),
 			float(state["orbit_speed"]),
-			int(state["damage"]),
+			_effective_weapon_damage(state),
 			TAU * float(orbitals.size()) / float(desired_count)
 		)
 		projectile.set_weapon_visual(state.get("sprite") as Texture2D)
@@ -280,10 +423,36 @@ func _ensure_orbitals(weapon_id: StringName, state: Dictionary) -> void:
 		projectile.update_orbit(
 			float(state["area_radius"]),
 			float(state["orbit_speed"]),
-			int(state["damage"])
+		_effective_weapon_damage(state)
 		)
 	state["orbitals"] = orbitals
 	_weapon_states[weapon_id] = state
+
+
+func _effective_damage(base_damage: int, damage_type: int = WeaponDefinition.DamageType.PHYSICAL) -> int:
+	var typed_damage := base_damage
+	if damage_type == WeaponDefinition.DamageType.ELEMENTAL and is_instance_valid(_owner_actor) and _owner_actor.has_method("get_elemental_damage"):
+		typed_damage += int(_owner_actor.call("get_elemental_damage"))
+	if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_attack_damage_multiplier"):
+		return maxi(1, roundi(float(typed_damage) * float(_owner_actor.call("get_attack_damage_multiplier"))))
+	return maxi(1, typed_damage)
+
+
+func _effective_weapon_damage(state: Dictionary) -> int:
+	var tuned_damage := int(state.get("damage", 1)) + int(state.get("level_damage_add", 0))
+	return _effective_damage(tuned_damage, int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)))
+
+
+func _effective_structure_damage(state: Dictionary) -> int:
+	var engineering := 0
+	if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_engineering"):
+		engineering = int(_owner_actor.call("get_engineering"))
+	return maxi(1, int(state.get("damage", 1)) + int(state.get("level_damage_add", 0)) + roundi(float(engineering) * clampf(float(state.get("engineering_coefficient", 0.0)), 0.0, 2.0)))
+
+
+func _effective_fire_interval(state: Dictionary) -> float:
+	var rate_bonus := clampf(float(state.get("level_fire_rate_bonus", 0.0)), 0.0, 0.3)
+	return maxf(0.05, float(state.get("fire_interval", fire_interval)) / (1.0 + rate_bonus))
 
 
 func _create_projectile(spawn_position: Vector2) -> Area2D:
@@ -322,6 +491,8 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"sprite": definition.sprite,
 		"attack_mode": definition.attack_mode,
 		"damage": definition.damage,
+		"damage_type": definition.damage_type,
+		"engineering_coefficient": definition.engineering_coefficient,
 		"fire_interval": definition.fire_interval,
 		"target_range": definition.target_range,
 		"muzzle_offset": definition.muzzle_offset,
@@ -335,6 +506,8 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"orbit_speed": definition.orbit_speed,
 		"return_distance": definition.return_distance,
 		"tier": 1,
+		"level_damage_add": 0,
+		"level_fire_rate_bonus": 0.0,
 		"cooldown": minf(0.15, definition.fire_interval),
 		"orbitals": [],
 	}
@@ -376,7 +549,13 @@ func _create_legacy_can_launcher() -> void:
 func get_save_data() -> Array:
 	var list: Array = []
 	for wid: StringName in _weapon_order:
-		list.append({"id": String(wid), "tier": get_weapon_tier(wid)})
+		var state: Dictionary = _weapon_states.get(wid, {})
+		list.append({
+			"id": String(wid),
+			"tier": get_weapon_tier(wid),
+			"level_damage_add": int(state.get("level_damage_add", 0)),
+			"level_fire_rate_bonus": float(state.get("level_fire_rate_bonus", 0.0)),
+		})
 	return list
 
 
@@ -388,3 +567,8 @@ func restore_save_data(saved_list: Array) -> void:
 			unlock_weapon_id(wid)
 		if target_tier > 1:
 			_raise_weapon_tier(wid, target_tier)
+		if _weapon_states.has(wid):
+			var state: Dictionary = _weapon_states[wid]
+			state["level_damage_add"] = clampi(int(entry.get("level_damage_add", 0)), -20, 20)
+			state["level_fire_rate_bonus"] = clampf(float(entry.get("level_fire_rate_bonus", 0.0)), 0.0, 0.3)
+			_weapon_states[wid] = state

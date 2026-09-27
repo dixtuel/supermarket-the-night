@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/barcode_reel.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"barcode_reel"
+display_name = "Barcode Reel"
+description = "Flicks a stiff price strip down an aisle; the strip reels back through targets."
+## The shop offers new weapons at Tier I; duplicates merge from there.
+tier = 1
+attack_mode = 2
+damage = 15
+fire_interval = 1.35
+target_range = 330.0
+muzzle_offset = 14.0
+projectile_speed = 470.0
+projectile_lifetime = 1.45
+projectile_count = 1
+pierce_count = 1
+return_distance = 195.0
+sprite = ExtResource("2_sprite")

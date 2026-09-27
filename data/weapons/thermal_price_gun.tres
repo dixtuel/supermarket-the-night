@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/thermal_price_gun.svg" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"thermal_price_gun"
+display_name = "Thermal Price Gun"
+description = "A heated label shot adds a little elemental damage to its base hit."
+sprite = ExtResource("2_sprite")
+attack_mode = 0
+damage = 8
+damage_type = 1
+engineering_coefficient = 0.0
+fire_interval = 1.3
+target_range = 410
+projectile_speed = 620
+projectile_lifetime = 1.5
+projectile_count = 1
+pierce_count = 0
+area_radius = 0
+effect_duration = 0
+slow_multiplier = 1.0
+return_distance = 0

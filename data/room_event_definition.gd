@@ -10,6 +10,7 @@ enum Kind {
 
 @export var id: StringName = &""
 @export var room_id: StringName = &""
+@export_range(1, 20, 1) var minimum_wave: int = 1
 @export var display_name: String = ""
 @export_multiline var description: String = ""
 @export var kind: Kind = Kind.TIMED_POWERUP

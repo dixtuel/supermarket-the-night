@@ -6,10 +6,11 @@
 *A 2D top-down rogue-lite horde-survival game set inside an eerie night-shift supermarket.*
 
 [![Engine](https://img.shields.io/badge/Engine-Godot_4.7.2-478CBF?logo=godotengine&logoColor=white)](https://godotengine.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code: MIT](https://img.shields.io/badge/Code-MIT-yellow.svg)](LICENSE)
+[![Assets: CC0](https://img.shields.io/badge/Assets-CC0_1.0-blue.svg)](ASSET_LICENSE.md)
 [![itch.io](https://img.shields.io/badge/itch.io-Supermarket%3A%20The%20Night-FA5C5C?logo=itchdotio&logoColor=white)](https://dixtuel.itch.io/supermarket-the-night)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue)](https://dixtuel.itch.io/supermarket-the-night)
-[![Status](https://img.shields.io/badge/Version-0.1.3--alpha-success)](#)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android-blue)](https://dixtuel.itch.io/supermarket-the-night)
+[![Status](https://img.shields.io/badge/Version-0.2.0--alpha-success)](#)
 
 <br/>
 

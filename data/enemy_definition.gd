@@ -27,6 +27,9 @@ enum AttackType {
 ## Actor texture or four-direction walk atlas. Keep art separately licensed.
 @export var sprite: Texture2D
 @export var directional_walk_atlas: bool = false
+## Per-definition art scale. Large single-frame illustrations can opt down while
+## atlas-based sprites keep the shared actor scale.
+@export_range(0.03, 0.4, 0.01) var sprite_scale: float = 0.2
 
 ## Fields consumed by the current chase/contact enemy implementation.
 @export_range(0.0, 1000.0, 1.0) var move_speed: float = 60.0

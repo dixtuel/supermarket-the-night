@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_scanline_runner_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"scanline_runner"
+display_name = "Scanline Runner"
+combat_read = "A quick checkout-line chaser that closes gaps fast."
+role = 1
+sprite = ExtResource("2_sprite")
+sprite_scale = 0.2
+directional_walk_atlas = true
+move_speed = 104
+max_health = 28
+contact_damage = 7
+contact_range = 34
+contact_interval = 1.0
+xp_reward = 2
+attack_type = 1
+attack_range = 0
+attack_interval = 2.0
+attack_damage = 65
+charge_speed = 310
+telegraph_duration = 0.55
+recovery_duration = 0.4
+projectile_speed = 0
+projectile_count = 0
+zone_radius = 0
+zone_duration = 0
+zone_speed_multiplier = 0.65
+spawn_weight = 0.6

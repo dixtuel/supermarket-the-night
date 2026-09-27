@@ -7,6 +7,8 @@
 # Build outputs and distribution packages
 builds/
 exports/
+android/build/
+android/.build_version
 *.pck
 *.exe
 *.x86_64
@@ -14,8 +16,7 @@ exports/
 *.tar.gz
 *.tar.zst
 
-# Research, drafts, temporary logs and tests
-research/
+# Local scratch files and generated test logs.
 scratch/
 tests/
 *.log
@@ -31,3 +32,12 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Ignore research dumps, agent instructions, and non-license markdown notes.
+research/
+*.md
+!README.md
+!**/README.md
+!ATTRIBUTION.md
+!ASSET_LICENSE.md
+!LICENSE.md

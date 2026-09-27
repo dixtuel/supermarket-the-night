@@ -30,6 +30,13 @@ const ENDLESS_WAVE_PATTERNS: Array[WaveDefinition] = [
 	preload("res://data/endless/wave_09.tres"),
 	preload("res://data/endless/wave_10.tres"),
 ]
+const ENDLESS_SUPPLEMENTAL_ENEMIES: Array[EnemyDefinition] = [
+	preload("res://data/enemies/scanline_runner.tres"),
+	preload("res://data/enemies/cooler_dripper.tres"),
+	preload("res://data/enemies/coupon_tosser.tres"),
+	preload("res://data/enemies/pallet_jack_pusher.tres"),
+	preload("res://data/enemies/night_shift_supervisor.tres"),
+]
 const WEAPON_DEFINITIONS: Array[WeaponDefinition] = [
 	preload("res://data/weapons/can_launcher.tres"),
 	preload("res://data/weapons/mop_whirl.tres"),
@@ -38,6 +45,13 @@ const WEAPON_DEFINITIONS: Array[WeaponDefinition] = [
 	preload("res://data/weapons/bulk_basket_fan.tres"),
 	preload("res://data/weapons/circulation_return.tres"),
 	preload("res://data/weapons/basket_orbit.tres"),
+	preload("res://data/weapons/barcode_reel.tres"),
+	preload("res://data/weapons/shelf_rinse_sprayer.tres"),
+	preload("res://data/weapons/aisle_sentinel.tres"),
+	preload("res://data/weapons/spill_tripmine.tres"),
+	preload("res://data/weapons/thermal_price_gun.tres"),
+	preload("res://data/weapons/tote_stack_lobber.tres"),
+	preload("res://data/weapons/deposit_ring_reel.tres"),
 ]
 const UPGRADE_DEFINITIONS: Array[UpgradeDefinition] = [
 	preload("res://data/upgrades/bulk_pack.tres"),
@@ -59,6 +73,12 @@ const UPGRADE_DEFINITIONS: Array[UpgradeDefinition] = [
 	preload("res://data/upgrades/extra_basket.tres"),
 	preload("res://data/upgrades/longer_shift.tres"),
 	preload("res://data/upgrades/quick_checkout.tres"),
+	preload("res://data/upgrades/quiet_shift_footwork.tres"),
+	preload("res://data/upgrades/engineering_caddy.tres"),
+	preload("res://data/upgrades/aisle_sentinel_calibration.tres"),
+	preload("res://data/upgrades/tripmine_trigger_tune.tres"),
+	preload("res://data/upgrades/reinforced_apron_plus.tres"),
+	preload("res://data/upgrades/thermal_price_gun_unlock.tres"),
 ]
 const RECORD_PATH := "user://bakkal_records.cfg"
 const SPAWN_MARGIN := 24.0
@@ -80,6 +100,7 @@ const ROOM_EVENT_DIRECTOR_SCENE: PackedScene = preload("res://levels/room_events
 var _state: RunState = RunState.RUNNING
 var _elapsed: float = 0.0
 var _round_elapsed: float = 0.0
+var _health_regen_elapsed: float = 0.0
 var _round_duration: float = 60.0
 var _round_number: int = 1
 var _spawn_cooldown: float = 0.0
@@ -95,6 +116,7 @@ var _active_stat_choices: Array[Dictionary] = []
 var _active_shop_offers: Array = []
 var _active_shop_prices: Array[int] = []
 var _purchased_shop_indices: Array[int] = []
+var _locked_shop_indices: Array[int] = []
 var _shop: ShiftShop
 var _current_phase: ShiftPhaseDefinition
 var _best_score: int = 0
@@ -103,18 +125,31 @@ var _authored_waves: Array[WaveDefinition] = []
 var _current_wave: WaveDefinition
 var _endless_mode: bool = false
 var _spawned_this_wave: int = 0
+var _endless_ambush_rng := RandomNumberGenerator.new()
+var _room_migration_rng := RandomNumberGenerator.new()
+var _endless_ambush_seed_base: int = 0
+var _deployable_ambush_pending: bool = false
+var _deployable_ambush_time: float = INF
+var _deployable_ambush_deadline: float = INF
+var _deployable_ambush_retry_timer: float = 0.0
+var _recent_turret_ambush_positions: Array[Vector2] = []
 var _best_endless_score: int = 0
 var _best_endless_wave: int = 0
 var _rooms: Dictionary = {}
 var _current_room_id: StringName = &"market"
 var _room_transition_pending: bool = false
 var _room_transition_cooldown: float = 0.0
+var _room_transition_count: int = 0
 var _room_event_director: RoomEventDirector
 var _wave_director: RuntimeWaveDirector = RuntimeWaveDirector.new()
 
 
 func _ready() -> void:
-	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Keep the game world (player, enemies, projectiles) under the SceneTree pause.
+	# HUD and lifecycle helpers opt into PROCESS_MODE_ALWAYS independently.
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+	_endless_ambush_rng.randomize()
+	_endless_ambush_seed_base = int(_endless_ambush_rng.randi())
 	if use_authored_waves:
 		_authored_waves = _load_authored_waves()
 	else:
@@ -149,8 +184,10 @@ func _ready() -> void:
 	_shop = SHOP_SCENE.instantiate() as ShiftShop
 	add_child(_shop)
 	_shop.offer_purchased.connect(_on_shop_offer_purchased)
+	_shop.offer_lock_toggled.connect(_on_shop_offer_lock_toggled)
 	_shop.reroll_requested.connect(_on_shop_reroll_requested)
 	_shop.continue_requested.connect(_on_shop_continue_requested)
+	_shop.weapon_sell_requested.connect(_on_shop_weapon_sell_requested)
 	if RunSaveManager != null and RunSaveManager.has_meta("should_resume") and bool(RunSaveManager.get_meta("should_resume")):
 		RunSaveManager.set_meta("should_resume", false)
 		var saved_data := RunSaveManager.load_and_clear_saved_run()
@@ -166,17 +203,37 @@ func _ready() -> void:
 	_powerup_cooldown = randf_range(20.0, 36.0)
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		if _state != RunState.RESULTS and RunSaveManager != null:
+			RunSaveManager.save_run_state(_gather_save_state())
+			if _state == RunState.RUNNING:
+				_pause_run()
+				_hud.show_pause_menu()
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if _state == RunState.RUNNING:
+			_pause_run()
+			_hud.show_pause_menu()
+		elif _state == RunState.PAUSED:
+			_resume_run()
+
+
 func _process(delta: float) -> void:
 	if _state != RunState.RUNNING:
 		return
 	_elapsed += delta
 	_round_elapsed += delta
+	_health_regen_elapsed += delta
+	if _health_regen_elapsed >= 4.0:
+		_health_regen_elapsed = fmod(_health_regen_elapsed, 4.0)
+		_player.heal(1)
 	_room_transition_cooldown = maxf(0.0, _room_transition_cooldown - delta)
 	_hud.set_round_clock(_round_number, _round_elapsed, _round_duration)
 	_spawn_cooldown -= delta
 	if _spawn_cooldown <= 0.0:
 		_spawn_from_phase()
 		_spawn_cooldown = _current_spawn_interval()
+	_tick_endless_deployable_ambush(delta)
 	_powerup_cooldown -= delta
 	if _powerup_cooldown <= 0.0:
 		_spawn_random_powerup()
@@ -189,7 +246,7 @@ func _process(delta: float) -> void:
 			_spawn_enemy(boss_definition, _boss_health_multiplier(), true)
 		else:
 			_boss_defeated = true
-	if _round_elapsed >= _round_duration and (not _is_boss_round() or _boss_defeated):
+	if _round_elapsed >= _round_duration:
 		_complete_round()
 
 
@@ -254,6 +311,7 @@ func _select_phase(initial: bool) -> void:
 		_spawn_cooldown = minf(_spawn_cooldown, 0.4)
 	_spawned_this_wave = 0
 	_wave_director.begin_wave(_round_number)
+	_setup_endless_deployable_ambush()
 	_spawn_cooldown = 1.0 if initial else 0.4
 	if is_instance_valid(_room_event_director):
 		_room_event_director.start_wave(_round_number)
@@ -332,6 +390,7 @@ func _complete_room_transition(target_room_id: StringName, arrival_position: Vec
 	if not _rooms.has(target_room_id):
 		_room_transition_pending = false
 		return
+	var source_room_id := _current_room_id
 	if is_instance_valid(_room_event_director):
 		_room_event_director.leave_room()
 	(_rooms[_current_room_id] as SurvivorRoom).set_active(false)
@@ -344,11 +403,91 @@ func _complete_room_transition(target_room_id: StringName, arrival_position: Vec
 	for projectile: Node in _projectile_layer.get_children():
 		projectile.queue_free()
 	_set_room_actor_presence()
+	await get_tree().physics_frame
+	_migrate_enemies_between_rooms(source_room_id, target_room_id)
+	_set_room_actor_presence()
 	if is_instance_valid(_room_event_director):
 		_room_event_director.enter_room(_current_room_id, _room_event_anchor(_current_room_id))
 	_refresh_room_title()
 	_room_transition_cooldown = 0.6
 	_room_transition_pending = false
+	_room_transition_count += 1
+
+
+func _migrate_enemies_between_rooms(source_room_id: StringName, target_room_id: StringName) -> void:
+	if source_room_id == target_room_id or not is_instance_valid(_player):
+		return
+	var candidates: Array[EnemyActor] = []
+	for actor: Node in _actor_layer.get_children():
+		if actor is EnemyActor and actor.has_meta("room_id") and StringName(actor.get_meta("room_id")) == source_room_id:
+			candidates.append(actor as EnemyActor)
+	if candidates.is_empty():
+		return
+	var progress := clampf(float(_round_number - 1) * 0.006 + float(_player.current_level - 1) * 0.003, 0.0, 0.18)
+	var weighted_candidates: Array[Dictionary] = []
+	for enemy: EnemyActor in candidates:
+		var definition := enemy.get_definition()
+		if definition == null or definition.role == EnemyDefinition.Role.BOSS:
+			continue
+		var weight := 0.0
+		match definition.role:
+			EnemyDefinition.Role.CHASER:
+				weight = 0.52
+			EnemyDefinition.Role.CHARGER:
+				weight = 0.36
+			EnemyDefinition.Role.RANGED:
+				weight = 0.16
+			EnemyDefinition.Role.AREA_DENIAL:
+				weight = 0.08
+		var enemy_id := String(definition.id)
+		if enemy_id.contains("runner") or enemy_id.contains("sprinter") or enemy_id.contains("pusher"):
+			weight += 0.08
+		weight = clampf(weight + progress, 0.0, 0.72)
+		if weight > 0.0:
+			weighted_candidates.append({"enemy": enemy, "weight": weight})
+	if weighted_candidates.is_empty():
+		return
+	var seed_value := _endless_ambush_seed_base ^ (_round_number * 19349663) ^ (_room_transition_count * 83492791) ^ (_player.current_level * 73856093)
+	_room_migration_rng.seed = maxi(1, absi(seed_value))
+	var available_slots := maxi(0, _current_max_alive() - _alive_enemy_count())
+	var population_cap := maxi(1, floori(float(maxi(1, candidates.size() - 1)) * 0.5))
+	var max_migrants := mini(available_slots, mini(2, population_cap))
+	var migrated: Array[EnemyActor] = []
+	while not weighted_candidates.is_empty() and migrated.size() < max_migrants:
+		var total_weight := 0.0
+		for entry: Dictionary in weighted_candidates:
+			total_weight += float(entry["weight"])
+		var roll := _room_migration_rng.randf() * total_weight
+		var selected_index := 0
+		for index: int in range(weighted_candidates.size()):
+			roll -= float(weighted_candidates[index]["weight"])
+			if roll <= 0.0:
+				selected_index = index
+				break
+		var selected: Dictionary = weighted_candidates.pop_at(selected_index)
+		if migrated.is_empty() and weighted_candidates.size() > 0:
+			# With a crowd, one eligible pursuer follows while the cap guarantees the
+			# remaining actors stay behind. A lone candidate still gets a real chance.
+			pass
+		elif _room_migration_rng.randf() > float(selected["weight"]):
+			break
+		migrated.append(selected["enemy"] as EnemyActor)
+	for enemy: EnemyActor in migrated:
+		var spawn_point := _room_migration_spawn_point()
+		if not spawn_point.is_finite():
+			continue
+		enemy.migrate_to_room(target_room_id, spawn_point)
+
+
+func _room_migration_spawn_point() -> Vector2:
+	for _attempt: int in range(36):
+		var radius := _room_migration_rng.randf_range(300.0, 390.0)
+		var point := _player.global_position + Vector2.RIGHT.rotated(_room_migration_rng.randf_range(0.0, TAU)) * radius
+		point.x = clampf(point.x, SPAWN_MIN_X, SPAWN_MAX_X)
+		point.y = clampf(point.y, SPAWN_MIN_Y, SPAWN_MAX_Y)
+		if point.distance_to(_player.global_position) >= SPAWN_MIN_PLAYER_DISTANCE and _spawn_point_is_clear(point):
+			return point
+	return _spawn_position()
 
 
 func _set_room_actor_presence() -> void:
@@ -363,7 +502,14 @@ func _set_room_actor_presence() -> void:
 			actor.visible = active
 			actor.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
 			actor.collision_layer = 4 if active else 0
-			actor.collision_mask = 7 if active else 0
+			actor.collision_mask = 1 if active else 0
+			var attack_area := actor.get_node_or_null("AttackArea") as Area2D
+			if attack_area != null:
+				attack_area.collision_mask = 2 if active else 0
+				if not active:
+					attack_area.set_deferred("monitoring", false)
+				elif actor.has_method("_update_attack_area"):
+					actor.call("_update_attack_area")
 	for pickup: Node in _pickup_layer.get_children():
 		if pickup is Area2D and pickup.has_meta("room_id"):
 			var active: bool = StringName(pickup.get_meta("room_id")) == _current_room_id
@@ -410,6 +556,7 @@ func _wave_for_round(round_number: int) -> WaveDefinition:
 		wave.enemy_health_multiplier += float(cycle_index) * 0.14
 		wave.max_alive += mini(cycle_index, 24)
 		wave.spawn_interval = maxf(0.55, wave.spawn_interval / (1.0 + float(cycle_index) * 0.025))
+		_extend_endless_roster(wave, pattern_index, cycle_index, round_number)
 		return wave
 	return _authored_waves[round_number - 1]
 
@@ -453,6 +600,169 @@ func _current_spawn_budget() -> int:
 	if _current_wave == null:
 		return 0
 	return _current_wave.planned_spawn_count
+
+
+func _extend_endless_roster(wave: WaveDefinition, pattern_index: int, cycle_index: int, round_number: int) -> void:
+	if wave == null or ENDLESS_SUPPLEMENTAL_ENEMIES.is_empty():
+		return
+	var supplemental: EnemyDefinition
+	for offset: int in range(ENDLESS_SUPPLEMENTAL_ENEMIES.size()):
+		var candidate := ENDLESS_SUPPLEMENTAL_ENEMIES[posmod(pattern_index + cycle_index + offset, ENDLESS_SUPPLEMENTAL_ENEMIES.size())]
+		var already_present := false
+		for existing: EnemyDefinition in wave.enemy_definitions:
+			if existing != null and existing.id == candidate.id:
+				already_present = true
+				break
+		if not already_present:
+			supplemental = candidate
+			break
+	if supplemental == null:
+		return
+	var weapon_controller := _player.get_node_or_null("AutoWeapon") if is_instance_valid(_player) else null
+	var average_tier := 1.0
+	if weapon_controller != null and weapon_controller.has_method("get_unlocked_weapon_ids"):
+		var weapon_ids: Array = weapon_controller.call("get_unlocked_weapon_ids")
+		if not weapon_ids.is_empty():
+			var tier_sum := 0.0
+			for weapon_id: StringName in weapon_ids:
+				tier_sum += float(weapon_controller.call("get_weapon_tier", weapon_id))
+			average_tier = tier_sum / float(weapon_ids.size())
+	var player_level := maxi(1, _player.current_level) if is_instance_valid(_player) else 1
+	var expected_level := 1.0 + float(maxi(0, round_number - 1)) * 0.5
+	var level_advantage := clampf(float(player_level) - expected_level, 0.0, 10.0)
+	var new_weight := clampf(0.055 + float(mini(cycle_index, 6)) * 0.003 + level_advantage * 0.0015 + (average_tier - 1.0) * 0.004, 0.055, 0.12)
+	var definitions: Array[EnemyDefinition] = wave.enemy_definitions.duplicate()
+	var weights: Array[float] = wave.spawn_weights.duplicate()
+	var total_weight := 0.0
+	for index: int in range(definitions.size()):
+		total_weight += maxf(0.0, weights[index])
+	if total_weight <= 0.0:
+		return
+	for index: int in range(weights.size()):
+		weights[index] = maxf(0.0, weights[index] / total_weight * (1.0 - new_weight))
+	definitions.append(supplemental)
+	weights.append(new_weight)
+	wave.enemy_definitions = definitions
+	wave.spawn_weights = weights
+
+
+func _setup_endless_deployable_ambush() -> void:
+	_deployable_ambush_pending = false
+	_deployable_ambush_time = INF
+	_deployable_ambush_deadline = INF
+	_deployable_ambush_retry_timer = 0.0
+	if not _endless_mode or _current_wave == null or _round_number <= _authored_waves.size() or not is_instance_valid(_player):
+		return
+	var inventory := _player.get_shop_inventory_summary()
+	var turret_weapon_count := 0
+	var active_turret_count := 0
+	var highest_turret_tier := 1
+	for deployable: Dictionary in inventory.get("deployables", []):
+		if String(deployable.get("kind", "")) in ["turret", "mine"]:
+			turret_weapon_count += 1
+			active_turret_count += maxi(0, int(deployable.get("count", 0)))
+			highest_turret_tier = maxi(highest_turret_tier, int(deployable.get("tier", 1)))
+	if turret_weapon_count <= 0:
+		return
+	var cycle_index := maxi(0, floori(float(_round_number - _authored_waves.size() - 1) / float(ENDLESS_WAVE_PATTERNS.size())))
+	var seed_value := _endless_ambush_seed_base ^ (_round_number * 73856093) ^ (_player.current_level * 19349663) ^ (highest_turret_tier * 83492791)
+	_endless_ambush_rng.seed = maxi(1, absi(seed_value))
+	var window_start := clampf(6.5 - float(mini(_player.current_level, 30)) * 0.035 - float(mini(highest_turret_tier - 1, 3)) * 0.35, 4.0, 6.5)
+	var window_end := minf(20.0, _round_duration * 0.36)
+	window_end = minf(window_end, window_start + 8.0 + float(mini(active_turret_count, 4)) * 0.35 + float(mini(cycle_index, 5)) * 0.25)
+	if window_end <= window_start:
+		return
+	_deployable_ambush_time = _endless_ambush_rng.randf_range(window_start, window_end)
+	_deployable_ambush_deadline = minf(_round_duration * 0.68, _deployable_ambush_time + 12.0)
+	_deployable_ambush_pending = true
+
+
+func _active_room_deployables() -> Array[Node2D]:
+	var deployables: Array[Node2D] = []
+	for candidate: Node in get_tree().get_nodes_in_group("deployed_structures"):
+		if not is_instance_valid(candidate) or candidate.is_queued_for_deletion() or not candidate is Node2D:
+			continue
+		if StringName(candidate.get_meta("room_id", _current_room_id)) != _current_room_id:
+			continue
+		deployables.append(candidate as Node2D)
+	return deployables
+
+
+func _tick_endless_deployable_ambush(delta: float) -> void:
+	if not _deployable_ambush_pending or _round_elapsed < _deployable_ambush_time or _state != RunState.RUNNING:
+		return
+	if _spawned_this_wave >= _current_spawn_budget() or _alive_enemy_count() >= _current_max_alive():
+		return
+	_deployable_ambush_retry_timer = maxf(0.0, _deployable_ambush_retry_timer - delta)
+	if _deployable_ambush_retry_timer > 0.0:
+		return
+	_deployable_ambush_retry_timer = 0.5
+	var deployables := _active_room_deployables()
+	var preferred_group := "deployed_turrets" if posmod(_round_number + floori(float(_round_number - _authored_waves.size() - 1) / float(ENDLESS_WAVE_PATTERNS.size())), 2) == 0 else "deployed_mines"
+	var candidates: Array[Node2D] = []
+	for structure: Node2D in deployables:
+		if structure.is_in_group(preferred_group):
+			candidates.append(structure)
+	if candidates.is_empty():
+		candidates = deployables
+	var spawn_point := Vector2(INF, INF)
+	if not candidates.is_empty():
+		var structure := candidates[_endless_ambush_rng.randi_range(0, candidates.size() - 1)]
+		spawn_point = _deployable_ambush_spawn_point(structure)
+	if not spawn_point.is_finite() and _round_elapsed >= _deployable_ambush_deadline:
+		spawn_point = _safe_edge_spawn_point()
+	if not spawn_point.is_finite() and _round_elapsed >= _deployable_ambush_deadline:
+		spawn_point = _spawn_position()
+	if not spawn_point.is_finite():
+		return
+	var definition := _wave_director.choose_enemy(_current_wave.enemy_definitions, _current_wave.spawn_weights, _build_wave_context())
+	if definition == null:
+		_deployable_ambush_pending = false
+		return
+	_spawn_enemy(definition, _current_health_multiplier(), false, spawn_point)
+	_spawned_this_wave += 1
+	_deployable_ambush_pending = false
+	_recent_turret_ambush_positions.append(spawn_point)
+	if _recent_turret_ambush_positions.size() > 5:
+		_recent_turret_ambush_positions.pop_front()
+
+
+func _deployable_ambush_spawn_point(structure: Node2D) -> Vector2:
+	if not is_instance_valid(structure):
+		return Vector2(INF, INF)
+	var is_mine := structure.is_in_group("deployed_mines")
+	var min_radius := 144.0 if is_mine else 96.0
+	var max_radius := 252.0 if is_mine else 220.0
+	for _attempt: int in range(48):
+		var radius := _endless_ambush_rng.randf_range(min_radius, max_radius)
+		var point := structure.global_position + Vector2.RIGHT.rotated(_endless_ambush_rng.randf_range(0.0, TAU)) * radius
+		point.x = clampf(point.x, SPAWN_MIN_X, SPAWN_MAX_X)
+		point.y = clampf(point.y, SPAWN_MIN_Y, SPAWN_MAX_Y)
+		if point.distance_to(_player.global_position) < SPAWN_MIN_PLAYER_DISTANCE or not _spawn_point_is_clear(point):
+			continue
+		var recently_used := false
+		for previous: Vector2 in _recent_turret_ambush_positions:
+			if previous.distance_squared_to(point) < 96.0 * 96.0:
+				recently_used = true
+				break
+		if not recently_used:
+			return point
+	return Vector2(INF, INF)
+
+
+func _safe_edge_spawn_point() -> Vector2:
+	var edge_points: Array[Vector2] = [
+		Vector2(SPAWN_MIN_X + 24.0, -100.0), Vector2(SPAWN_MAX_X - 24.0, -100.0),
+		Vector2(SPAWN_MIN_X + 24.0, 170.0), Vector2(SPAWN_MAX_X - 24.0, 170.0),
+		Vector2(-430.0, SPAWN_MIN_Y + 24.0), Vector2(0.0, SPAWN_MIN_Y + 24.0), Vector2(430.0, SPAWN_MIN_Y + 24.0),
+		Vector2(-430.0, SPAWN_MAX_Y - 24.0), Vector2(0.0, SPAWN_MAX_Y - 24.0), Vector2(430.0, SPAWN_MAX_Y - 24.0),
+	]
+	for attempt: int in range(edge_points.size()):
+		var index := posmod(attempt + _endless_ambush_rng.randi_range(0, edge_points.size() - 1), edge_points.size())
+		var point := edge_points[index]
+		if point.distance_to(_player.global_position) >= SPAWN_MIN_PLAYER_DISTANCE and _spawn_point_is_clear(point):
+			return point
+	return Vector2(INF, INF)
 
 
 func _is_boss_round() -> bool:
@@ -578,7 +888,7 @@ func _build_wave_context() -> Dictionary:
 	var starter_output: float = 1.0
 	if starter_definition != null:
 		starter_output = float(starter_definition.damage) * float(starter_definition.projectile_count) / maxf(0.05, starter_definition.fire_interval)
-	context["offense_index"] = maxf(0.5, estimated_output / starter_output) * pow(1.0 + float(context["combat_upgrade_ranks"]) * 0.015, 0.2)
+	context["offense_index"] = maxf(0.5, estimated_output / starter_output) * _player.get_attack_damage_multiplier() * pow(1.0 + float(context["combat_upgrade_ranks"]) * 0.015, 0.2)
 	return context
 
 
@@ -590,10 +900,19 @@ func _weapon_definition(weapon_id: StringName) -> WeaponDefinition:
 
 
 func _spawn_from_phase() -> void:
-	if _current_phase == null or _alive_enemy_count() >= _current_max_alive():
-		if _current_wave == null or _alive_enemy_count() >= _current_max_alive():
-			return
-	if _current_wave != null and _current_spawn_budget() > 0 and _spawned_this_wave >= _current_spawn_budget():
+	if _current_phase == null and _current_wave == null:
+		return
+	var max_alive := _current_max_alive()
+	var planned_budget := _current_spawn_budget()
+	if _deployable_ambush_pending:
+		# Reserve one legal live slot and one authored spawn slot for the scheduled
+		# deployable encounter. The event itself still obeys both limits.
+		max_alive = maxi(0, max_alive - 1)
+		if planned_budget > 0:
+			planned_budget = maxi(0, planned_budget - 1)
+	if _alive_enemy_count() >= max_alive:
+		return
+	if _current_wave != null and _current_spawn_budget() > 0 and _spawned_this_wave >= planned_budget:
 		return
 	var definition := _wave_director.choose_enemy(_current_wave.enemy_definitions, _current_wave.spawn_weights, _build_wave_context()) if _current_wave != null else _weighted_enemy(_current_phase)
 	if definition != null:
@@ -623,10 +942,14 @@ func _weighted_enemy_from_arrays(definitions: Array[EnemyDefinition], weights: A
 	return definitions.back()
 
 
-func _spawn_enemy(definition: EnemyDefinition, health_multiplier: float, boss: bool = false) -> void:
+func _spawn_enemy(
+		definition: EnemyDefinition, health_multiplier: float, boss: bool = false,
+		forced_spawn_point: Vector2 = Vector2(INF, INF)) -> void:
 	if definition == null:
 		return
-	var spawn_point: Vector2 = _boss_spawn_position() if boss else _spawn_position()
+	var spawn_point: Vector2 = forced_spawn_point
+	if not spawn_point.is_finite():
+		spawn_point = _boss_spawn_position() if boss else _spawn_position()
 	if not spawn_point.is_finite():
 		return
 	var enemy := ENEMY_SCENE.instantiate() as EnemyActor
@@ -694,6 +1017,8 @@ func _on_enemy_defeated(definition: EnemyDefinition, death_position: Vector2) ->
 		_boss_defeated = true
 		_hud.set_phase_name("%s CLEARED" % definition.display_name.to_upper())
 		_hud.hide_boss_health()
+		# Bosses pay out a visible extra XP pickup and a guaranteed health pack.
+		_spawn_xp_orb(maxi(6, roundi(float(definition.xp_reward) * 0.5)), death_position + Vector2(0, -24))
 		_spawn_consumable(death_position + Vector2(30, 0), ConsumablePickup.Reward.HEALTH)
 		_spawn_consumable(death_position + Vector2(-30, 0), ConsumablePickup.Reward.ENERGY)
 	elif randf() < 0.035:
@@ -814,8 +1139,9 @@ func _on_player_level_up(_new_level: int) -> void:
 func _complete_round() -> void:
 	if _state != RunState.RUNNING:
 		return
-	if _is_boss_round() and not _boss_defeated:
-		return
+	if _is_boss_round() and _boss_spawned and not _boss_defeated:
+		# The boss can outlast the shift timer; its round still clears into the shop.
+		_hud.hide_boss_health()
 	_state = RunState.ROUND_CLEAR
 	for actor: Node in _actor_layer.get_children():
 		if actor is EnemyActor:
@@ -825,7 +1151,10 @@ func _complete_round() -> void:
 	for pickup: Node in _pickup_layer.get_children():
 		if pickup is SurvivorXpOrb:
 			pickup.collect_for_player(_player)
-		elif pickup is ConsumablePickup or pickup is RoomSupplyPickup:
+		elif pickup is ConsumablePickup:
+			pickup.collect_for_player(_player)
+			pickup.queue_free()
+		elif pickup is RoomSupplyPickup:
 			pickup.queue_free()
 	call_deferred("_open_intermission")
 
@@ -845,42 +1174,159 @@ func _show_next_stat_choice() -> void:
 		return
 	_pending_level_ups -= 1
 	_active_stat_choices.clear()
-	for choice: Dictionary in _build_stat_choices():
-		if _player.can_apply_level_stat(choice["id"]):
+	for choice: Dictionary in _build_level_choices():
+		if _player.can_apply_level_choice(choice):
 			_active_stat_choices.append(choice)
 	_active_stat_choices.shuffle()
-	if _active_stat_choices.size() > 3:
-		_active_stat_choices.resize(3)
+	if _active_stat_choices.size() > 4:
+		_active_stat_choices.resize(4)
 	_state = RunState.LEVEL_UP
 	get_tree().paused = true
-	_hud.show_stat_choices(_active_stat_choices)
+	_hud.show_stat_choices(_active_stat_choices, _player.get_shop_summary())
 
 
-func _build_stat_choices() -> Array[Dictionary]:
+func _build_level_choices() -> Array[Dictionary]:
 	var progress_tier := mini(4, floori(float(_player.current_level - 1) / 5.0) + floori(float(_round_number - 1) / 5.0))
-	var speed_bonus := 0.03 + float(progress_tier) * 0.01
-	var health_bonus := 3 + progress_tier * 2
-	var lifesteal_bonus := minf(0.07, 0.02 + float(progress_tier) * 0.0125)
-	var dodge_bonus := minf(0.07, 0.02 + float(progress_tier) * 0.0125)
-	var protection_bonus := minf(0.07, 0.03 + float(progress_tier) * 0.01)
-	return [
-		{"id": &"speed", "name": "QUICKER FEET", "description": "+%d%% movement speed for this run." % roundi(speed_bonus * 100.0), "value": speed_bonus},
-		{"id": &"health", "name": "HEALTHIER SHIFT", "description": "+%d maximum health and restore %d health now." % [health_bonus, health_bonus], "value": float(health_bonus)},
-		{"id": &"lifesteal", "name": "RETURNING ENERGY", "description": "Recover %d%% of damage dealt as health." % roundi(lifesteal_bonus * 100.0), "value": lifesteal_bonus},
-		{"id": &"dodge", "name": "QUICK REFLEXES", "description": "+%d%% chance to dodge an incoming hit." % roundi(dodge_bonus * 100.0), "value": dodge_bonus},
-		{"id": &"protection", "name": "PROTECTIVE APRON", "description": "Reduce each hit's damage by %d%% for this run." % roundi(protection_bonus * 100.0), "value": protection_bonus},
+	var health_bonus := 4 + progress_tier
+	var damage_bonus := minf(0.12, 0.07 + float(progress_tier) * 0.01)
+	var speed_bonus := minf(0.09, 0.06 + float(progress_tier) * 0.0075)
+	var lifesteal_bonus := minf(0.04, 0.025 + float(progress_tier) * 0.00375)
+	var elemental_bonus := mini(3, 1 + floori(float(progress_tier) / 2.0))
+	var bundle_health := 2 + progress_tier
+	var bundle_protection := minf(0.04, 0.02 + float(progress_tier) * 0.005)
+	var bundle_speed := minf(0.055, 0.035 + float(progress_tier) * 0.005)
+	var bundle_dodge := minf(0.03, 0.015 + float(progress_tier) * 0.00375)
+	var choices: Array[Dictionary] = [
+		{"id": &"health_pickup", "name": "Break-room soup", "description": "A hearty meal raises your maximum health.", "effects": [{"stat": &"max_health", "value": health_bonus}]},
+		{"id": &"damage_pickup", "name": "Heavy-duty price gun", "description": "A sturdier grip improves every hit.", "effects": [{"stat": &"damage", "value": minf(0.10, 0.04 + float(progress_tier) * 0.015)}]},
+		{"id": &"steady_footing_bundle", "name": "Fresh aisle runners", "description": "A better pace helps you slip past trouble.", "effects": [{"stat": &"move_speed", "value": bundle_speed}, {"stat": &"dodge", "value": bundle_dodge}]},
+		{"id": &"apron_bundle", "name": "Reinforced apron", "description": "Extra padding and a little more room to take a hit.", "effects": [{"stat": &"protection", "value": bundle_protection}, {"stat": &"max_health", "value": bundle_health}]},
+		{"id": &"elemental_bundle", "name": "Aisle-rinse concentrate", "description": "Stronger mist and a small reserve of extra health.", "effects": [{"stat": &"elemental_damage", "value": elemental_bonus}, {"stat": &"max_health", "value": 1 + floori(float(progress_tier) / 2.0)}]},
+		{"id": &"damage_tradeoff", "name": "Marked-down cans", "description": "Pack a harder hit, take on less maximum health.", "effects": [{"stat": &"damage", "value": damage_bonus}, {"stat": &"max_health", "value": -3}]},
+		{"id": &"speed_tradeoff", "name": "Non-slip shoes", "description": "Move faster, give up a little force.", "effects": [{"stat": &"move_speed", "value": speed_bonus}, {"stat": &"damage", "value": -0.04}]},
+		{"id": &"lifesteal_tradeoff", "name": "Energy drink", "description": "Recover on hits, lose some staying power.", "effects": [{"stat": &"lifesteal", "value": lifesteal_bonus}, {"stat": &"max_health", "value": -3}]},
 	]
+	var weapon_targets := _player.get_level_choice_weapon_targets()
+	if weapon_targets.is_empty():
+		return choices
+	var target_index := posmod(_player.current_level + _round_number, weapon_targets.size())
+	var primary: Dictionary = weapon_targets[target_index]
+	var primary_id := String(primary.get("id", ""))
+	var primary_name := String(primary.get("name", "equipped tool"))
+	var primary_is_elemental := int(primary.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)) == WeaponDefinition.DamageType.ELEMENTAL
+	var primary_supports_rate := bool(primary.get("supports_fire_rate", true))
+	var weapon_damage_bonus := mini(4, 1 + floori(float(progress_tier + int(primary.get("tier", 1))) / 2.0))
+	var weapon_rate_bonus := minf(0.12, 0.04 + float(progress_tier) * 0.015)
+	choices.append({
+		"id": &"aisle_tool_calibration",
+		"name": "Aisle-tool calibration",
+		"description": "%s lands a firmer hit after the mid-shift tune-up." % primary_name,
+		"effects": [{"stat": &"weapon_damage", "value": weapon_damage_bonus, "label": "%s damage" % primary_name, "weapon_id": primary_id}],
+	})
+	var tuneup_name := "Closer's tune-up"
+	var tuneup_description := "Rebalance %s for a faster, slightly stronger cycle." % primary_name
+	var tuneup_effects: Array[Dictionary] = [
+		{"stat": &"weapon_damage", "value": maxi(1, weapon_damage_bonus - 1), "label": "%s damage" % primary_name, "weapon_id": primary_id},
+		{"stat": &"weapon_fire_rate", "value": weapon_rate_bonus, "label": "%s fire rate" % primary_name, "weapon_id": primary_id},
+	]
+	if primary_is_elemental:
+		tuneup_name = "Pressure-regulator tune-up"
+		tuneup_description = "Set %s to a stronger spray and keep its cycle moving." % primary_name
+		tuneup_effects[1] = {"stat": &"elemental_damage", "value": elemental_bonus, "label": "Elemental Damage"}
+	elif not primary_supports_rate:
+		tuneup_name = "Steady-hand reinforcement"
+		tuneup_description = "Brace %s for cleaner, harder contact." % primary_name
+		tuneup_effects[1] = {"stat": &"protection", "value": bundle_protection}
+	choices.append({
+		"id": &"closer_tuneup_bundle",
+		"name": tuneup_name,
+		"description": tuneup_description,
+		"effects": tuneup_effects,
+	})
+	var extra_effects: Array[Dictionary] = [
+		{"stat": &"weapon_damage", "value": weapon_damage_bonus, "label": "%s damage" % primary_name, "weapon_id": primary_id},
+		{"stat": &"move_speed", "value": minf(0.04, 0.02 + float(progress_tier) * 0.005)},
+	]
+	if primary_is_elemental:
+		extra_effects.append({"stat": &"elemental_damage", "value": elemental_bonus, "label": "Elemental Damage"})
+	elif primary_supports_rate:
+		var secondary_name := primary_name
+		var secondary_id := primary_id
+		if weapon_targets.size() > 1:
+			for offset: int in range(1, weapon_targets.size()):
+				var secondary_index := posmod(target_index + offset, weapon_targets.size())
+				var secondary: Dictionary = weapon_targets[secondary_index]
+				if bool(secondary.get("supports_fire_rate", true)):
+					secondary_name = String(secondary.get("name", "backup tool"))
+					secondary_id = String(secondary.get("id", ""))
+					break
+		extra_effects.append({"stat": &"weapon_fire_rate", "value": minf(0.08, weapon_rate_bonus * 0.75), "label": "%s fire rate" % secondary_name, "weapon_id": secondary_id})
+	else:
+		extra_effects.append({"stat": &"protection", "value": minf(0.04, 0.02 + float(progress_tier) * 0.005)})
+	choices.append({
+		"id": &"closing_round_routine",
+		"name": "Closing-round routine",
+		"description": "A practice lap for %s, with a little more room to move." % primary_name,
+		"effects": extra_effects,
+	})
+	var tradeoff_positive: Dictionary
+	var tradeoff_name := "Overclocked register"
+	var tradeoff_description := "Run %s faster, at the cost of your general striking force." % primary_name
+	if primary_supports_rate:
+		tradeoff_positive = {"stat": &"weapon_fire_rate", "value": minf(0.14, weapon_rate_bonus + 0.025), "label": "%s fire rate" % primary_name, "weapon_id": primary_id}
+	else:
+		tradeoff_name = "Heavy-handed restock"
+		tradeoff_description = "Hit harder with %s, but give up some general striking force." % primary_name
+		tradeoff_positive = {"stat": &"weapon_damage", "value": weapon_damage_bonus, "label": "%s damage" % primary_name, "weapon_id": primary_id}
+	choices.append({
+		"id": &"overclocked_register_tradeoff",
+		"name": tradeoff_name,
+		"description": tradeoff_description,
+		"effects": [tradeoff_positive, {"stat": &"damage", "value": -minf(0.08, 0.04 + float(progress_tier) * 0.01)}],
+	})
+	if bool(primary.get("is_structure", false)):
+		var engineering_bonus := mini(5, 2 + progress_tier)
+		choices.append({
+			"id": &"engineering_shift_training",
+			"name": "Fixture maintenance",
+			"description": "Tune your deployed gear; higher Engineering adds direct turret and mine damage.",
+			"effects": [{"stat": &"engineering", "value": engineering_bonus, "label": "Engineering"}],
+		})
+		choices.append({
+			"id": &"structure_and_stock_bundle",
+			"name": "Spare-parts crate",
+			"description": "Improve the equipped %s and your fixture output." % primary_name,
+			"effects": [
+				{"stat": &"weapon_damage", "value": mini(3, weapon_damage_bonus), "label": "%s damage" % primary_name, "weapon_id": primary_id},
+				{"stat": &"engineering", "value": 1 + floori(float(progress_tier) / 2.0), "label": "Engineering"},
+			],
+		})
+	if weapon_targets.size() > 1:
+		var secondary_index := posmod(target_index + 1, weapon_targets.size())
+		var secondary: Dictionary = weapon_targets[secondary_index]
+		var secondary_id := String(secondary.get("id", ""))
+		var secondary_name := String(secondary.get("name", "backup tool"))
+		choices.append({
+			"id": &"cross_tool_rebalance",
+			"name": "Borrowed torque",
+			"description": "Move one point of force from %s into %s." % [secondary_name, primary_name],
+			"effects": [
+				{"stat": &"weapon_damage", "value": mini(3, weapon_damage_bonus), "label": "%s damage" % primary_name, "weapon_id": primary_id},
+				{"stat": &"weapon_damage", "value": -1, "label": "%s damage" % secondary_name, "weapon_id": secondary_id},
+			],
+		})
+	return choices
 
 
 func _on_stat_choice_selected(choice_id: StringName) -> void:
 	if _state != RunState.LEVEL_UP:
 		return
-	var choice_value := -1.0
+	var selected_choice: Dictionary = {}
 	for choice: Dictionary in _active_stat_choices:
 		if StringName(String(choice.get("id", ""))) == choice_id:
-			choice_value = float(choice.get("value", 0.0))
+			selected_choice = choice
 			break
-	if choice_value < 0.0 or not _player.apply_level_stat(choice_id, choice_value):
+	if selected_choice.is_empty() or not _player.apply_level_choice(selected_choice):
 		return
 	_active_stat_choices.clear()
 	_hud.hide_overlay()
@@ -901,9 +1347,10 @@ func _open_shop() -> void:
 	get_tree().paused = true
 	_shop_reroll_count = 0
 	_purchased_shop_indices.clear()
+	_locked_shop_indices.clear()
 	_active_shop_offers = _roll_shop_offers()
 	_active_shop_prices = _prices_for_offers(_active_shop_offers)
-	_shop.show_shop(_round_number, _currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices)
+	_shop.show_shop(_round_number, _currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _player.get_shop_summary(), _weapon_names())
 
 
 func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
@@ -935,20 +1382,18 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 				direct_offer.description = "Skip the merge and upgrade this tool directly to Tier %s." % _tier_roman(available_direct_tier)
 				candidates.append(direct_offer)
 	for upgrade: UpgradeDefinition in UPGRADE_DEFINITIONS:
-		if _player.get_upgrade_rank(upgrade.id) >= upgrade.max_rank:
+		if not _player.can_apply_upgrade(upgrade):
 			continue
 		if upgrade.effect == UpgradeDefinition.Effect.UNLOCK_WEAPON:
 			# New weapons already have a dedicated tier-aware offer, so avoid two
 			# different cards competing for the same unlock.
-			continue
-		elif not upgrade.target_weapon_id.is_empty() and weapon_controller != null and weapon_controller.has_method("has_weapon") and not weapon_controller.call("has_weapon", upgrade.target_weapon_id):
 			continue
 		candidates.append(upgrade)
 	candidates.shuffle()
 	var offers: Array = []
 	var candidate_keys: Dictionary = {}
 	for candidate: Variant in candidates:
-		if offers.size() >= 3:
+		if offers.size() >= ShiftShop.MAX_OFFERS:
 			break
 		var key := _shop_candidate_key(candidate)
 		if candidate_keys.has(key) or excluded_keys.has(key):
@@ -956,7 +1401,7 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 		candidate_keys[key] = true
 		offers.append(candidate)
 	for stat_offer: Dictionary in _eligible_stat_shop_offers():
-		if offers.size() >= 3:
+		if offers.size() >= ShiftShop.MAX_OFFERS:
 			break
 		var key := _shop_candidate_key(stat_offer)
 		if candidate_keys.has(key) or excluded_keys.has(key):
@@ -967,7 +1412,7 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 	# upgrade/weapon is capped and lifesteal/dodge have hit their limits, use a
 	# separately keyed repeatable stat offer to keep all three slots actionable.
 	var repeat_index: int = 0
-	while offers.size() < 3 and repeat_index < 16:
+	while offers.size() < ShiftShop.MAX_OFFERS and repeat_index < 16:
 		var fallback := _repeatable_stat_fallback(repeat_index)
 		if fallback.is_empty():
 			break
@@ -984,7 +1429,7 @@ func _eligible_stat_shop_offers() -> Array[Dictionary]:
 	var offers: Array[Dictionary] = []
 	for choice: Dictionary in _build_stat_choices():
 		var choice_id := StringName(choice.get("id", &""))
-		if not _player.can_apply_level_stat(choice_id):
+		if not _player.can_apply_level_stat_delta(choice_id, float(choice.get("value", 0.0))):
 			continue
 		offers.append({
 			"kind": "stat",
@@ -996,12 +1441,28 @@ func _eligible_stat_shop_offers() -> Array[Dictionary]:
 	return offers
 
 
+func _build_stat_choices() -> Array[Dictionary]:
+	var progress_tier := mini(4, floori(float(_player.current_level - 1) / 5.0) + floori(float(_round_number - 1) / 5.0))
+	var speed_bonus := 0.03 + float(progress_tier) * 0.01
+	var health_bonus := 3 + progress_tier * 2
+	var lifesteal_bonus := minf(0.07, 0.02 + float(progress_tier) * 0.0125)
+	var dodge_bonus := minf(0.07, 0.02 + float(progress_tier) * 0.0125)
+	var protection_bonus := minf(0.07, 0.03 + float(progress_tier) * 0.01)
+	return [
+		{"id": &"speed", "name": "QUICKER FEET", "description": "+%d%% movement speed for this run." % roundi(speed_bonus * 100.0), "value": speed_bonus},
+		{"id": &"health", "name": "HEALTHIER SHIFT", "description": "+%d maximum health and restore %d health now." % [health_bonus, health_bonus], "value": float(health_bonus)},
+		{"id": &"lifesteal", "name": "RETURNING ENERGY", "description": "Recover %d%% of damage dealt as health." % roundi(lifesteal_bonus * 100.0), "value": lifesteal_bonus},
+		{"id": &"dodge", "name": "QUICK REFLEXES", "description": "+%d%% chance to dodge an incoming hit." % roundi(dodge_bonus * 100.0), "value": dodge_bonus},
+		{"id": &"protection", "name": "PROTECTIVE APRON", "description": "Reduce each hit's damage by %d%% for this run." % roundi(protection_bonus * 100.0), "value": protection_bonus},
+	]
+
+
 func _repeatable_stat_fallback(variant_index: int) -> Dictionary:
 	var choices: Array[Dictionary] = _build_stat_choices()
 	var repeatable_choices: Array[Dictionary] = []
 	for choice: Dictionary in choices:
 		var choice_id := StringName(choice.get("id", &""))
-		if choice_id in [&"health", &"speed", &"protection"] and _player.can_apply_level_stat(choice_id):
+		if choice_id in [&"health", &"speed", &"protection"] and _player.can_apply_level_stat_delta(choice_id, float(choice.get("value", 0.0))):
 			repeatable_choices.append(choice)
 	if repeatable_choices.is_empty():
 		return {}
@@ -1059,7 +1520,7 @@ func _on_shop_offer_purchased(index: int) -> void:
 	if _purchased_shop_indices.has(index):
 		return
 	if index >= _active_shop_prices.size() or _currency < _active_shop_prices[index]:
-		_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices)
+		_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
 		return
 	var offer: Variant = _active_shop_offers[index]
 	var purchased := false
@@ -1070,14 +1531,30 @@ func _on_shop_offer_purchased(index: int) -> void:
 		purchased = _player.apply_upgrade(offer)
 	elif offer is Dictionary and String(offer.get("kind", "")) == "stat":
 		var stat_id := StringName(offer.get("id", &""))
-		purchased = _player.can_apply_level_stat(stat_id) and _player.apply_level_stat(stat_id, float(offer.get("value", 0.0)))
+		purchased = _player.can_apply_level_stat_delta(stat_id, float(offer.get("value", 0.0))) and _player.apply_level_stat(stat_id, float(offer.get("value", 0.0)))
 	if not purchased:
 		return
 	_currency -= _active_shop_prices[index]
 	if not _purchased_shop_indices.has(index):
 		_purchased_shop_indices.append(index)
 	_hud.set_weapons(_weapon_names())
-	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices)
+	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
+	_shop.set_shop_summary(_player.get_shop_summary(), _weapon_names())
+
+
+func _on_shop_weapon_sell_requested(weapon_id: StringName) -> void:
+	if _state != RunState.SHOP:
+		return
+	var weapon_controller := _player.get_node_or_null("AutoWeapon")
+	if weapon_controller == null or not weapon_controller.has_method("sell_weapon"):
+		return
+	var sold: Dictionary = weapon_controller.call("sell_weapon", weapon_id)
+	if sold.is_empty():
+		return
+	_currency += int(sold.get("payout", 0))
+	_hud.set_weapons(_weapon_names())
+	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
+	_shop.set_shop_summary(_player.get_shop_summary(), _weapon_names())
 
 
 func _on_shop_reroll_requested() -> void:
@@ -1085,14 +1562,53 @@ func _on_shop_reroll_requested() -> void:
 		return
 	var cost := _reroll_price()
 	if _currency < cost:
-		_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, cost, _purchased_shop_indices)
+		_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, cost, _purchased_shop_indices, _locked_shop_indices)
 		return
 	_currency -= cost
 	_shop_reroll_count += 1
-	_purchased_shop_indices.clear()
-	_active_shop_offers = _roll_shop_offers()
-	_active_shop_prices = _prices_for_offers(_active_shop_offers)
-	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices)
+	var locked_by_index: Dictionary = {}
+	var locked_keys: Dictionary = {}
+	var next_purchased: Array[int] = []
+	for index: int in _locked_shop_indices:
+		if index < 0 or index >= _active_shop_offers.size():
+			continue
+		locked_by_index[index] = {"offer": _active_shop_offers[index], "price": _active_shop_prices[index] if index < _active_shop_prices.size() else 0}
+		locked_keys[_shop_candidate_key(_active_shop_offers[index])] = true
+		if _purchased_shop_indices.has(index):
+			next_purchased.append(index)
+	var rerolled_offers := _roll_shop_offers(locked_keys)
+	var rerolled_prices := _prices_for_offers(rerolled_offers)
+	var next_offers: Array = []
+	var next_prices: Array[int] = []
+	var rolled_index := 0
+	var next_locked: Array[int] = []
+	for index: int in range(ShiftShop.MAX_OFFERS):
+		if locked_by_index.has(index):
+			var saved: Dictionary = locked_by_index[index]
+			next_offers.append(saved["offer"])
+			next_prices.append(int(saved["price"]))
+			next_locked.append(index)
+		else:
+			if rolled_index < rerolled_offers.size():
+				next_offers.append(rerolled_offers[rolled_index])
+				next_prices.append(rerolled_prices[rolled_index])
+				rolled_index += 1
+	_active_shop_offers = next_offers
+	_active_shop_prices = next_prices
+	_locked_shop_indices = next_locked
+	_purchased_shop_indices = next_purchased
+	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
+	_shop.set_shop_summary(_player.get_shop_summary(), _weapon_names())
+
+
+func _on_shop_offer_lock_toggled(index: int, locked: bool) -> void:
+	if _state != RunState.SHOP or index < 0 or index >= _active_shop_offers.size():
+		return
+	if locked and not _locked_shop_indices.has(index):
+		_locked_shop_indices.append(index)
+	elif not locked:
+		_locked_shop_indices.erase(index)
+	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
 
 
 func _on_shop_continue_requested() -> void:
@@ -1101,6 +1617,8 @@ func _on_shop_continue_requested() -> void:
 	_shop.visible = false
 	_round_number += 1
 	_round_elapsed = 0.0
+	_health_regen_elapsed = 0.0
+	_player.heal(maxi(1, roundi(float(_player.max_health) * 0.10)))
 	_boss_spawned = false
 	_boss_defeated = false
 	_powerup_cooldown = randf_range(18.0, 32.0)

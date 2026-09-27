@@ -1,6 +1,6 @@
 # Original audio
 
-All WAV files in this folder were synthesized for Bakkal After Dark by `generate_audio.py` on 26 September 2026. No third-party samples or melodies are used.
+All WAV files in this folder were synthesized for Supermarket: The Night by `generate_audio.py` on 26 September 2026. No third-party samples or melodies are used.
 
 - `night_shift_theme.wav` — soft 82 BPM eight-bar loop for the night shift.
 - `ui_confirm.wav` — menu and button confirmation.
@@ -17,4 +17,4 @@ Regenerate all source audio with:
 python3 assets/audio/generate_audio.py
 ```
 
-These are original generated audio assets, tracked separately from the project’s MIT-licensed code.
+The WAV files are original synthesized audio assets dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md). The generator script is source code and remains under the repository MIT license.

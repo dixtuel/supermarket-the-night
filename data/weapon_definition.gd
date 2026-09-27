@@ -8,9 +8,12 @@ enum AttackMode {
 	ORBITAL_CONTACT,
 	RETURNING_PROJECTILE,
 	DEPLOYED_SLOW_ZONE,
+	DEPLOYED_TURRET,
+	DEPLOYED_MINE,
 }
 
 enum ShopOfferKind { NEW_WEAPON, MERGE_COPY, DIRECT_TIER }
+enum DamageType { PHYSICAL, ELEMENTAL }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -20,6 +23,9 @@ enum ShopOfferKind { NEW_WEAPON, MERGE_COPY, DIRECT_TIER }
 @export var shop_offer_kind: ShopOfferKind = ShopOfferKind.NEW_WEAPON
 @export var attack_mode: AttackMode = AttackMode.TARGETED_PROJECTILE
 @export_range(1, 10000, 1) var damage: int = 10
+@export var damage_type: DamageType = DamageType.PHYSICAL
+## A bounded fraction of the player's Engineering added to this device's hit.
+@export_range(0.0, 2.0, 0.05) var engineering_coefficient: float = 0.0
 ## Matches SurvivorAutoWeapon's current authored field names.
 @export_range(0.05, 60.0, 0.05) var fire_interval: float = 0.65
 @export_range(0.0, 2000.0, 1.0) var target_range: float = 420.0

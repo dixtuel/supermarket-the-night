@@ -6,17 +6,17 @@ const TEST_ARENA_PATH := "res://levels/arena/test_arena.tscn"
 const RECORD_PATH := "user://bakkal_records.cfg"
 
 # Core Palette Tokens
-const COLOR_BASE_DARK := Color("101820")     # Midnight / Deep Charcoal Ink
-const COLOR_SURFACE := Color("1A2B30")       # Deep Petrol Slate / Register Chassis
-const COLOR_RECEIPT_PAPER := Color("F1E7CE") # Thermal Receipt Cream / Primary Ink
-const COLOR_ACCENT_LIME := Color("D4E36D")   # Fluorescent Discount Sticker / Neon Lime / Focus Ring
-const COLOR_ACCENT_CORAL := Color("EE806D")  # Price Slash / Alert Coral / Secondary Accent
+const COLOR_BASE_DARK := Color("10191c")     # Coolers after closing
+const COLOR_SURFACE := Color("263630")       # Deep aisle green
+const COLOR_RECEIPT_PAPER := Color("efebd8") # Stockroom paper
+const COLOR_ACCENT_LIME := Color("d6c479")   # Faded yellow price sticker
+const COLOR_ACCENT_CORAL := Color("d9786b")  # Marked-down produce label
 
 # Supporting Tonal Tokens
-const COLOR_SURFACE_DARK := Color(0.07, 0.11, 0.14, 0.96)
-const COLOR_SURFACE_BORDER := Color(0.18, 0.28, 0.32, 1.0)
-const COLOR_SURFACE_BORDER_LIGHT := Color(0.24, 0.37, 0.42, 1.0)
-const COLOR_MUTED := Color(0.55, 0.65, 0.67, 1.0)
+const COLOR_SURFACE_DARK := Color(0.07, 0.11, 0.10, 0.94)
+const COLOR_SURFACE_BORDER := Color(0.25, 0.35, 0.31, 1.0)
+const COLOR_SURFACE_BORDER_LIGHT := Color(0.39, 0.48, 0.40, 1.0)
+const COLOR_MUTED := Color(0.64, 0.69, 0.63, 1.0)
 const COLOR_SHADOW := Color(0.0, 0.0, 0.0, 0.70)
 
 # Backward-Compatible Aliases
@@ -28,10 +28,10 @@ const PANEL := COLOR_SURFACE_DARK
 
 @export var display_font: FontFile
 
-var _menu: VBoxContainer
+var _menu: Control
 var _clerk: TextureRect
 var _active_modal: Control
-var _last_focused_control: Control
+var _modal_return_focus: Control
 var _buttons: Array[Button] = []
 var _btn_focus_indicators: Dictionary = {}
 
@@ -97,10 +97,22 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+func _notification(what: int) -> void:
+	if what != Node.NOTIFICATION_WM_GO_BACK_REQUEST:
+		return
+	if is_instance_valid(_active_modal):
+		if _active_modal.has_meta("is_settings"):
+			BakkalAudio.save_settings()
+		_close_modal()
+	else:
+		_show_exit_confirmation()
+
+
 func _build() -> void:
 	# 1. Full-store interior background
 	var background := TextureRect.new()
 	background.texture = load("res://assets/generated/rooms/market_tidy_lights_on.png")
+	background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -171,72 +183,61 @@ func _build() -> void:
 
 
 func _build_compact_menu() -> void:
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var portrait := viewport_size.x < viewport_size.y
+	var mobile := _is_mobile_platform()
+	var mobile_landscape := mobile and not portrait
+	var scale_factor := _receipt_ui_scale()
+	var inset := 8.0 * scale_factor if mobile else 24.0
+	var available_width := maxf(200.0 * scale_factor, viewport_size.x - safe.x - safe.z - inset * 2.0)
+	var available_height := maxf(200.0 * scale_factor, viewport_size.y - safe.y - safe.w - inset * 2.0)
+	var menu_width := available_width * (0.29 if mobile_landscape else 0.90) if mobile else (available_width * 0.88 if portrait else minf(390.0 * scale_factor, available_width * 0.48))
+	var menu_height := available_height * (0.72 if mobile_landscape else 0.90) if mobile else (available_height * 0.68 if portrait else minf(462.0 * scale_factor, available_height * 0.88))
 	var card := PanelContainer.new()
-	card.offset_left = 100.0
-	card.offset_top = 130.0
-	card.offset_right = 560.0
-	card.offset_bottom = 920.0
-	card.custom_minimum_size = Vector2(460, 790)
-	card.add_theme_stylebox_override("panel", _chassis_panel_style())
+	card.anchor_left = 0.0
+	card.anchor_right = 0.0
+	card.anchor_top = 1.0
+	card.anchor_bottom = 1.0
+	card.offset_left = safe.x + inset
+	card.offset_right = card.offset_left + menu_width
+	card.offset_top = -menu_height - safe.w - inset
+	card.offset_bottom = -safe.w - inset
+	card.custom_minimum_size = Vector2(menu_width, 0)
+	card.add_theme_stylebox_override("panel", _receipt_panel_style())
 	add_child(card)
 
-	var margins := _margins(18)
+	var margins := _margins(roundi((2.0 if mobile_landscape else 12.0) * scale_factor) if mobile else 18)
 	card.add_child(margins)
 
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 8)
+	stack.add_theme_constant_override("separation", roundi((1.0 if mobile_landscape else 8.0) * scale_factor) if mobile else 8)
 	margins.add_child(stack)
 
-	# Brand & Terminal Identification
-	var status_row := HBoxContainer.new()
-	status_row.add_theme_constant_override("separation", 8)
-	stack.add_child(status_row)
+	var header := VBoxContainer.new()
+	header.add_theme_constant_override("separation", 0)
+	stack.add_child(header)
+	var title_line := HBoxContainer.new()
+	title_line.add_theme_constant_override("separation", 8)
+	header.add_child(title_line)
+	var brand_title := _label("SUPERMARKET", 13 if mobile_landscape else 22, COLOR_BASE_DARK)
+	brand_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_line.add_child(brand_title)
+	title_line.add_child(_label("THE NIGHT", 9 if mobile_landscape else 12, COLOR_ACCENT_CORAL))
+	var receipt_subtitle := _label("NIGHT SHIFT  /  CHOOSE YOUR ROUTE", 6 if mobile_landscape else 10, COLOR_SURFACE)
+	header.add_child(receipt_subtitle)
+	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, Color(COLOR_BASE_DARK, 0.55)))
 
-	var reg_tag := _badge_label("REG 01", COLOR_SURFACE, COLOR_ACCENT_LIME, 12)
-	status_row.add_child(reg_tag)
-
-	var shift_tag := _badge_label("NIGHT SHIFT", COLOR_SURFACE, COLOR_RECEIPT_PAPER, 12)
-	status_row.add_child(shift_tag)
-
-	var spacer_s := Control.new()
-	spacer_s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	status_row.add_child(spacer_s)
-
-	var online_tag := _label("● ON DUTY", 12, COLOR_ACCENT_LIME)
-	status_row.add_child(online_tag)
-
-	var title_lbl := _label("SUPERMARKET", 30, COLOR_RECEIPT_PAPER)
-	title_lbl.add_theme_constant_override("line_spacing", -3)
-	stack.add_child(title_lbl)
-
-	var subtitle_row := HBoxContainer.new()
-	subtitle_row.add_theme_constant_override("separation", 8)
-	stack.add_child(subtitle_row)
-
-	var sub_lbl := _label("THE NIGHT", 20, COLOR_ACCENT_CORAL)
-	subtitle_row.add_child(sub_lbl)
-
-	var dot_lbl := _label("·", 16, COLOR_MUTED)
-	subtitle_row.add_child(dot_lbl)
-
-	var genre_lbl := _label("AISLE SURVIVAL", 13, COLOR_MUTED)
-	genre_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	subtitle_row.add_child(genre_lbl)
-
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, COLOR_SURFACE_BORDER_LIGHT))
-
-	# Action Menu
-	_menu = VBoxContainer.new()
-	_menu.add_theme_constant_override("separation", 6)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", roundi((1.0 if mobile_landscape else 4.0) * scale_factor) if mobile else 4)
+	_menu = list
 	_menu.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(_menu)
 	_build_menu()
-
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, COLOR_SURFACE_BORDER_LIGHT))
-
-	var nav_tip := _label("[WASD / ARROWS] NAVIGATE  ·  [ENTER] SELECT", 11, COLOR_MUTED)
-	nav_tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stack.add_child(nav_tip)
+	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_BASE_DARK, 0.42)))
+	var receipt_footer := _label("KEEP AISLES CLEAR UNTIL MORNING", 6 if mobile_landscape else 10, COLOR_SURFACE)
+	receipt_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(receipt_footer)
 
 
 func _build_menu() -> void:
@@ -251,31 +252,33 @@ func _build_menu() -> void:
 	# 0. Resume saved run if available
 	if RunSaveManager != null and RunSaveManager.has_saved_run():
 		var summary := RunSaveManager.get_saved_run_summary()
-		var wave_num: int = int(summary.get("round_number", 1))
-		var cont_text := I18n.t("TITLE_CONTINUE", "VARDİYAYA DEVAM ET (Dalga %02d)") % wave_num
+		var cont_text := "CONTINUE SHIFT" if I18n.current_locale == "en" else "VARDIYAYA DEVAM ET"
 		_add_menu_button(
 			cont_text,
-			"►",
-			"RESUME",
+			"↻",
+			"",
 			COLOR_ACCENT_LIME,
 			_resume_saved_run,
 			first_focus,
 			false,
-			50
+			42,
+			true
 		)
 		first_focus = false
-		_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
+		if not _is_mobile_landscape():
+			_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
 
 	# 1. Primary Action: 20-Round Campaign
 	_add_menu_button(
-		I18n.t("TITLE_CAMPAIGN", "20-ROUND CAMPAIGN"),
+		I18n.t("TITLE_CAMPAIGN", "START SHIFT"),
 		"01",
-		"PRIMARY",
+		"",
 		COLOR_ACCENT_LIME,
 		_start_run,
 		first_focus,
 		false,
-		48
+		42,
+		true
 	)
 	first_focus = false
 
@@ -283,26 +286,29 @@ func _build_menu() -> void:
 	_add_menu_button(
 		I18n.t("TITLE_ENDLESS", "ENDLESS NIGHT"),
 		"02",
-		"SURVIVAL",
+		"",
 		COLOR_ACCENT_CORAL,
 		_start_endless_run,
 		false,
 		false,
-		44
+		40,
+		true
 	)
 
-	_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
+	if not _is_mobile_landscape():
+		_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
 
 	# 3. Subpage Actions
-	_add_menu_button(I18n.t("TITLE_MANUAL", "HOW TO PLAY"), "03", "GUIDE", COLOR_MUTED, _show_controls, false, false, 42)
-	_add_menu_button(I18n.t("TITLE_SETTINGS", "OPTIONS"), "04", "CONFIG", COLOR_MUTED, _show_settings, false, false, 42)
-	_add_menu_button(I18n.t("TITLE_RECORDS", "RECORDS"), "05", "AUDIT", COLOR_MUTED, _show_records, false, false, 42)
-	_add_menu_button(I18n.t("TITLE_CREDITS", "CREDITS"), "06", "INFO", COLOR_MUTED, _show_credits, false, false, 42)
+	_add_menu_button(I18n.t("TITLE_MANUAL", "HOW TO PLAY"), "03", "", COLOR_MUTED, _show_controls, false, false, 36, true)
+	_add_menu_button(I18n.t("TITLE_SETTINGS", "OPTIONS"), "04", "", COLOR_MUTED, _show_settings, false, false, 36, true)
+	_add_menu_button(I18n.t("TITLE_RECORDS", "RECORDS"), "05", "", COLOR_MUTED, _show_records, false, false, 36, true)
+	_add_menu_button(I18n.t("TITLE_CREDITS", "CREDITS"), "06", "", COLOR_MUTED, _show_credits, false, false, 36, true)
 
-	_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
+	if not _is_mobile_landscape():
+		_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
 
 	# 4. Quit Action
-	_add_menu_button(I18n.t("TITLE_QUIT", "QUIT"), "ESC", "EXIT", COLOR_ACCENT_CORAL, _quit_game, false, true, 42)
+	_add_menu_button(I18n.t("TITLE_QUIT", "QUIT"), "ESC", "", COLOR_ACCENT_CORAL, _quit_game, false, true, 36, true)
 
 	_setup_focus_navigation()
 
@@ -315,14 +321,19 @@ func _resume_saved_run() -> void:
 
 func _build_concise_status() -> void:
 	# Compact score/mode status chip in top right
+	if _is_mobile_landscape():
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var chip_width := minf(280.0 * _receipt_ui_scale(), maxf(220.0, viewport_size.x * 0.46 - safe.z))
 	var chip := PanelContainer.new()
 	chip.anchor_left = 1.0
 	chip.anchor_right = 1.0
-	chip.offset_left = -340.0
-	chip.offset_top = 40.0
-	chip.offset_right = -60.0
-	chip.offset_bottom = 120.0
-	chip.custom_minimum_size = Vector2(280, 80)
+	chip.offset_left = -chip_width - safe.z - 24.0
+	chip.offset_top = safe.y + 24.0
+	chip.offset_right = -safe.z - 24.0
+	chip.offset_bottom = chip.offset_top + 80.0 * _receipt_ui_scale()
+	chip.custom_minimum_size = Vector2(chip_width, 80.0 * _receipt_ui_scale())
 	chip.add_theme_stylebox_override("panel", _chip_panel_style())
 	add_child(chip)
 
@@ -359,26 +370,23 @@ func _build_concise_status() -> void:
 
 
 func _build_footer() -> void:
-	var footer := HBoxContainer.new()
-	footer.anchor_left = 0.04
-	footer.anchor_right = 0.96
-	footer.anchor_top = 0.95
-	footer.anchor_bottom = 0.985
-	add_child(footer)
-
-	var left_lbl := _label("SUPERMARKET: THE NIGHT  ·  NIGHT SHIFT", 11, COLOR_MUTED)
-	footer.add_child(left_lbl)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer.add_child(spacer)
-
-	var right_lbl := _label("KEEP AISLES CLEAR UNTIL MORNING", 11, Color(COLOR_ACCENT_LIME, 0.75))
-	footer.add_child(right_lbl)
+	# The receipt already carries the one-line store sign-off; avoid a second floating footer.
+	return
 
 
 func _setup_focus_navigation() -> void:
 	if _buttons.is_empty():
+		return
+	if _is_mobile_landscape():
+		for i in range(_buttons.size()):
+			var left := i - 1 if i % 2 == 1 else i
+			var right := i + 1 if i % 2 == 0 and i + 1 < _buttons.size() else i
+			var top := i - 2 if i >= 2 else i
+			var bottom := i + 2 if i + 2 < _buttons.size() else i
+			_buttons[i].focus_neighbor_left = _buttons[left].get_path()
+			_buttons[i].focus_neighbor_right = _buttons[right].get_path()
+			_buttons[i].focus_neighbor_top = _buttons[top].get_path()
+			_buttons[i].focus_neighbor_bottom = _buttons[bottom].get_path()
 		return
 	for i in range(_buttons.size()):
 		var prev_idx := (i - 1 + _buttons.size()) % _buttons.size()
@@ -395,38 +403,52 @@ func _add_menu_button(
 	callback: Callable,
 	is_primary: bool = false,
 	is_danger: bool = false,
-	height: int = 30
+	height: int = 30,
+	use_receipt_style: bool = false
 ) -> void:
 	var button := Button.new()
 	button.text = ""
-	button.custom_minimum_size = Vector2(0, height)
+	var scale_factor := _receipt_ui_scale()
+	var touch_size := _mobile_touch_target(get_viewport().get_visible_rect().size)
+	var mobile_landscape := _is_mobile_landscape()
+	var landscape_row_height := minf(26.0 * scale_factor, get_viewport().get_visible_rect().size.y / 15.0)
+	if mobile_landscape:
+		text = _mobile_menu_label(badge_text, text)
+		touch_size = minf(touch_size, landscape_row_height)
+	button.custom_minimum_size = Vector2(0, landscape_row_height if mobile_landscape else maxf(float(height) * scale_factor, touch_size))
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.focus_mode = Control.FOCUS_ALL
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	button.add_theme_stylebox_override("normal", _button_normal_style(is_primary, is_danger))
-	button.add_theme_stylebox_override("hover", _button_hover_style(is_primary, is_danger))
-	button.add_theme_stylebox_override("focus", _button_focus_style(is_primary, is_danger))
-	button.add_theme_stylebox_override("pressed", _button_pressed_style(is_danger))
+	button.add_theme_stylebox_override("normal", _receipt_button_style(is_primary, is_danger, &"normal") if use_receipt_style else _button_normal_style(is_primary, is_danger))
+	button.add_theme_stylebox_override("hover", _receipt_button_style(is_primary, is_danger, &"hover") if use_receipt_style else _button_hover_style(is_primary, is_danger))
+	button.add_theme_stylebox_override("focus", _receipt_button_style(is_primary, is_danger, &"focus") if use_receipt_style else _button_focus_style(is_primary, is_danger))
+	button.add_theme_stylebox_override("pressed", _receipt_button_style(is_primary, is_danger, &"pressed") if use_receipt_style else _button_pressed_style(is_danger))
+	if use_receipt_style:
+		button.add_theme_color_override("font_color", COLOR_BASE_DARK)
+		button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
+		button.add_theme_color_override("font_pressed_color", COLOR_BASE_DARK)
+		button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+	button.clip_contents = true
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 4)
-	margin.add_theme_constant_override("margin_bottom", 4)
+	margin.add_theme_constant_override("margin_left", roundi((4.0 if mobile_landscape else 12.0) * scale_factor))
+	margin.add_theme_constant_override("margin_right", roundi((4.0 if mobile_landscape else 12.0) * scale_factor))
+	margin.add_theme_constant_override("margin_top", roundi((1.0 if mobile_landscape else 4.0) * scale_factor))
+	margin.add_theme_constant_override("margin_bottom", roundi((1.0 if mobile_landscape else 4.0) * scale_factor))
 	button.add_child(margin)
 
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", roundi((5.0 if mobile_landscape else 8.0) * scale_factor))
 	margin.add_child(row)
 
 	var focus_cursor := Label.new()
 	focus_cursor.text = "▶"
-	focus_cursor.add_theme_font_size_override("font_size", 13)
-	focus_cursor.add_theme_color_override("font_color", COLOR_ACCENT_CORAL if is_danger else COLOR_ACCENT_LIME)
+	focus_cursor.add_theme_font_size_override("font_size", roundi(13.0 * scale_factor))
+	focus_cursor.add_theme_color_override("font_color", COLOR_ACCENT_CORAL if is_danger else (COLOR_SURFACE if use_receipt_style else COLOR_ACCENT_LIME))
 	focus_cursor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	focus_cursor.visible = false
 	row.add_child(focus_cursor)
@@ -434,8 +456,8 @@ func _add_menu_button(
 
 	var code_lbl := Label.new()
 	code_lbl.text = "[%s]" % code
-	code_lbl.add_theme_font_size_override("font_size", 12)
-	code_lbl.add_theme_color_override("font_color", COLOR_MUTED)
+	code_lbl.add_theme_font_size_override("font_size", roundi((10.0 if mobile_landscape else 13.0) * scale_factor))
+	code_lbl.add_theme_color_override("font_color", COLOR_SURFACE if use_receipt_style else COLOR_MUTED)
 	code_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if display_font != null:
 		code_lbl.add_theme_font_override("font", display_font)
@@ -443,9 +465,15 @@ func _add_menu_button(
 
 	var main_lbl := Label.new()
 	main_lbl.text = text
-	main_lbl.add_theme_font_size_override("font_size", 17 if is_primary else 16)
-	main_lbl.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER)
+	main_lbl.add_theme_font_size_override("font_size", roundi(float(16 if is_primary else 15) * scale_factor * (0.50 if mobile_landscape else 1.0)))
+	main_lbl.add_theme_color_override("font_color", COLOR_BASE_DARK if use_receipt_style else COLOR_RECEIPT_PAPER)
 	main_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if mobile_landscape:
+		main_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		main_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		main_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	else:
+		main_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	main_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if display_font != null:
 		main_lbl.add_theme_font_override("font", display_font)
@@ -454,8 +482,8 @@ func _add_menu_button(
 	if badge_text != "":
 		var badge := Label.new()
 		badge.text = badge_text
-		badge.add_theme_font_size_override("font_size", 12)
-		badge.add_theme_color_override("font_color", badge_color)
+		badge.add_theme_font_size_override("font_size", roundi(12.0 * scale_factor))
+		badge.add_theme_color_override("font_color", COLOR_BASE_DARK if use_receipt_style else badge_color)
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if display_font != null:
 			badge.add_theme_font_override("font", display_font)
@@ -482,6 +510,20 @@ func _add_menu_button(
 		button.grab_focus.call_deferred()
 
 
+func _mobile_menu_label(code: String, fallback: String) -> String:
+	var english := I18n.current_locale == "en"
+	match code:
+		"01": return "CAMPAIGN SHIFT" if english else "KAMPANYA VARDİYASI"
+		"02": return "ENDLESS NIGHT" if english else "SONSUZ GECE MODU"
+		"03": return "HOW TO PLAY" if english else "NASIL OYNANIR"
+		"04": return "OPTIONS" if english else "AYARLAR"
+		"05": return "RECORDS" if english else "KAYITLAR"
+		"06": return "CREDITS" if english else "EMEĞİ GEÇENLER"
+		"ESC": return "QUIT" if english else "ÇIKIŞ"
+		"↻": return "RESUME SHIFT" if english else "VARDİYAYA DÖN"
+	return fallback
+
+
 # --- Actions and Callbacks (Preserved 1:1) ---
 
 func _start_run() -> void:
@@ -506,13 +548,19 @@ func _quit_game() -> void:
 # --- Modal Management ---
 
 func _open_modal(title_text: String, min_size: Vector2i) -> VBoxContainer:
-	_close_modal()
-	_last_focused_control = get_viewport().gui_get_focus_owner()
+	# Replacing a modal should preserve the original menu focus target; restoring
+	# focus to the modal being replaced would leave a stale control after queue_free.
+	if is_instance_valid(_active_modal):
+		_active_modal.queue_free()
+		_active_modal = null
+	else:
+		_modal_return_focus = get_viewport().gui_get_focus_owner()
 
 	var overlay := Control.new()
 	overlay.name = "ModalOverlay"
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.theme = _receipt_modal_theme()
 	add_child(overlay)
 	_active_modal = overlay
 
@@ -527,43 +575,162 @@ func _open_modal(title_text: String, min_size: Vector2i) -> VBoxContainer:
 	card.anchor_right = 0.5
 	card.anchor_top = 0.5
 	card.anchor_bottom = 0.5
-	card.offset_left = -min_size.x / 2.0
-	card.offset_right = min_size.x / 2.0
-	card.offset_top = -min_size.y / 2.0
-	card.offset_bottom = min_size.y / 2.0
-	card.custom_minimum_size = Vector2(min_size)
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var available_size := Vector2(viewport_size.x - safe.x - safe.z, viewport_size.y - safe.y - safe.w)
+	var scale_factor := _receipt_ui_scale()
+	var mobile := OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+	var modal_size := Vector2(minf(min_size.x * scale_factor, available_size.x * 0.92), minf(min_size.y * scale_factor, available_size.y * 0.92))
+	var safe_center := Vector2((safe.x - safe.z) / 2.0, (safe.y - safe.w) / 2.0)
+	card.offset_left = safe_center.x - modal_size.x / 2.0
+	card.offset_right = safe_center.x + modal_size.x / 2.0
+	card.offset_top = safe_center.y - modal_size.y / 2.0
+	card.offset_bottom = safe_center.y + modal_size.y / 2.0
+	card.custom_minimum_size = modal_size
 
 	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = COLOR_SURFACE
-	card_style.border_color = COLOR_ACCENT_LIME
-	card_style.set_border_width_all(2)
-	card_style.set_corner_radius_all(6)
+	card_style.bg_color = COLOR_RECEIPT_PAPER
+	card_style.border_color = COLOR_SURFACE_BORDER
+	card_style.set_border_width_all(1)
+	card_style.set_corner_radius_all(0)
 	card_style.shadow_color = COLOR_SHADOW
 	card_style.shadow_size = 18
 	card.add_theme_stylebox_override("panel", card_style)
 	overlay.add_child(card)
 
-	var margins := _margins(18)
-	card.add_child(margins)
+	var margins := _margins(roundi(12.0 * scale_factor) if mobile else 18)
+	var settings_scroll := mobile and (title_text.to_upper().contains("OPTIONS") or title_text.to_upper().contains("AYARLAR"))
+	if settings_scroll:
+		var scroll := ScrollContainer.new()
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.add_child(margins)
+		card.add_child(scroll)
+	else:
+		card.add_child(margins)
 
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 8)
+	stack.add_theme_constant_override("separation", roundi(8.0 * scale_factor))
 	margins.add_child(stack)
 
-	var title_lbl := _label(title_text, 20, COLOR_ACCENT_LIME)
+	var title_lbl := _label(title_text, 22, COLOR_BASE_DARK)
 	stack.add_child(title_lbl)
 
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, COLOR_SURFACE_BORDER_LIGHT))
+	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, Color(COLOR_SURFACE, 0.45)))
 
 	return stack
 
 
+func _receipt_modal_theme() -> Theme:
+	var theme := Theme.new()
+	var normal := _receipt_button_style(false, false, &"normal")
+	var hover := _receipt_button_style(false, false, &"hover")
+	var pressed := _receipt_button_style(false, false, &"pressed")
+	var disabled := normal.duplicate() as StyleBoxFlat
+	disabled.bg_color = Color("e1dece")
+	theme.set_stylebox("normal", "Button", normal)
+	theme.set_stylebox("hover", "Button", hover)
+	theme.set_stylebox("focus", "Button", hover)
+	theme.set_stylebox("pressed", "Button", pressed)
+	theme.set_stylebox("disabled", "Button", disabled)
+	for state: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
+		theme.set_color(state, "Button", COLOR_BASE_DARK)
+	theme.set_color("font_disabled_color", "Button", COLOR_MUTED)
+	theme.set_font_size("font_size", "Button", roundi(15.0 * _receipt_ui_scale()))
+	if display_font != null:
+		theme.set_font("font", "Button", display_font)
+	return theme
+
+
+func _receipt_ui_scale() -> float:
+	if _is_mobile_platform():
+		return _mobile_density_scale(get_viewport().get_visible_rect().size)
+	var window_width := float(get_window().size.x) if get_window() != null else 1920.0
+	return clampf(1920.0 / maxf(window_width, 1.0), 1.0, 1.4)
+
+
+func _is_portrait() -> bool:
+	var viewport_size := get_viewport().get_visible_rect().size
+	return viewport_size.x < viewport_size.y
+
+
+func _is_mobile_landscape() -> bool:
+	return _is_mobile_platform() and not _is_portrait()
+
+
+func _is_mobile_platform() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
+
+
+func _safe_insets(viewport_size: Vector2) -> Vector4:
+	if not _is_mobile_platform() or get_window() == null:
+		return Vector4.ZERO
+	var safe_area := DisplayServer.get_display_safe_area()
+	var window_position := DisplayServer.window_get_position()
+	var window_size := get_window().size
+	if safe_area.size.x <= 0 or safe_area.size.y <= 0 or window_size.x <= 0 or window_size.y <= 0:
+		return Vector4.ZERO
+	var left_px := clampf(float(safe_area.position.x - window_position.x), 0.0, float(window_size.x))
+	var top_px := clampf(float(safe_area.position.y - window_position.y), 0.0, float(window_size.y))
+	var right_px := clampf(float(window_position.x + window_size.x - safe_area.end.x), 0.0, float(window_size.x))
+	var bottom_px := clampf(float(window_position.y + window_size.y - safe_area.end.y), 0.0, float(window_size.y))
+	return Vector4(left_px * viewport_size.x / window_size.x, top_px * viewport_size.y / window_size.y, right_px * viewport_size.x / window_size.x, bottom_px * viewport_size.y / window_size.y)
+
+
+func _mobile_touch_target(viewport_size: Vector2) -> float:
+	if not _is_mobile_platform():
+		return 0.0
+	return 48.0 * _mobile_density_scale(viewport_size)
+
+
+func _mobile_density_scale(viewport_size: Vector2) -> float:
+	var window_width := float(get_window().size.x) if get_window() != null else viewport_size.x
+	var dpi := float(DisplayServer.screen_get_dpi())
+	if dpi <= 0.0:
+		dpi = 160.0 if _is_mobile_platform() else 96.0
+	var viewport_scale := viewport_size.x / maxf(window_width, 1.0)
+	return clampf(dpi / 160.0 * viewport_scale, 1.0, 4.0)
+
+
+func _show_exit_confirmation() -> void:
+	var stack := _open_modal("CLOCKING OUT?", Vector2i(520, 236))
+	var prompt := _label("Leave the night shift and close the game?", 16, COLOR_BASE_DARK)
+	prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stack.add_child(prompt)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	stack.add_child(actions)
+	var stay := Button.new()
+	stay.text = "KEEP WORKING"
+	var exit_button := Button.new()
+	exit_button.text = "CLOCK OUT"
+	for button in [stay, exit_button]:
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size.y = maxf(44.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
+		button.focus_mode = Control.FOCUS_ALL
+		button.add_theme_font_size_override("font_size", roundi(15.0 * _receipt_ui_scale()))
+		button.add_theme_color_override("font_color", COLOR_BASE_DARK)
+		button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
+		button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+		button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
+		button.add_theme_stylebox_override("hover", _receipt_button_style(false, false, &"hover"))
+		button.add_theme_stylebox_override("focus", _receipt_button_style(false, false, &"focus"))
+		button.add_theme_stylebox_override("pressed", _receipt_button_style(false, false, &"pressed"))
+		actions.add_child(button)
+	stay.pressed.connect(_close_modal)
+	exit_button.pressed.connect(func() -> void: get_tree().quit())
+	stay.grab_focus.call_deferred()
+
+
 func _close_modal() -> void:
+	var closing_modal := _active_modal
 	if is_instance_valid(_active_modal):
 		_active_modal.queue_free()
 		_active_modal = null
-	if is_instance_valid(_last_focused_control):
-		_last_focused_control.grab_focus.call_deferred()
+	var return_focus := _modal_return_focus
+	_modal_return_focus = null
+	if is_instance_valid(return_focus) and (not is_instance_valid(closing_modal) or not closing_modal.is_ancestor_of(return_focus)):
+		return_focus.grab_focus.call_deferred()
 
 
 func _add_modal_section(parent: VBoxContainer, sec_title: String, description: String) -> void:
@@ -571,14 +738,14 @@ func _add_modal_section(parent: VBoxContainer, sec_title: String, description: S
 	box.add_theme_constant_override("separation", 4)
 	parent.add_child(box)
 
-	var t_lbl := _label(sec_title, 14, COLOR_ACCENT_LIME)
+	var t_lbl := _label(sec_title, 17, COLOR_SURFACE)
 	box.add_child(t_lbl)
 
 	var d_lbl := Label.new()
 	d_lbl.text = description
 	d_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	d_lbl.add_theme_font_size_override("font_size", 14)
-	d_lbl.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER)
+	d_lbl.add_theme_font_size_override("font_size", 17)
+	d_lbl.add_theme_color_override("font_color", COLOR_BASE_DARK)
 	d_lbl.add_theme_constant_override("line_spacing", 2)
 	box.add_child(d_lbl)
 
@@ -608,17 +775,17 @@ func _show_controls() -> void:
 
 	var close_btn := Button.new()
 	close_btn.text = "BACK TO SHIFT"
-	close_btn.custom_minimum_size.y = 38
+	close_btn.custom_minimum_size.y = maxf(38.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	close_btn.focus_mode = Control.FOCUS_ALL
 	close_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	close_btn.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER)
-	close_btn.add_theme_color_override("font_focus_color", COLOR_ACCENT_LIME)
+	close_btn.add_theme_color_override("font_color", COLOR_BASE_DARK)
+	close_btn.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
 	if display_font != null:
 		close_btn.add_theme_font_override("font", display_font)
-	close_btn.add_theme_stylebox_override("normal", _button_normal_style(true, false))
-	close_btn.add_theme_stylebox_override("hover", _button_hover_style(true, false))
-	close_btn.add_theme_stylebox_override("focus", _button_focus_style(true, false))
-	close_btn.add_theme_stylebox_override("pressed", _button_pressed_style(false))
+	close_btn.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
+	close_btn.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
+	close_btn.add_theme_stylebox_override("focus", _receipt_button_style(true, false, &"focus"))
+	close_btn.add_theme_stylebox_override("pressed", _receipt_button_style(true, false, &"pressed"))
 	close_btn.pressed.connect(func() -> void:
 		BakkalAudio.play_sfx(&"ui_confirm")
 		_close_modal()
@@ -634,51 +801,59 @@ func _show_settings() -> void:
 	_active_modal.set_meta("is_settings", true)
 
 	# 1. Language selection
-	var lang_row := HBoxContainer.new()
+	var portrait := _is_portrait()
+	var lang_row: Control = VBoxContainer.new() if portrait else HBoxContainer.new()
 	lang_row.add_theme_constant_override("separation", 12)
 	stack.add_child(lang_row)
 
-	var lang_title := _label(I18n.t("SETTINGS_LANGUAGE", "DİL / LANGUAGE"), 11, COLOR_ACCENT_LIME)
+	var lang_title := _label(I18n.t("SETTINGS_LANGUAGE", "DİL / LANGUAGE"), 16, COLOR_SURFACE)
 	lang_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lang_row.add_child(lang_title)
 
 	var tr_btn := Button.new()
 	tr_btn.text = "TÜRKÇE"
 	tr_btn.custom_minimum_size = Vector2(100, 36)
+	tr_btn.custom_minimum_size.y = maxf(tr_btn.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	tr_btn.disabled = (I18n.current_locale == "tr")
 	tr_btn.focus_mode = Control.FOCUS_ALL
 	tr_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	tr_btn.pressed.connect(func() -> void:
 		I18n.set_language("tr")
 		BakkalAudio.play_sfx(&"ui_confirm")
-		_close_modal()
 		_build_menu()
+		_modal_return_focus = _buttons[0] if not _buttons.is_empty() else null
 		_show_settings()
 	)
-	lang_row.add_child(tr_btn)
+	var language_buttons: Control = HBoxContainer.new() if portrait else lang_row
+	if portrait:
+		lang_row.add_child(language_buttons)
+	language_buttons.add_child(tr_btn)
 
 	var en_btn := Button.new()
 	en_btn.text = "ENGLISH"
 	en_btn.custom_minimum_size = Vector2(100, 36)
+	en_btn.custom_minimum_size.y = maxf(en_btn.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	en_btn.disabled = (I18n.current_locale == "en")
 	en_btn.focus_mode = Control.FOCUS_ALL
 	en_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	en_btn.pressed.connect(func() -> void:
 		I18n.set_language("en")
 		BakkalAudio.play_sfx(&"ui_confirm")
-		_close_modal()
 		_build_menu()
+		_modal_return_focus = _buttons[0] if not _buttons.is_empty() else null
 		_show_settings()
 	)
-	lang_row.add_child(en_btn)
+	language_buttons.add_child(en_btn)
 
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
 
 	# 2. Resolution selection
-	var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 11, COLOR_ACCENT_LIME)
+	var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 16, COLOR_SURFACE)
 	stack.add_child(res_label)
 
-	var res_row := HBoxContainer.new()
+	var res_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
+	if portrait:
+		(res_row as GridContainer).columns = 2
 	res_row.add_theme_constant_override("separation", 8)
 	stack.add_child(res_row)
 
@@ -686,7 +861,7 @@ func _show_settings() -> void:
 	for r_idx: int in range(resolutions.size()):
 		var r_btn := Button.new()
 		r_btn.text = resolutions[r_idx]
-		r_btn.custom_minimum_size = Vector2(110, 36)
+		r_btn.custom_minimum_size = Vector2(110, maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size)))
 		r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
 		r_btn.focus_mode = Control.FOCUS_ALL
@@ -697,13 +872,16 @@ func _show_settings() -> void:
 			_close_modal()
 			_show_settings()
 		)
+		r_btn.custom_minimum_size.y = maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 		res_row.add_child(r_btn)
 
 	# 3. Window Mode selection
-	var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 11, COLOR_ACCENT_LIME)
+	var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 16, COLOR_SURFACE)
 	stack.add_child(mode_label)
 
-	var mode_row := HBoxContainer.new()
+	var mode_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
+	if portrait:
+		(mode_row as GridContainer).columns = 2
 	mode_row.add_theme_constant_override("separation", 8)
 	stack.add_child(mode_row)
 
@@ -715,7 +893,7 @@ func _show_settings() -> void:
 	for m_idx: int in range(mode_names.size()):
 		var m_btn := Button.new()
 		m_btn.text = mode_names[m_idx]
-		m_btn.custom_minimum_size = Vector2(140, 36)
+		m_btn.custom_minimum_size = Vector2(140, maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size)))
 		m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
 		m_btn.focus_mode = Control.FOCUS_ALL
@@ -726,6 +904,7 @@ func _show_settings() -> void:
 			_close_modal()
 			_show_settings()
 		)
+		m_btn.custom_minimum_size.y = maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 		mode_row.add_child(m_btn)
 
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
@@ -741,17 +920,17 @@ func _show_settings() -> void:
 	# 5. Save & Close
 	var done := Button.new()
 	done.text = I18n.t("SETTINGS_SAVE", "SAVE AND CLOSE")
-	done.custom_minimum_size.y = 44
+	done.custom_minimum_size.y = maxf(44.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	done.focus_mode = Control.FOCUS_ALL
 	done.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	done.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER)
-	done.add_theme_color_override("font_focus_color", COLOR_ACCENT_LIME)
+	done.add_theme_color_override("font_color", COLOR_BASE_DARK)
+	done.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
 	if display_font != null:
 		done.add_theme_font_override("font", display_font)
-	done.add_theme_stylebox_override("normal", _button_normal_style(true, false))
-	done.add_theme_stylebox_override("hover", _button_hover_style(true, false))
-	done.add_theme_stylebox_override("focus", _button_focus_style(true, false))
-	done.add_theme_stylebox_override("pressed", _button_pressed_style(false))
+	done.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
+	done.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
+	done.add_theme_stylebox_override("focus", _receipt_button_style(true, false, &"focus"))
+	done.add_theme_stylebox_override("pressed", _receipt_button_style(true, false, &"pressed"))
 	done.pressed.connect(func() -> void:
 		BakkalAudio.play_sfx(&"ui_confirm")
 		BakkalAudio.save_settings()
@@ -767,20 +946,20 @@ func _show_records() -> void:
 	if stack == null:
 		return
 
-	var info := _label("BAKKAL 24/7 MART · REGISTER 01 LOG", 9, COLOR_MUTED)
+	var info := _label("BAKKAL 24/7 MART · REGISTER 01 LOG", 13, COLOR_MUTED)
 	stack.add_child(info)
 
 	_add_record_entry(stack, "BEST CAMPAIGN SCORE", "%06d" % _load_best_score(), COLOR_ACCENT_LIME, 16)
-	_add_record_entry(stack, "ENDLESS BEST WAVE", "WAVE %02d" % _load_endless_best_wave(), COLOR_RECEIPT_PAPER, 13)
-	_add_record_entry(stack, "ENDLESS BEST SCORE", "%06d" % _load_endless_best_score(), COLOR_RECEIPT_PAPER, 13)
+	_add_record_entry(stack, "ENDLESS BEST WAVE", "WAVE %02d" % _load_endless_best_wave(), COLOR_BASE_DARK, 16)
+	_add_record_entry(stack, "ENDLESS BEST SCORE", "%06d" % _load_endless_best_score(), COLOR_BASE_DARK, 16)
 
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
 
-	var dir_lbl := _label("DIRECTIVE: KEEP AISLES PATROLLED UNTIL 07:00", 9, COLOR_MUTED)
+	var dir_lbl := _label("DIRECTIVE: KEEP AISLES PATROLLED UNTIL 07:00", 12, COLOR_MUTED)
 	dir_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(dir_lbl)
 
-	var barcode := _label("||| | |||| | ||| || |||| | |||| || |", 10, COLOR_MUTED)
+	var barcode := _label("||| | |||| | ||| || |||| | |||| || |", 12, COLOR_MUTED)
 	barcode.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(barcode)
 
@@ -788,17 +967,17 @@ func _show_records() -> void:
 
 	var close := Button.new()
 	close.text = "BACK TO SHIFT"
-	close.custom_minimum_size.y = 38
+	close.custom_minimum_size.y = maxf(38.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	close.focus_mode = Control.FOCUS_ALL
 	close.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	close.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER)
-	close.add_theme_color_override("font_focus_color", COLOR_ACCENT_LIME)
+	close.add_theme_color_override("font_color", COLOR_BASE_DARK)
+	close.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
 	if display_font != null:
 		close.add_theme_font_override("font", display_font)
-	close.add_theme_stylebox_override("normal", _button_normal_style(true, false))
-	close.add_theme_stylebox_override("hover", _button_hover_style(true, false))
-	close.add_theme_stylebox_override("focus", _button_focus_style(true, false))
-	close.add_theme_stylebox_override("pressed", _button_pressed_style(false))
+	close.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
+	close.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
+	close.add_theme_stylebox_override("focus", _receipt_button_style(true, false, &"focus"))
+	close.add_theme_stylebox_override("pressed", _receipt_button_style(true, false, &"pressed"))
 	close.pressed.connect(func() -> void:
 		BakkalAudio.play_sfx(&"ui_confirm")
 		_close_modal()
@@ -812,7 +991,7 @@ func _add_record_entry(parent: Control, key: String, val: String, val_color: Col
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(row)
 
-	var k_lbl := _label(key, 10, COLOR_RECEIPT_PAPER)
+	var k_lbl := _label(key, 14, COLOR_BASE_DARK)
 	row.add_child(k_lbl)
 
 	var dl := DotLeader.new(Color(COLOR_MUTED, 0.35))
@@ -827,11 +1006,11 @@ func _show_credits() -> void:
 	if stack == null:
 		return
 
-	var heading := _label("THE PEOPLE AND TOOLS BEHIND THE SHIFT", 11, COLOR_MUTED)
+	var heading := _label("THE PEOPLE AND TOOLS BEHIND THE SHIFT", 14, COLOR_MUTED)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(heading)
 
-	var columns := HBoxContainer.new()
+	var columns: Control = VBoxContainer.new() if _is_portrait() else HBoxContainer.new()
 	columns.add_theme_constant_override("separation", 12)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(columns)
@@ -849,24 +1028,24 @@ func _show_credits() -> void:
 
 	var assets := _credit_category(
 		"ASSETS & LICENSES",
-		"[center]Project-authored code: [url=https://github.com/dixtuel/supermarket-the-night/blob/main/LICENSE][color=#a3e635][u]MIT License[/u][/color][/url]   ·   Assets: [b]Kenney CC0 1.0[/b]\nOfficial Store: [url=https://dixtuel.itch.io/supermarket-the-night][color=#a3e635][u]itch.io/supermarket-the-night[/u][/color][/url]\nFull asset record: [url=https://github.com/dixtuel/supermarket-the-night/blob/main/ATTRIBUTION.md][color=#a3e635][u]ATTRIBUTION.md[/u][/color][/url][/center]",
+		"[center]Project-authored code: [url=https://github.com/dixtuel/supermarket-the-night/blob/main/LICENSE][color=#38664b][u]MIT License[/u][/color][/url]   ·   Assets: [b]Kenney CC0 1.0[/b]\nOfficial Store: [url=https://dixtuel.itch.io/supermarket-the-night][color=#38664b][u]itch.io/supermarket-the-night[/u][/color][/url]\nFull asset record: [url=https://github.com/dixtuel/supermarket-the-night/blob/main/ATTRIBUTION.md][color=#38664b][u]ATTRIBUTION.md[/u][/color][/url][/center]",
 		Vector2(0, 106)
 	)
 	stack.add_child(assets)
 
 	var close := Button.new()
 	close.text = "CLOSE"
-	close.custom_minimum_size.y = 38
+	close.custom_minimum_size.y = maxf(38.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	close.focus_mode = Control.FOCUS_ALL
 	close.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	close.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER)
-	close.add_theme_color_override("font_focus_color", COLOR_ACCENT_LIME)
+	close.add_theme_color_override("font_color", COLOR_BASE_DARK)
+	close.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
 	if display_font != null:
 		close.add_theme_font_override("font", display_font)
-	close.add_theme_stylebox_override("normal", _button_normal_style(false, false))
-	close.add_theme_stylebox_override("hover", _button_hover_style(false, false))
-	close.add_theme_stylebox_override("focus", _button_focus_style(false, false))
-	close.add_theme_stylebox_override("pressed", _button_pressed_style(false))
+	close.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
+	close.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
+	close.add_theme_stylebox_override("focus", _receipt_button_style(true, false, &"focus"))
+	close.add_theme_stylebox_override("pressed", _receipt_button_style(true, false, &"pressed"))
 	close.pressed.connect(func() -> void:
 		BakkalAudio.play_sfx(&"ui_confirm")
 		_close_modal()
@@ -880,10 +1059,10 @@ func _credit_category(title_text: String, body_bbcode: String, minimum_size: Vec
 	card.custom_minimum_size = minimum_size
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = COLOR_SURFACE_DARK
-	card_style.border_color = COLOR_SURFACE_BORDER_LIGHT
+	card_style.bg_color = Color("f8f5e9")
+	card_style.border_color = COLOR_SURFACE_BORDER
 	card_style.set_border_width_all(1)
-	card_style.set_corner_radius_all(4)
+	card_style.set_corner_radius_all(0)
 	card.add_theme_stylebox_override("panel", card_style)
 
 	var margins := _margins(12)
@@ -891,10 +1070,10 @@ func _credit_category(title_text: String, body_bbcode: String, minimum_size: Vec
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 9)
 	margins.add_child(content)
-	var category := _label(title_text, 11, COLOR_ACCENT_LIME)
+	var category := _label(title_text, 14, COLOR_SURFACE)
 	category.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(category)
-	content.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, COLOR_SURFACE_BORDER_LIGHT))
+	content.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, COLOR_SURFACE_BORDER))
 
 	var body := RichTextLabel.new()
 	body.bbcode_enabled = true
@@ -902,9 +1081,9 @@ func _credit_category(title_text: String, body_bbcode: String, minimum_size: Vec
 	body.scroll_active = false
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_color_override("default_color", COLOR_RECEIPT_PAPER)
-	body.add_theme_font_size_override("normal_font_size", 11)
-	body.add_theme_font_size_override("bold_font_size", 12)
+	body.add_theme_color_override("default_color", COLOR_BASE_DARK)
+	body.add_theme_font_size_override("normal_font_size", 14)
+	body.add_theme_font_size_override("bold_font_size", 15)
 	body.text = body_bbcode
 	body.meta_clicked.connect(func(meta: Variant) -> void: OS.shell_open(String(meta)))
 	content.add_child(body)
@@ -922,11 +1101,11 @@ func _volume_control(parent: VBoxContainer, label_text: String, initial_value: f
 	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(header_row)
 
-	var label := _label(label_text, 9, COLOR_RECEIPT_PAPER)
+	var label := _label(label_text, 14, COLOR_BASE_DARK)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_row.add_child(label)
 
-	var value_label := _label(_format_db(initial_value), 9, COLOR_ACCENT_LIME)
+	var value_label := _label(_format_db(initial_value), 14, COLOR_SURFACE)
 	header_row.add_child(value_label)
 
 	var slider := HSlider.new()
@@ -935,11 +1114,11 @@ func _volume_control(parent: VBoxContainer, label_text: String, initial_value: f
 	slider.step = 1.0
 	slider.value = initial_value
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slider.custom_minimum_size.y = 22
+	slider.custom_minimum_size.y = maxf(22.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	slider.focus_mode = Control.FOCUS_ALL
 
 	var track := StyleBoxFlat.new()
-	track.bg_color = COLOR_BASE_DARK
+	track.bg_color = Color("d7d1bc")
 	track.border_color = COLOR_SURFACE_BORDER
 	track.set_border_width_all(1)
 	track.set_corner_radius_all(3)
@@ -948,7 +1127,7 @@ func _volume_control(parent: VBoxContainer, label_text: String, initial_value: f
 	slider.add_theme_stylebox_override("slider", track)
 
 	var fill := StyleBoxFlat.new()
-	fill.bg_color = COLOR_ACCENT_LIME
+	fill.bg_color = COLOR_SURFACE
 	fill.set_corner_radius_all(3)
 	fill.content_margin_top = 4
 	fill.content_margin_bottom = 4
@@ -968,9 +1147,9 @@ func _volume_control(parent: VBoxContainer, label_text: String, initial_value: f
 func _label(text: String, size: int, color: Color) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_font_size_override("font_size", roundi(float(size) * _receipt_ui_scale()))
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.95))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.10))
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	if display_font != null:
@@ -1012,6 +1191,49 @@ func _chassis_panel_style() -> StyleBoxFlat:
 	style.shadow_color = COLOR_SHADOW
 	style.shadow_size = 12
 	style.shadow_offset = Vector2(0, 3)
+	return style
+
+
+func _receipt_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(COLOR_RECEIPT_PAPER, 0.98)
+	style.border_color = Color(COLOR_BASE_DARK, 0.72)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(0)
+	style.shadow_color = COLOR_SHADOW
+	style.shadow_size = 12
+	style.shadow_offset = Vector2(0, 3)
+	style.content_margin_left = 0
+	style.content_margin_right = 0
+	style.content_margin_top = 0
+	style.content_margin_bottom = 0
+	return style
+
+
+func _receipt_button_style(is_primary: bool, is_danger: bool, state: StringName) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	if state == &"pressed":
+		style.bg_color = Color("d8e5d2") if not is_danger else Color("f0d6cc")
+		style.border_color = COLOR_ACCENT_CORAL if is_danger else COLOR_SURFACE
+		style.set_border_width_all(1)
+	elif state in [&"hover", &"focus"]:
+		style.bg_color = Color("fffdf4")
+		style.border_color = COLOR_ACCENT_CORAL if is_danger else COLOR_SURFACE
+		style.set_border_width_all(1)
+		if state == &"focus":
+			style.shadow_color = Color(COLOR_ACCENT_LIME, 0.75)
+			style.shadow_size = 5
+	else:
+		style.bg_color = Color(COLOR_RECEIPT_PAPER.lightened(0.08), 0.86) if is_primary else Color(COLOR_RECEIPT_PAPER, 0.0)
+		style.border_color = Color(COLOR_BASE_DARK, 0.18) if not is_primary else Color(COLOR_BASE_DARK, 0.58)
+		style.set_border_width_all(0)
+		style.border_width_left = 3 if is_primary else 0
+		style.border_width_bottom = 1
+	style.set_corner_radius_all(0)
+	style.content_margin_left = 7
+	style.content_margin_right = 7
+	style.content_margin_top = 3
+	style.content_margin_bottom = 3
 	return style
 
 

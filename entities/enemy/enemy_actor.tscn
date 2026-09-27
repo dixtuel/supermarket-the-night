@@ -5,9 +5,12 @@
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 18.0
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_attack"]
+radius = 36.0
+
 [node name="EnemyActor" type="CharacterBody2D"]
 collision_layer = 4
-collision_mask = 7
+collision_mask = 1
 motion_mode = 1
 script = ExtResource("1_actor")
 
@@ -26,6 +29,15 @@ color = Color(0.858824, 0.611765, 0.258824, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_body")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("CircleShape2D_attack")
 
 [node name="ChargeTelegraph" type="Line2D" parent="."]
 visible = false

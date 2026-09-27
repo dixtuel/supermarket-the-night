@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_coupon_tosser_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"coupon_tosser"
+display_name = "Coupon Tosser"
+combat_read = "Keeps a lane of distance and flicks a slow paper projectile."
+role = 3
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 47
+max_health = 44
+contact_damage = 4
+contact_range = 36
+contact_interval = 1.2
+xp_reward = 2
+attack_type = 2
+attack_range = 220
+attack_interval = 1.75
+attack_damage = 11
+charge_speed = 0
+telegraph_duration = 0.0
+recovery_duration = 0.0
+projectile_speed = 260
+projectile_count = 1
+zone_radius = 0
+zone_duration = 0
+zone_speed_multiplier = 0.65
+spawn_weight = 0.7

@@ -8,8 +8,8 @@ signal health_changed(current: int, maximum: int)
 ## Compatibility signal for arena code that consumes an XP amount directly.
 signal died(xp_reward: int, world_position: Vector2)
 
-enum Phase { APPROACH, TELEGRAPH, CHARGING, RECOVERING, DEFEATED }
-enum PendingAttack { NONE, CHARGE, PROJECTILE, ZONE, SCATTER }
+enum Phase { APPROACH, TELEGRAPH, CHARGING, ATTACKING, RECOVERING, DEFEATED }
+enum PendingAttack { NONE, CHARGE, CONTACT, PROJECTILE, ZONE, SCATTER }
 
 const ENEMY_PROJECTILE_SCENE: PackedScene = preload("res://combat/enemy_projectile/enemy_projectile.tscn")
 const SLOW_PATCH_SCENE: PackedScene = preload("res://entities/enemy/slow_patch.tscn")
@@ -21,19 +21,22 @@ const WALK_FRAMES_PER_DIRECTION := 4
 const WALK_ANIMATION_SPEED := 7.0
 const NORMAL_HIT_MAX_HEALTH_FRACTION := 0.24
 const BOSS_HIT_MAX_HEALTH_FRACTION := 0.38
+const OBSTACLE_STEER_CLEAR_GRACE := 0.14
+const OBSTACLE_PATH_PROBE_INTERVAL := 0.1
 
 @onready var _sprite: AnimatedSprite2D = $Sprite
 @onready var _fallback_shape: Polygon2D = $FallbackShape
 @onready var _collision: CollisionShape2D = $CollisionShape2D
 @onready var _charge_telegraph: Line2D = $ChargeTelegraph
 @onready var _ring_telegraph: Line2D = $RingTelegraph
+@onready var _attack_area: Area2D = $AttackArea
+@onready var _attack_area_shape: CollisionShape2D = $AttackArea/CollisionShape2D
 
 var _definition: EnemyDefinition
 var _target: Node2D
 var _health: int = 1
 var _health_multiplier: float = 1.0
 var _damage_multiplier: float = 1.0
-var _contact_cooldown: float = 0.0
 var _attack_cooldown: float = 0.8
 var _phase: Phase = Phase.APPROACH
 var _pending_attack: PendingAttack = PendingAttack.NONE
@@ -45,6 +48,12 @@ var _target_refresh_timer: float = 0.0
 var _slow_effects: Dictionary = {}
 var _next_slow_id: int = 1
 var _facing: StringName = &"down"
+var _avoidance_normal: Vector2 = Vector2.ZERO
+var _avoidance_tangent: Vector2 = Vector2.ZERO
+var _avoidance_clear_timer: float = 0.0
+var _avoidance_probe_timer: float = 0.0
+var _avoidance_path_is_clear: bool = false
+var _contact_hit_applied: bool = false
 
 
 func configure(definition: EnemyDefinition, health_multiplier: float, target: Node2D, damage_multiplier: float = 1.0) -> void:
@@ -54,7 +63,7 @@ func configure(definition: EnemyDefinition, health_multiplier: float, target: No
 	_target = target
 	if _definition != null:
 		_health = maxi(1, roundi(float(_definition.max_health) * _health_multiplier))
-		_attack_cooldown = minf(0.7, _definition.attack_interval * 0.25)
+		_attack_cooldown = minf(0.7, _contact_attack_interval() * 0.25)
 	if is_inside_tree():
 		_apply_definition()
 
@@ -87,6 +96,21 @@ func apply_slow(multiplier: float, duration: float) -> void:
 	_slow_effects[effect_id] = {"multiplier": clampf(multiplier, 0.05, 1.0), "remaining": duration}
 
 
+func migrate_to_room(room_id: StringName, spawn_position: Vector2) -> void:
+	set_meta("room_id", room_id)
+	global_position = spawn_position
+	_phase = Phase.APPROACH
+	_pending_attack = PendingAttack.NONE
+	_phase_timer = 0.0
+	_attack_cooldown = maxf(_attack_cooldown, 0.45)
+	_contact_hit_applied = false
+	_target_refresh_timer = 0.0
+	velocity = Vector2.ZERO
+	_hide_telegraphs()
+	_restore_actor_color()
+	_attack_area.monitoring = false
+
+
 func _ready() -> void:
 	add_to_group(ENEMY_GROUP)
 	if _definition == null:
@@ -101,7 +125,6 @@ func _physics_process(delta: float) -> void:
 	if _definition == null or _phase == Phase.DEFEATED:
 		return
 	_tick_slow_effects(delta)
-	_contact_cooldown = maxf(0.0, _contact_cooldown - delta)
 	_attack_cooldown = maxf(0.0, _attack_cooldown - delta)
 	_target_refresh_timer -= delta
 	if _target_refresh_timer <= 0.0 or not is_instance_valid(_target):
@@ -115,7 +138,7 @@ func _physics_process(delta: float) -> void:
 
 	match _definition.role:
 		EnemyDefinition.Role.CHASER:
-			_tick_chaser()
+			_tick_chaser(delta)
 		EnemyDefinition.Role.CHARGER:
 			_tick_charger(delta)
 		EnemyDefinition.Role.RANGED:
@@ -127,33 +150,91 @@ func _physics_process(delta: float) -> void:
 			
 	if _phase != Phase.DEFEATED:
 		if _phase == Phase.APPROACH:
-			velocity = _steer_around_obstacles(velocity)
+			velocity = _steer_around_obstacles(velocity, delta)
 		move_and_slide()
 		_update_walk_animation(velocity)
+		_update_attack_area()
 		_apply_contact_damage()
 
 
-func _steer_around_obstacles(desired_velocity: Vector2) -> Vector2:
-	if desired_velocity.is_zero_approx() or get_slide_collision_count() == 0:
+func _steer_around_obstacles(desired_velocity: Vector2, delta: float) -> Vector2:
+	if desired_velocity.is_zero_approx():
 		return desired_velocity
-	var col := get_slide_collision(0)
-	var normal := col.get_normal()
 	var desired_dir := desired_velocity.normalized()
-	var dot := desired_dir.dot(-normal)
-	if dot > 0.15:
-		var tangent_a := Vector2(-normal.y, normal.x)
-		var tangent_b := Vector2(normal.y, -normal.x)
-		var best_tangent := tangent_a if desired_dir.dot(tangent_a) > desired_dir.dot(tangent_b) else tangent_b
-		var slide_dir := (best_tangent * 0.8 + normal * 0.2).normalized()
-		return slide_dir * desired_velocity.length()
+	var blocking_normal := Vector2.ZERO
+	for collision_index: int in get_slide_collision_count():
+		var normal := get_slide_collision(collision_index).get_normal().normalized()
+		if desired_dir.dot(-normal) > 0.15:
+			blocking_normal = normal
+			break
+	if not blocking_normal.is_zero_approx():
+		if _avoidance_tangent.is_zero_approx():
+			var tangent_a := Vector2(-blocking_normal.y, blocking_normal.x)
+			var tangent_b := Vector2(blocking_normal.y, -blocking_normal.x)
+			_avoidance_tangent = tangent_a if desired_dir.dot(tangent_a) > desired_dir.dot(tangent_b) else tangent_b
+		elif not _avoidance_normal.is_zero_approx() and not _avoidance_normal.is_equal_approx(blocking_normal):
+			# Preserve the chosen side while adapting to a corner's new surface normal.
+			var projected_tangent := _avoidance_tangent - blocking_normal * _avoidance_tangent.dot(blocking_normal)
+			if projected_tangent.length_squared() > 0.01:
+				_avoidance_tangent = projected_tangent.normalized()
+		_avoidance_normal = blocking_normal
+		_avoidance_clear_timer = 0.0
+		_avoidance_probe_timer = 0.0
+		_avoidance_path_is_clear = false
+		return _avoidance_velocity(desired_velocity.length())
+	if not _avoidance_tangent.is_zero_approx():
+		_avoidance_clear_timer += delta
+		_avoidance_probe_timer -= delta
+		if _avoidance_probe_timer <= 0.0:
+			_avoidance_path_is_clear = _has_clear_path_to_target()
+			_avoidance_probe_timer = OBSTACLE_PATH_PROBE_INTERVAL
+		if _avoidance_clear_timer < OBSTACLE_STEER_CLEAR_GRACE or not _avoidance_path_is_clear:
+			return _avoidance_velocity(desired_velocity.length())
+		_avoidance_normal = Vector2.ZERO
+		_avoidance_tangent = Vector2.ZERO
+		_avoidance_clear_timer = 0.0
+		_avoidance_probe_timer = 0.0
+		_avoidance_path_is_clear = false
 	return desired_velocity
 
 
-func _tick_chaser() -> void:
-	_phase = Phase.APPROACH
-	_pending_attack = PendingAttack.NONE
-	_hide_telegraphs()
-	velocity = _direction_to_target() * _movement_speed()
+func _avoidance_velocity(speed: float) -> Vector2:
+	var slide_direction := (_avoidance_tangent * 0.85 + _avoidance_normal * 0.15).normalized()
+	return slide_direction * speed
+
+
+func _has_clear_path_to_target() -> bool:
+	if not is_instance_valid(_target):
+		return false
+	var query := PhysicsRayQueryParameters2D.create(global_position, _target.global_position, collision_mask)
+	query.exclude = [get_rid()]
+	if _target is CollisionObject2D:
+		query.exclude.append((_target as CollisionObject2D).get_rid())
+	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+
+
+func _tick_chaser(delta: float) -> void:
+	match _phase:
+		Phase.APPROACH:
+			_pending_attack = PendingAttack.NONE
+			_hide_telegraphs()
+			velocity = _direction_to_target() * _movement_speed()
+			if _distance_to_target() <= _definition.contact_range and _attack_cooldown <= 0.0:
+				_pending_attack = PendingAttack.CONTACT
+				_begin_telegraph(_definition.contact_range, false)
+		Phase.TELEGRAPH:
+			velocity = Vector2.ZERO
+			_tick_telegraph(delta)
+		Phase.ATTACKING:
+			velocity = Vector2.ZERO
+			_phase_timer -= delta
+			if _phase_timer <= 0.0:
+				_begin_recovery()
+		Phase.RECOVERING:
+			velocity = Vector2.ZERO
+			_tick_recovery(delta)
+		_:
+			velocity = Vector2.ZERO
 
 
 func _tick_charger(delta: float) -> void:
@@ -314,6 +395,11 @@ func _tick_telegraph(delta: float) -> void:
 		PendingAttack.CHARGE:
 			_phase = Phase.CHARGING
 			_phase_timer = clampf(_charge_distance / _charge_speed(), 0.22, 0.9)
+			_contact_hit_applied = false
+		PendingAttack.CONTACT:
+			_phase = Phase.ATTACKING
+			_phase_timer = 0.1
+			_contact_hit_applied = false
 			if _definition.role == EnemyDefinition.Role.BOSS and _definition.attack_type == EnemyDefinition.AttackType.CHARGE_AND_SCATTER:
 				_boss_next_charge = false
 		PendingAttack.PROJECTILE:
@@ -338,7 +424,7 @@ func _tick_telegraph(delta: float) -> void:
 func _begin_recovery() -> void:
 	_phase = Phase.RECOVERING
 	_phase_timer = maxf(0.15, _definition.recovery_duration)
-	_attack_cooldown = maxf(0.2, _definition.attack_interval)
+	_attack_cooldown = maxf(0.2, _contact_attack_interval())
 	_pending_attack = PendingAttack.NONE
 
 
@@ -403,16 +489,26 @@ func _spawn_slow_patch_deferred(origin: Vector2, radius: float) -> void:
 
 
 func _apply_contact_damage() -> void:
-	if _contact_cooldown > 0.0 or not is_instance_valid(_target):
+	if not _attack_area.monitoring or _contact_hit_applied or not is_instance_valid(_target):
 		return
 	if global_position.distance_squared_to(_target.global_position) > pow(_definition.contact_range, 2.0):
+		return
+	if not _attack_area.get_overlapping_bodies().has(_target):
 		return
 	var damage: int = _scaled_damage(_definition.contact_damage)
 	if _phase == Phase.CHARGING and _definition.attack_damage > 0:
 		damage = _scaled_damage(_definition.attack_damage)
-	if _target.has_method("take_damage"):
+	if damage > 0 and _target.has_method("take_damage"):
 		_target.call("take_damage", damage)
-	_contact_cooldown = maxf(0.05, _definition.contact_interval)
+	_contact_hit_applied = true
+
+
+func _update_attack_area() -> void:
+	var attack_is_active := _phase in [Phase.ATTACKING, Phase.CHARGING]
+	if _attack_area.monitoring != attack_is_active:
+		_attack_area.monitoring = attack_is_active
+	if not attack_is_active:
+		_contact_hit_applied = false
 
 
 func _scaled_damage(base_damage: int, simultaneous_projectiles: int = 1) -> int:
@@ -455,17 +551,16 @@ func _apply_definition() -> void:
 		still_frames.add_frame("idle_down", _definition.sprite)
 		_sprite.sprite_frames = still_frames
 		_sprite.offset = Vector2.ZERO
-	var actor_scale := 0.2
-	if _definition.role == EnemyDefinition.Role.BOSS:
-		actor_scale = 0.23
-	elif _definition.role == EnemyDefinition.Role.AREA_DENIAL:
-		actor_scale = 0.2
+	var actor_scale := _definition.sprite_scale
+	if _definition.role == EnemyDefinition.Role.BOSS and not _definition.directional_walk_atlas:
+		actor_scale = maxf(actor_scale, 0.23)
 	_sprite.scale = Vector2.ONE * actor_scale
 	_sprite.visible = _definition.sprite != null
 	_fallback_shape.visible = _definition.sprite == null
 	_apply_fallback_look()
 	_set_collision_radius(_body_radius())
-	_attack_cooldown = minf(_attack_cooldown, _definition.attack_interval)
+	_set_attack_radius(_definition.contact_range)
+	_attack_cooldown = minf(_attack_cooldown, _contact_attack_interval())
 	if _definition.directional_walk_atlas:
 		_sprite.play("idle_down")
 
@@ -545,6 +640,17 @@ func _set_collision_radius(radius: float) -> void:
 	shape.radius = radius
 
 
+func _set_attack_radius(radius: float) -> void:
+	var shape := _attack_area_shape.shape as CircleShape2D
+	if shape == null:
+		shape = CircleShape2D.new()
+		_attack_area_shape.shape = shape
+	else:
+		shape = shape.duplicate() as CircleShape2D
+		_attack_area_shape.shape = shape
+	shape.radius = maxf(1.0, radius)
+
+
 func _body_radius() -> float:
 	match _definition.role:
 		EnemyDefinition.Role.AREA_DENIAL:
@@ -557,6 +663,12 @@ func _body_radius() -> float:
 
 func _charge_speed() -> float:
 	return maxf(90.0, _definition.charge_speed)
+
+
+func _contact_attack_interval() -> float:
+	if _definition != null and _definition.role == EnemyDefinition.Role.CHASER:
+		return _definition.contact_interval
+	return _definition.attack_interval if _definition != null else 1.0
 
 
 func _direction_to_target() -> Vector2:

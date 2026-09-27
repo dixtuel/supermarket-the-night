@@ -1,6 +1,6 @@
 # Modular room artwork
 
-Generated as original Bakkal After Dark art with OpenAI ImageGen on 26 September 2026. Each room is a separate 1672×941 background so the game can connect spaces through doors. The first market artwork is the style reference; no reference-game maps, assets, or presentation were copied. These images are not covered by the project's MIT code license.
+Generated as original Supermarket: The Night art with OpenAI ImageGen on 26 September 2026. Each room is a separate 1672×941 background so the game can connect spaces through doors. The first market artwork is the style reference; no reference-game maps, assets, or presentation were copied. Original images are dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../../ASSET_LICENSE.md).
 
 ## Room states
 
@@ -24,4 +24,4 @@ Door centers in the source illustrations were estimated visually, not authored a
 
 ## Provenance
 
-These are AI-generated project assets guided by the project's own first-market image. They are not third-party assets and are not licensed under the code's MIT license. Keep the source PNGs and this provenance note with the project.
+These original AI-generated project assets are dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../../ASSET_LICENSE.md). Keep the source PNGs and this provenance note with the project.

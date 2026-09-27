@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/reinforced_apron_plus.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_upgrade")
+id = &"reinforced_apron_plus"
+display_name = "Reinforced Apron"
+description = "Gain 7 maximum health and a small top-up."
+effect = 9
+icon = ExtResource("2_icon")
+target_weapon_id = &""
+value = 7.0
+immediate_heal = 4
+max_rank = 1

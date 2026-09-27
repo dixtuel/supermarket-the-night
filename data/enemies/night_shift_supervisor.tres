@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/enemy_night_shift_supervisor_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"night_shift_supervisor"
+display_name = "Night-Shift Supervisor"
+combat_read = "Holds the back aisle and sends measured label shots toward the player."
+role = 3
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+move_speed = 40
+max_health = 132
+contact_damage = 9
+contact_range = 50
+contact_interval = 1.2
+xp_reward = 4
+attack_type = 2
+attack_range = 220
+attack_interval = 3.5
+attack_damage = 9
+charge_speed = 0
+telegraph_duration = 0.9
+recovery_duration = 0.8
+projectile_speed = 190
+projectile_count = 1
+zone_radius = 0
+zone_duration = 0
+zone_speed_multiplier = 0.65
+spawn_weight = 0.5

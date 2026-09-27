@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/pallet_stacker_boss.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"pallet_stacker_boss"
+display_name = "The Pallet Stacker"
+combat_read = "Marks a lane before a fast pallet rush, then sends stock flying outward in every direction. Leave the lane before the rush and keep moving after the scatter warning."
+role = 4
+move_speed = 30.0
+max_health = 1000
+contact_damage = 18
+contact_range = 50.0
+contact_interval = 1.25
+xp_reward = 28
+attack_type = 4
+attack_range = 310.0
+attack_interval = 4.2
+attack_damage = 14
+telegraph_duration = 1.05
+recovery_duration = 1.2
+charge_speed = 250.0
+projectile_speed = 185.0
+projectile_count = 8
+zone_radius = 116.0
+zone_duration = 2.8
+zone_speed_multiplier = 0.68
+spawn_weight = 0.0
+sprite = ExtResource("2_sprite")

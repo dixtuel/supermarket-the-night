@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/shelf_rinse_sprayer.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"shelf_rinse_sprayer"
+display_name = "Shelf-Rinse Sprayer"
+description = "Fires a fan of cleaning mist at the nearest nuisance. Damage scales with Elemental Damage."
+sprite = ExtResource("2_sprite")
+damage = 4
+damage_type = 1
+fire_interval = 1.0
+target_range = 350.0
+muzzle_offset = 14.0
+projectile_speed = 460.0
+projectile_lifetime = 1.15
+projectile_count = 3
+pierce_count = 0

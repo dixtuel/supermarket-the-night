@@ -7,7 +7,7 @@
 [ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="5_enemy_runaway_cart"]
 [ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="6_enemy_leaking_freezer"]
 [ext_resource type="Resource" path="res://data/enemies/overloaded_cart.tres" id="7_enemy_overloaded_cart"]
-[ext_resource type="Resource" path="res://data/enemies/elite_15_freezer_keeper.tres" id="8_elite"]
+[ext_resource type="Resource" path="res://data/enemies/pallet_stacker_boss.tres" id="8_boss"]
 
 [resource]
 script = ExtResource("1_wave")
@@ -22,7 +22,7 @@ enemy_health_multiplier = 1.30
 enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_expiry_sprinter"), ExtResource("5_enemy_runaway_cart"), ExtResource("6_enemy_leaking_freezer"), ExtResource("7_enemy_overloaded_cart")])
 spawn_weights = Array[float]([0.34, 0.20, 0.18, 0.18, 0.10])
 event_tag = &"act_three_milestone"
-event_description = "The Cold Storage Keeper alternates broad marked slicks with outward projectile scatters."
+event_description = "The Pallet Stacker marks a charge lane, then scatters stock in every direction."
 is_boss_wave = true
-boss_definition = ExtResource("8_elite")
+boss_definition = ExtResource("8_boss")
 boss_spawn_seconds = 19.0

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RoomEventDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/room_event_definition.gd" id="1_event"]
+
+[resource]
+script = ExtResource("1_event")
+id = &"depot_emergency_radio"
+room_id = &"depot"
+minimum_wave = 6
+display_name = "The emergency radio has one charge left."
+description = "A charged radio battery appears in the depot during this wave. Pick it up for a short speed boost."
+kind = 0
+min_delay_seconds = 26.0
+max_delay_seconds = 44.0
+powerup_reward = 1

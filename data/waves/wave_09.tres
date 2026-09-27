@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="WaveDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
 [ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
 [ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="3_enemy_expired_regular"]
 [ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy_expiry_sprinter"]
 [ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="5_enemy_after_hours_shopper"]
+[ext_resource type="Resource" path="res://data/enemies/receipt_moth.tres" id="6_receipt_moth"]
 
 [resource]
 script = ExtResource("1_wave")
@@ -16,8 +17,8 @@ planned_spawn_count = 41
 spawn_interval = 1.70
 max_alive = 20
 enemy_health_multiplier = 1.15
-enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_expiry_sprinter"), ExtResource("5_enemy_after_hours_shopper")])
-spawn_weights = Array[float]([0.47, 0.25, 0.28])
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy_expired_regular"), ExtResource("4_enemy_expiry_sprinter"), ExtResource("5_enemy_after_hours_shopper"), ExtResource("6_receipt_moth")])
+spawn_weights = Array[float]([0.43, 0.23, 0.22, 0.12])
 event_tag = &"closing_bell"
-event_description = "Two different approach speeds compete for attention while the cap stays level."
+event_description = "Fast and ranged threats distract from the new receipt-moth pursuer."
 is_boss_wave = false

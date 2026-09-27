@@ -48,6 +48,8 @@ func start_wave(wave_number: int, run_seed: int = 0) -> void:
 	for definition: RoomEventDefinition in event_definitions:
 		if definition == null or definition.id == &"" or definition.room_id == &"":
 			continue
+		if _wave_number < definition.minimum_wave:
+			continue
 		var state := {
 			"definition": definition,
 			"resolved": false,

@@ -1,6 +1,6 @@
 # Generated game art
 
-Generated with OpenAI ImageGen on 2026-09-26 for the original Bakkal After Dark project. These are project-local art assets; they are not copied from the GPL-3.0 or MIT reference game repositories. The project's `LICENSE` covers authored code and does not automatically change the terms applicable to art.
+Generated with OpenAI ImageGen on 2026-09-26 for the original Supermarket: The Night project. These are project-local art assets; they are not copied from the GPL-3.0 or MIT reference game repositories. Original project-made art in this directory is dedicated under CC0 1.0; the source code's MIT `LICENSE` is separate. See [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md).
 
 ## Original compact store backgrounds
 
@@ -64,13 +64,13 @@ each row contains four walk poses. The Godot player/enemy scripts derive the
 frame rectangle from the actual atlas size because ImageGen returned
 1254×1254 pixels despite the 1024×1024 prompt. See
 [`docs/asset_animation_spec.md`](../../docs/asset_animation_spec.md) for camera,
-pivot, collision, and review rules. Generated artwork is not part of the
-project's MIT code license.
+pivot, collision, and review rules. Generated artwork is part of the
+CC0 1.0 asset dedication; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md).
 
 ## Shop icons
 
 The 20 transparent shop-card icons in `shop_icons/` are original project art,
-prepared on 2026-09-27. They are not covered by the project's MIT code license.
+prepared on 2026-09-27. They are dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md).
 
 - The seven weapon icons (`can_launcher`, `bulk_basket_fan`, `basket_orbit`,
   `circulation_return`, `mop_whirl`, `receipt_boomerang`, and
@@ -88,3 +88,40 @@ prepared on 2026-09-27. They are not covered by the project's MIT code license.
 Each PNG is 256×256 RGBA with a transparent background. The six `new_*`
 weapon-unlock upgrades reuse the corresponding weapon icon rather than adding
 duplicate upgrade art.
+
+## Night shift content pack
+
+Four original transparent pixel-art PNGs were generated with OpenAI ImageGen
+on 2026-09-27 for the Barcode Reel weapon, Quiet-Shift Footwork upgrade, Receipt
+Moth enemy, and Pallet Stacker boss. The weapon/upgrade icons are 256×256; the
+static enemy sprites are 320×320 and 512×512 respectively. The enemy images do
+not include walk animation frames. They are project-local art and are not
+dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md). The depot radio event uses the
+existing energy-can pickup image.
+
+Additional original transparent pixel-art art was generated with OpenAI
+ImageGen on 2026-09-27 for the Wiki-inspired content pack. Five static enemy
+sprites are in `content_pack/`: `scanline_runner.png`, `coupon_tosser.png`,
+`cooler_dripper.png`, `pallet_jack_pusher.png`, and
+`night_shift_supervisor.png`. Two upgrade/stat icons are also included:
+`engineering_caddy.png` and `reinforced_apron_plus.png`. They use the existing
+content-pack palette and transparent backgrounds. These source PNGs are
+1254×1254 RGBA; the images are static sprites/icons and do not include walk
+animation frames. Matching original weapon SVGs already in this directory are
+used for Aisle Sentinel, Spill Tripmine, Thermal Price Gun, Tote-Stack Lobber,
+and Deposit-Ring Reel. These generated assets are project-local artwork and are
+dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md).
+
+## Directional enemy art update
+
+Four-direction, four-frame walk atlases for the five Wiki-inspired enemies were
+made with OpenAI ImageGen on 2026-09-27 from their project source sprites. They
+are stored in `actors/enemy_scanline_runner_walk.png`,
+`actors/enemy_cooler_dripper_walk.png`, `actors/enemy_coupon_tosser_walk.png`,
+`actors/enemy_pallet_jack_pusher_walk.png`, and
+`actors/enemy_night_shift_supervisor_walk.png`. Rows are up, left, right, down.
+Scanline Runner uses the same compact atlas scale as the other roster sprites.
+
+## Separate asset license
+
+Original images and SVGs in this directory are dedicated under CC0 1.0, separate from the MIT code license. Third-party assets are excluded; see [`ATTRIBUTION.md`](../../ATTRIBUTION.md) and each asset pack provenance file.

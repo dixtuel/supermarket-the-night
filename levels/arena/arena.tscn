@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://levels/arena/arena.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://entities/player/player.tscn" id="2_player_scene"]
 [ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="3_hud_scene"]
+[ext_resource type="PackedScene" path="res://ui/mobile/mobile_touch_controls.tscn" id="4_mobile_controls"]
 
 [node name="Arena" type="Node2D"]
 script = ExtResource("1_script")
@@ -25,3 +26,5 @@ unique_name_in_owner = true
 
 [node name="HUD" parent="." instance=ExtResource("3_hud_scene")]
 unique_name_in_owner = true
+
+[node name="MobileTouchControls" parent="." instance=ExtResource("4_mobile_controls")]

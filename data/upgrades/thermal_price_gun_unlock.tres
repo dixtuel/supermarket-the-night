@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+[ext_resource type="Resource" path="res://data/weapons/thermal_price_gun.tres" id="2_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/thermal_price_gun.svg" id="3_icon"]
+
+[resource]
+script = ExtResource("1_upgrade")
+id = &"thermal_price_gun_unlock"
+display_name = "Thermal Price Gun"
+description = "Unlock the elemental price-label shot."
+effect = 0
+unlocks_weapon = ExtResource("2_weapon")
+icon = ExtResource("3_icon")
+target_weapon_id = &""
+value = 0.0
+immediate_heal = 0
+max_rank = 1

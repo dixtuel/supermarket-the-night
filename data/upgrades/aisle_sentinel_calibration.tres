@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/upgrade_definition.gd" id="1_upgrade"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/aisle_sentinel.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_upgrade")
+id = &"aisle_sentinel_calibration"
+display_name = "Sentinel Calibration"
+description = "Increase Aisle Sentinel base hit damage by 2."
+effect = 1
+icon = ExtResource("2_icon")
+target_weapon_id = &"aisle_sentinel"
+value = 2.0
+immediate_heal = 0
+max_rank = 1

@@ -20,15 +20,16 @@ func _ready() -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if not body.is_in_group("player"):
 		return
-	var consumed := false
-	if reward == Reward.HEALTH and body.has_method("heal"):
-		consumed = int(body.call("heal", amount)) > 0
-	elif reward == Reward.ENERGY and body.has_method("apply_speed_boost"):
-		consumed = int(body.call("apply_speed_boost", speed_multiplier, duration)) >= 0
-	else:
-		return
-	if consumed:
+	if collect_for_player(body):
 		queue_free()
+
+
+func collect_for_player(body: Node) -> bool:
+	if reward == Reward.HEALTH and body.has_method("heal"):
+		return int(body.call("heal", amount)) > 0
+	if reward == Reward.ENERGY and body.has_method("apply_speed_boost"):
+		return int(body.call("apply_speed_boost", speed_multiplier, duration)) >= 0
+	return false
 
 
 func _refresh_look() -> void:

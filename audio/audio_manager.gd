@@ -29,7 +29,10 @@ func _ready() -> void:
 	_music_player.name = "MusicPlayer"
 	_music_player.bus = "Master"
 	_music_player.volume_db = music_volume_db
-	var source_stream := AudioStreamWAV.load_from_file(MUSIC_PATH)
+	# Use ResourceLoader so exported Android builds resolve imported .sample
+	# resources through Godot's remap table instead of looking for the source WAV
+	# as a loose filesystem file inside the APK.
+	var source_stream := ResourceLoader.load(MUSIC_PATH) as AudioStreamWAV
 	if source_stream == null:
 		push_error("Could not load night-shift music from %s." % MUSIC_PATH)
 		return
@@ -40,7 +43,7 @@ func _ready() -> void:
 	_music_player.stream = loop_stream
 	add_child(_music_player)
 	for sound_id: StringName in SOUND_EFFECT_PATHS:
-		var stream := AudioStreamWAV.load_from_file(String(SOUND_EFFECT_PATHS[sound_id]))
+		var stream := ResourceLoader.load(String(SOUND_EFFECT_PATHS[sound_id])) as AudioStreamWAV
 		if stream != null:
 			_sfx_streams[sound_id] = stream
 	for index: int in range(6):

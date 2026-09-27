@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="WaveDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
 [ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
 [ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="3_enemy"]
 [ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy"]
 [ext_resource type="Resource" path="res://data/enemies/expired_regular.tres" id="5_enemy"]
+[ext_resource type="Resource" path="res://data/enemies/receipt_moth.tres" id="6_receipt_moth"]
 
 [resource]
 script = ExtResource("1_wave")
@@ -17,8 +18,8 @@ endless_cycle_spawn_delta = -2
 spawn_interval = 1.70
 max_alive = 34
 enemy_health_multiplier = 1.90
-enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy"), ExtResource("4_enemy"), ExtResource("5_enemy")])
-spawn_weights = Array[float]([0.38, 0.34, 0.28])
+enemy_definitions = Array[ExtResource("2_enemy_type")]([ExtResource("3_enemy"), ExtResource("4_enemy"), ExtResource("5_enemy"), ExtResource("6_receipt_moth")])
+spawn_weights = Array[float]([0.34, 0.30, 0.28, 0.08])
 event_tag = &"endless_pattern_08"
 event_description = "A lower-count breath with more ranged pressure and quick flankers."
 is_boss_wave = false

@@ -11,8 +11,13 @@ config_version=5
 [application]
 
 config/name="Supermarket: The Night"
+config/version="0.2.0-alpha"
+company_name="dixtuel"
+product_name="Supermarket: The Night"
 run/main_scene="res://ui/title/title.tscn"
+config/icon="res://assets/generated/app_icon.svg"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+config/quit_on_go_back=false
 
 [autoload]
 
@@ -20,12 +25,15 @@ BakkalAudio="*res://audio/audio_manager.gd"
 I18n="*res://data/i18n.gd"
 DisplayManager="*res://data/display_manager.gd"
 RunSaveManager="*res://data/run_save_manager.gd"
+MobileLifecycle="*res://data/mobile_lifecycle.gd"
 
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation="landscape"
 
 [input]
 
@@ -69,6 +77,10 @@ interact={
 ]
 }
 
+[input_devices/pointing]
+
+emulate_mouse_from_touch=true
+
 [layer_names]
 
 2d_physics/layer_1="world"
@@ -79,7 +91,8 @@ interact={
 
 [rendering]
 
-textures/canvas_textures/default_texture_filter=2
+textures/canvas_textures/default_texture_filter=1
+textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.04, 0.05, 0.07, 1)

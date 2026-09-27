@@ -12,14 +12,15 @@ signal settings_requested
 
 @export var display_font: FontFile
 
-const INK := Color("101820")
-const PANEL := Color("1a2b30", 0.94)
-const PANEL_EDGE := Color("71847d")
-const TEXT := Color("f1e7ce")
-const MUTED := Color("a6b5ae")
-const TEAL := Color("79c8b7")
-const GOLD := Color("d4e36d")
-const RED := Color("ee806d")
+const INK := Color("111a1c")
+const PANEL := Color("efebd8", 0.97)
+const PANEL_EDGE := Color("a59c80")
+const TEXT := Color("18231e")
+const MUTED := Color("56645a")
+const TEAL := Color("4d7658")
+const GOLD := Color("a98936")
+const RED := Color("b75d54")
+const RECEIPT_LIGHT := Color("f8f5e9")
 
 var _root: Control
 var _health_bar: ProgressBar
@@ -38,14 +39,39 @@ var _overlay_body: VBoxContainer
 var _overlay_mode: StringName = &""
 var _level_up_choice_count: int = 0
 var _stat_choice_ids: Array[StringName] = []
+var _last_player_summary: Dictionary = {}
 var _styles: Dictionary = {}
 var _room_event_panel: PanelContainer
 var _room_event_tween: Tween
+var _touch_pause_button: Button
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_hud()
+
+
+func _notification(what: int) -> void:
+	if what == Node.NOTIFICATION_WM_GO_BACK_REQUEST:
+		_handle_platform_back()
+
+
+func _handle_platform_back() -> void:
+	var scene := get_tree().current_scene
+	var shop := scene.find_child("ShiftShop", true, false) as ShiftShop if is_instance_valid(scene) else null
+	if is_instance_valid(shop) and shop.visible:
+		return
+	match _overlay_mode:
+		&"pause":
+			resume_requested.emit()
+		&"in_game_settings":
+			show_pause_menu()
+		&"results":
+			title_requested.emit()
+		&"level_up", &"stat_choice":
+			return
+		_:
+			_request_pause()
 
 
 func _input(event: InputEvent) -> void:
@@ -63,9 +89,11 @@ func _input(event: InputEvent) -> void:
 				resume_requested.emit()
 			BakkalAudio.play_sfx(&"ui_confirm")
 		elif _overlay_mode.is_empty():
-			show_pause_menu()
-			pause_requested.emit()
-			BakkalAudio.play_sfx(&"ui_confirm")
+			var scene := get_tree().current_scene
+			var shop := scene.find_child("ShiftShop", true, false) as ShiftShop if is_instance_valid(scene) else null
+			if is_instance_valid(shop) and shop.visible:
+				return
+			_request_pause()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -73,7 +101,7 @@ func _input(event: InputEvent) -> void:
 		var key := (event as InputEventKey).keycode
 		var index := key - KEY_1
 		var choice_count := _level_up_choice_count if _overlay_mode == &"level_up" else _stat_choice_ids.size()
-		if key >= KEY_1 and key <= KEY_3 and index < choice_count:
+		if key >= KEY_1 and key <= KEY_4 and index < choice_count:
 			if _overlay_mode == &"level_up":
 				upgrade_selected.emit(index)
 			else:
@@ -85,19 +113,15 @@ func _input(event: InputEvent) -> void:
 func set_run_clock(elapsed_seconds: float, duration_seconds: float) -> void:
 	if not is_instance_valid(_clock_text):
 		return
-	var current := maxi(0, int(elapsed_seconds))
-	var duration := maxi(0, int(duration_seconds))
-	_clock_text.text = "%02d:%02d  /  %02d:%02d" % [current / 60, current % 60, duration / 60, duration % 60]
+	var clock := _format_clock(maxf(0.0, duration_seconds - elapsed_seconds))
+	_clock_text.text = clock if _is_mobile_platform() else "TIME   " + clock
 
 
 func set_round_clock(round_number: int, elapsed_seconds: float, duration_seconds: float) -> void:
 	if not is_instance_valid(_clock_text):
 		return
-	var current := maxi(0, int(elapsed_seconds))
-	var duration := maxi(0, int(duration_seconds))
-	_clock_text.text = "WAVE %02d\n%02d:%02d / %02d:%02d" % [
-		maxi(0, round_number), current / 60, current % 60, duration / 60, duration % 60,
-	]
+	var clock := _format_clock(maxf(0.0, duration_seconds - elapsed_seconds))
+	_clock_text.text = clock if _is_mobile_platform() else "TIME   " + clock
 
 
 func update_health(current: int, maximum: int) -> void:
@@ -105,7 +129,7 @@ func update_health(current: int, maximum: int) -> void:
 		return
 	_health_bar.max_value = maxi(1, maximum)
 	_health_bar.value = clampi(current, 0, maxi(1, maximum))
-	_health_text.text = "Health     %d / %d" % [current, maximum]
+	_health_text.text = ("HP   %d / %d" if _is_mobile_platform() else "Health     %d / %d") % [current, maximum]
 
 
 func update_progress(xp: int, needed: int, level: int) -> void:
@@ -113,7 +137,7 @@ func update_progress(xp: int, needed: int, level: int) -> void:
 		return
 	_xp_bar.max_value = maxi(1, needed)
 	_xp_bar.value = clampi(xp, 0, maxi(1, needed))
-	_level_text.text = "Level %02d   /   Stock XP %d / %d" % [level, xp, needed]
+	_level_text.text = ("LV %02d   ·   XP %d / %d" if _is_mobile_platform() else "Level %02d   /   Stock XP %d / %d") % [level, xp, needed]
 
 
 func set_kill_count(kills: int) -> void:
@@ -150,18 +174,18 @@ func show_room_event_message(heading: String, message: String) -> void:
 	_room_event_panel = PanelContainer.new()
 	_room_event_panel.anchor_left = 0.5
 	_room_event_panel.anchor_right = 0.5
-	_room_event_panel.offset_left = -210.0
-	_room_event_panel.offset_right = 210.0
+	_room_event_panel.offset_left = -260.0
+	_room_event_panel.offset_right = 260.0
 	_room_event_panel.offset_top = 92.0
-	_room_event_panel.offset_bottom = 156.0
-	_room_event_panel.add_theme_stylebox_override("panel", _style(PANEL, GOLD, 4, 1))
+	_room_event_panel.offset_bottom = 184.0
+	_room_event_panel.add_theme_stylebox_override("panel", _style(PANEL, PANEL_EDGE, 0, 1))
 	var copy := VBoxContainer.new()
 	copy.add_theme_constant_override("separation", 3)
 	_room_event_panel.add_child(_margin_content(copy, 9))
-	var title := _label(heading, 12, GOLD, true)
+	var title := _label(heading, 18, GOLD, true)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	copy.add_child(title)
-	var body := _label(message, 13, TEXT)
+	var body := _label(message, 17, TEXT)
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	copy.add_child(body)
@@ -186,123 +210,316 @@ func hide_boss_health() -> void:
 func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 	_open_overlay(&"level_up", "Choose a shift bonus", "One item comes off the shelf. The clock is paused.")
 	_level_up_choice_count = upgrades.size()
-	var cards := HBoxContainer.new()
-	cards.add_theme_constant_override("separation", 16)
+	var mobile_layout := _is_mobile_platform()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var choice_layout := HBoxContainer.new()
+	choice_layout.add_theme_constant_override("separation", _mobile_spacing(12) if mobile_layout else 16)
+	choice_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	choice_layout.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_overlay_body.add_child(choice_layout)
+	var cards: Control = GridContainer.new() if mobile_layout else HBoxContainer.new()
+	if mobile_layout:
+		(cards as GridContainer).columns = 4
+	var choice_buttons: Array[Button] = []
+	cards.add_theme_constant_override("h_separation", _mobile_spacing(12) if mobile_layout else 12)
+	cards.add_theme_constant_override("v_separation", _mobile_spacing(10) if mobile_layout else 12)
 	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_overlay_body.add_child(cards)
+	cards.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if mobile_layout:
+		var safe := _safe_insets(viewport_size)
+		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
+		cards.custom_minimum_size.x = inner_width - 260.0 - _mobile_spacing(12)
+	choice_layout.add_child(cards)
 	for index in range(upgrades.size()):
 		var definition := upgrades[index]
 		var card := Button.new()
-		card.custom_minimum_size = Vector2(178, 176)
+		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(36)) / 4.0 if mobile_layout else 0, viewport_size.y * 0.58 if mobile_layout else 300)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		card.focus_mode = Control.FOCUS_ALL
-		card.add_theme_font_size_override("font_size", 18)
+		card.add_theme_font_size_override("font_size", _responsive_font_size(18))
 		card.add_theme_color_override("font_color", TEXT)
-		card.add_theme_color_override("font_hover_color", Color.WHITE)
-		card.add_theme_stylebox_override("normal", _style(PANEL, PANEL_EDGE, 4, 1))
-		card.add_theme_stylebox_override("hover", _style(Color("294046"), GOLD, 4, 2))
-		card.add_theme_stylebox_override("pressed", _style(Color("354b4d"), TEAL, 4, 2))
-		card.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEXT, 4, 2))
+		card.add_theme_color_override("font_hover_color", TEXT)
+		card.add_theme_stylebox_override("normal", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+		card.add_theme_stylebox_override("hover", _style(Color("fffdf4"), GOLD, 0, 2))
+		card.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
+		card.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
 		var content := VBoxContainer.new()
-		content.add_theme_constant_override("separation", 12)
+		content.add_theme_constant_override("separation", _mobile_spacing(6) if mobile_layout else 12)
 		var content_margins := MarginContainer.new()
 		content_margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		content_margins.add_theme_constant_override("margin_left", 12)
-		content_margins.add_theme_constant_override("margin_right", 12)
-		content_margins.add_theme_constant_override("margin_top", 14)
-		content_margins.add_theme_constant_override("margin_bottom", 14)
-		var number := _label("SHELF %02d  /  KEY %d" % [index + 1, index + 1], 11, GOLD)
-		var title := _label(definition.display_name, 19, TEXT)
+		content_margins.add_theme_constant_override("margin_left", _mobile_spacing(8) if mobile_layout else 12)
+		content_margins.add_theme_constant_override("margin_right", _mobile_spacing(8) if mobile_layout else 12)
+		content_margins.add_theme_constant_override("margin_top", _mobile_spacing(8) if mobile_layout else 14)
+		content_margins.add_theme_constant_override("margin_bottom", _mobile_spacing(8) if mobile_layout else 14)
+		var number := _label("SHELF %02d  /  KEY %d" % [index + 1, index + 1], 14, GOLD)
+		var icon := TextureRect.new()
+		icon.texture = definition.icon
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.custom_minimum_size = Vector2(64, 64)
+		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if icon.texture != null:
+			var icon_center := _center_control(icon)
+			icon_center.custom_minimum_size.y = _mobile_spacing(42) if mobile_layout else 64
+			content.add_child(icon_center)
+		var title := _label(definition.display_name, 23, TEXT)
+		if mobile_layout:
+			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 21.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var description := _label(definition.description, 13, MUTED)
+		var description := _label(definition.description, 17, MUTED)
+		if mobile_layout:
+			description.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 17.0)))
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		description.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		content.add_child(number)
 		content.add_child(title)
 		content.add_child(description)
+		var choose_hint := _label("CHOOSE   /   %d" % (index + 1), 15, TEAL)
+		choose_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		content.add_child(choose_hint)
 		content_margins.add_child(content)
 		card.add_child(content_margins)
 		card.pressed.connect(func() -> void: BakkalAudio.play_sfx(&"ui_confirm"); upgrade_selected.emit(index))
 		cards.add_child(card)
-		if index == 0:
+		choice_buttons.append(card)
+		if index == 0 and not mobile_layout:
 			card.grab_focus.call_deferred()
+	_link_horizontal_focus(choice_buttons)
+	if not _last_player_summary.is_empty():
+		var ledger := _build_stat_ledger(_last_player_summary)
+		if mobile_layout:
+			ledger.custom_minimum_size.y = viewport_size.y * 0.58
+			ledger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		choice_layout.add_child(ledger)
 
 
-func show_stat_choices(choices: Array[Dictionary]) -> void:
-	_open_overlay(&"stat_choice", "Adjust your shift", "Choose one lasting stat. The clock is paused.")
+func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = {}) -> void:
+	_open_overlay(&"stat_choice", "Choose a shift adjustment", "Select one lasting bonus. Some upgrades include a trade-off.")
+	_last_player_summary = player_summary.duplicate(true)
 	_stat_choice_ids.clear()
-	var cards := HBoxContainer.new()
-	cards.add_theme_constant_override("separation", 16)
+	var portrait := _is_portrait()
+	var mobile_layout := _is_mobile_platform()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var layout: Control = HBoxContainer.new()
+	layout.add_theme_constant_override("separation", 16)
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_overlay_body.add_child(layout)
+	var cards: Control = GridContainer.new() if mobile_layout else HBoxContainer.new()
+	if mobile_layout:
+		(cards as GridContainer).columns = 4
+	var choice_buttons: Array[Button] = []
+	cards.add_theme_constant_override("h_separation", _mobile_spacing(8) if mobile_layout else 10)
+	cards.add_theme_constant_override("v_separation", _mobile_spacing(8) if mobile_layout else 10)
 	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_overlay_body.add_child(cards)
-	var choice_count: int = mini(choices.size(), 3)
+	cards.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if mobile_layout:
+		var safe := _safe_insets(viewport_size)
+		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
+		cards.custom_minimum_size.x = inner_width - 260.0 - _mobile_spacing(16)
+	layout.add_child(cards)
+	var choice_count: int = mini(choices.size(), 4)
 	for index: int in range(choice_count):
 		var choice: Dictionary = choices[index]
 		var choice_id := StringName(String(choice.get("id", "")))
 		_stat_choice_ids.append(choice_id)
-		var card := Button.new()
-		card.custom_minimum_size = Vector2(210, 240)
+		var card := PanelContainer.new()
+		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(24)) / 4.0 if mobile_layout else 0, viewport_size.y * 0.58 if mobile_layout else 320)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.focus_mode = Control.FOCUS_ALL
-		card.add_theme_font_size_override("font_size", 18)
-		card.add_theme_color_override("font_color", TEXT)
-		card.add_theme_color_override("font_hover_color", Color.WHITE)
-		card.add_theme_stylebox_override("normal", _style(PANEL, PANEL_EDGE, 5, 1))
-		card.add_theme_stylebox_override("hover", _style(Color("294046"), GOLD, 5, 2))
-		card.add_theme_stylebox_override("pressed", _style(Color("354b4d"), TEAL, 5, 2))
-		card.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEXT, 5, 2))
+		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		card.add_theme_stylebox_override("panel", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
 		var content := VBoxContainer.new()
-		content.add_theme_constant_override("separation", 8)
-		var content_margins := MarginContainer.new()
-		content_margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		content_margins.add_theme_constant_override("margin_left", 12)
-		content_margins.add_theme_constant_override("margin_right", 12)
-		content_margins.add_theme_constant_override("margin_top", 12)
-		content_margins.add_theme_constant_override("margin_bottom", 12)
-
-		var number := _label("SHELF %02d  /  KEY %d" % [index + 1, index + 1], 12, GOLD)
-		content.add_child(number)
-
-		var stat_texture: Texture2D
-		match String(choice_id):
-			"speed":
-				stat_texture = load("res://assets/generated/shop_icons/comfortable_shoes.png") as Texture2D
-			"health":
-				stat_texture = load("res://assets/generated/pickups/pickup_health_bag.png") as Texture2D
-			"lifesteal":
-				stat_texture = load("res://assets/generated/pickups/pickup_energy_can.png") as Texture2D
-			"dodge":
-				stat_texture = load("res://assets/generated/shop_icons/longer_shift.png") as Texture2D
-			"protection":
-				stat_texture = load("res://assets/generated/shop_icons/fresh_apron.png") as Texture2D
-			_:
-				stat_texture = load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
-
-		if stat_texture != null:
-			var icon_box := PanelContainer.new()
-			icon_box.custom_minimum_size = Vector2(0, 72)
-			icon_box.add_theme_stylebox_override("panel", _style(INK, Color("3f5a5d"), 4, 1))
-			var icon_rect := TextureRect.new()
-			icon_rect.texture = stat_texture
-			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_rect.custom_minimum_size = Vector2(56, 56)
-			icon_box.add_child(_center_control(icon_rect))
-			content.add_child(icon_box)
-
-		var title := _label(String(choice.get("name", "Stat adjustment")), 18, TEXT)
+		content.add_theme_constant_override("separation", _mobile_spacing(6) if mobile_layout else 10)
+		card.add_child(_margin_content(content, _mobile_spacing(8) if mobile_layout else 12))
+		content.add_child(_label("PICK %02d  /  KEY %d" % [index + 1, index + 1], 14, GOLD))
+		var icon_panel := PanelContainer.new()
+		icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(54) if mobile_layout else 72)
+		icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
+		var icon_rect := TextureRect.new()
+		icon_rect.texture = _stat_icon(choice)
+		icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.custom_minimum_size = Vector2(_mobile_spacing(48), _mobile_spacing(48)) if mobile_layout else Vector2(56, 56)
+		icon_panel.add_child(_center_control(icon_rect))
+		content.add_child(icon_panel)
+		var title := _label(String(choice.get("name", "Stat adjustment")), 22, TEXT)
+		if mobile_layout:
+			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 20.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var description := _label(String(choice.get("description", "")), 13, MUTED)
-		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		description.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		content.add_child(title)
-		content.add_child(description)
-		content_margins.add_child(content)
-		card.add_child(content_margins)
-		card.pressed.connect(func() -> void: BakkalAudio.play_sfx(&"ui_confirm"); stat_choice_selected.emit(choice_id))
+		var details_scroll := ScrollContainer.new()
+		details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		details_scroll.follow_focus = true
+		content.add_child(details_scroll)
+		var details := VBoxContainer.new()
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.add_theme_constant_override("separation", 6)
+		details_scroll.add_child(details)
+		var effects: Array = choice.get("effects", [])
+		for effect: Variant in effects:
+			if effect is Dictionary:
+				var delta_row := _label(_format_stat_delta(effect), 18, TEAL if float(effect.get("value", 0.0)) >= 0.0 else RED)
+				if mobile_layout:
+					delta_row.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 18.0)))
+				delta_row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				details.add_child(delta_row)
+		if effects.is_empty():
+			details.add_child(_label("No lasting stat change.", 16, MUTED))
+		var reason := _label(String(choice.get("description", "")), 15, MUTED)
+		if mobile_layout:
+			reason.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 16.0)))
+		reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		details.add_child(reason)
+		var choose_button := _add_card_button(content, "Choose", func() -> void:
+			BakkalAudio.play_sfx(&"ui_confirm")
+			stat_choice_selected.emit(choice_id)
+		)
 		cards.add_child(card)
+		choice_buttons.append(choose_button)
 		if index == 0:
-			card.grab_focus.call_deferred()
+			if not mobile_layout:
+				choose_button.grab_focus.call_deferred()
+
+	var ledger := _build_stat_ledger(player_summary)
+	if mobile_layout:
+		ledger.custom_minimum_size.y = viewport_size.y * 0.58
+		ledger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	layout.add_child(ledger)
+	_link_horizontal_focus(choice_buttons)
+
+
+func _link_horizontal_focus(buttons: Array[Button]) -> void:
+	for index in range(buttons.size()):
+		var previous := (index - 1 + buttons.size()) % buttons.size()
+		var next := (index + 1) % buttons.size()
+		buttons[index].focus_neighbor_left = buttons[previous].get_path()
+		buttons[index].focus_neighbor_right = buttons[next].get_path()
+
+
+func _stat_icon(choice: Dictionary) -> Texture2D:
+	var effects: Array = choice.get("effects", [])
+	for effect: Variant in effects:
+		if not effect is Dictionary or float(effect.get("value", 0.0)) <= 0.0:
+			continue
+		var weapon_id := String(effect.get("weapon_id", ""))
+		if not weapon_id.is_empty():
+			var weapon_path := "res://data/weapons/%s.tres" % weapon_id
+			if ResourceLoader.exists(weapon_path):
+				var weapon := load(weapon_path) as WeaponDefinition
+				if weapon != null and weapon.sprite != null:
+					return weapon.sprite
+		match String(effect.get("stat", "")):
+			"max_health":
+				return load("res://assets/generated/pickups/pickup_health_bag.png") as Texture2D
+			"damage":
+				return load("res://assets/generated/shop_icons/heavier_cans.png") as Texture2D
+			"move_speed":
+				return load("res://assets/generated/shop_icons/comfortable_shoes.png") as Texture2D
+			"lifesteal":
+				return load("res://assets/generated/pickups/pickup_energy_can.png") as Texture2D
+			"dodge":
+				return load("res://assets/generated/shop_icons/longer_shift.png") as Texture2D
+			"protection":
+				return load("res://assets/generated/shop_icons/fresh_apron.png") as Texture2D
+			"elemental_damage":
+				return load("res://assets/generated/weapons/shelf_rinse_sprayer.png") as Texture2D
+			"engineering":
+				return load("res://assets/generated/content_pack/engineering_caddy.png") as Texture2D
+	return null
+
+
+func _add_card_button(parent: Control, button_text: String, callback: Callable) -> Button:
+	var button := Button.new()
+	button.text = button_text
+	button.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 48
+	button.focus_mode = Control.FOCUS_ALL
+	button.add_theme_font_size_override("font_size", _responsive_font_size(17))
+	button.add_theme_color_override("font_color", INK)
+	button.add_theme_color_override("font_hover_color", INK)
+	button.add_theme_color_override("font_focus_color", INK)
+	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24), GOLD, 0, 1))
+	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32), TEXT, 0, 1))
+	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+	button.pressed.connect(func() -> void: callback.call())
+	parent.add_child(button)
+	return button
+
+
+func _format_stat_delta(effect: Dictionary) -> String:
+	var stat_key := String(effect.get("stat", ""))
+	var custom_label := String(effect.get("label", "")).strip_edges()
+	var stat_name := custom_label if not custom_label.is_empty() else _stat_display_name(stat_key)
+	var value := float(effect.get("value", 0.0))
+	var unit := String(effect.get("unit", effect.get("format", ""))).to_lower()
+	var is_percent := unit in ["percent", "%", "percentage"] or stat_key in ["damage", "move_speed", "lifesteal", "dodge", "protection", "weapon_fire_rate"]
+	var amount := "%+d%%" % roundi(value * 100.0) if is_percent else "%+d" % roundi(value)
+	return "%s  %s" % [amount, stat_name]
+
+
+func _stat_display_name(stat_key: String) -> String:
+	match stat_key:
+		"engineering":
+			return "Engineering"
+		"elemental_damage":
+			return "Elemental Damage"
+		"max_health":
+			return "Max Health"
+		"move_speed":
+			return "Move Speed"
+		"lifesteal":
+			return "Life Steal"
+		"weapon_damage":
+			return "Weapon Damage"
+		"weapon_fire_rate":
+			return "Weapon Fire Rate"
+		_:
+			return stat_key.replace("_", " ").capitalize()
+
+
+func _build_stat_ledger(stats: Dictionary) -> PanelContainer:
+	var panel := PanelContainer.new()
+	var mobile := _is_mobile_platform()
+	var viewport_size := get_viewport().get_visible_rect().size
+	panel.custom_minimum_size.x = 260 if mobile else 280
+	panel.add_theme_stylebox_override("panel", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
+	panel.add_child(_margin_content(content, 14))
+	var heading := _label("Current shift", 23, TEXT)
+	var level_line := _label("Level  %s" % str(stats.get("level", "1")), 17, MUTED)
+	if mobile:
+		heading.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 23.0)))
+		level_line.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 17.0)))
+	content.add_child(heading)
+	content.add_child(level_line)
+	for key: String in ["health", "damage", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection"]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var stat_label := "Elemental Damage" if key == "elemental_damage" else ("Engineering" if key == "engineering" else key.replace("_", " ").capitalize())
+		var name_label := _label(stat_label, 17, MUTED)
+		var value_label := _label(str(stats.get(key, "0")), 17, GOLD)
+		if mobile:
+			var row_font := roundi(_mobile_overlay_font(viewport_size, 17.0))
+			name_label.add_theme_font_size_override("font_size", row_font)
+			value_label.add_theme_font_size_override("font_size", row_font)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(name_label)
+		row.add_child(value_label)
+		content.add_child(row)
+	var training_text := String(stats.get("weapon_training", ""))
+	if not training_text.is_empty():
+		var training_label := _label("Weapon Training  %s" % training_text, 13, GOLD)
+		if mobile:
+			training_label.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 15.0)))
+		training_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(training_label)
+	return panel
 
 
 func show_pause_menu() -> void:
@@ -312,14 +529,16 @@ func show_pause_menu() -> void:
 	_add_menu_button(I18n.t("PAUSE_RESTART", "Yeniden Başlat"), func() -> void: restart_requested.emit())
 	_add_menu_button(I18n.t("PAUSE_SETTINGS", "Ayarlar & Dil"), func() -> void: _show_in_game_settings())
 	_add_menu_button(I18n.t("PAUSE_TITLE_MENU", "Ana Menü"), func() -> void: title_requested.emit())
-	_add_menu_button(I18n.t("PAUSE_QUIT_DESKTOP", "Masaüstüne Çık"), func() -> void: get_tree().quit())
+	if not _is_mobile_platform():
+		_add_menu_button(I18n.t("PAUSE_QUIT_DESKTOP", "Masaüstüne Çık"), func() -> void: get_tree().quit())
 
 
 func _show_in_game_settings() -> void:
 	_open_overlay(&"in_game_settings", I18n.t("SETTINGS_TITLE", "AYARLAR — SES, EKRAN & DİL"), "")
 
 	# Language toggle row
-	var lang_row := HBoxContainer.new()
+	var portrait := _is_portrait()
+	var lang_row: Control = VBoxContainer.new() if portrait else HBoxContainer.new()
 	lang_row.add_theme_constant_override("separation", 12)
 	_overlay_body.add_child(lang_row)
 
@@ -330,24 +549,29 @@ func _show_in_game_settings() -> void:
 	var tr_btn := Button.new()
 	tr_btn.text = "TÜRKÇE"
 	tr_btn.custom_minimum_size = Vector2(100, 36)
+	_style_settings_button(tr_btn)
 	tr_btn.disabled = (I18n.current_locale == "tr")
 	tr_btn.pressed.connect(func() -> void:
 		I18n.set_language("tr")
 		BakkalAudio.play_sfx(&"ui_confirm")
 		_show_in_game_settings()
 	)
-	lang_row.add_child(tr_btn)
+	var language_buttons: Control = HBoxContainer.new() if portrait else lang_row
+	if portrait:
+		lang_row.add_child(language_buttons)
+	language_buttons.add_child(tr_btn)
 
 	var en_btn := Button.new()
 	en_btn.text = "ENGLISH"
 	en_btn.custom_minimum_size = Vector2(100, 36)
+	_style_settings_button(en_btn)
 	en_btn.disabled = (I18n.current_locale == "en")
 	en_btn.pressed.connect(func() -> void:
 		I18n.set_language("en")
 		BakkalAudio.play_sfx(&"ui_confirm")
 		_show_in_game_settings()
 	)
-	lang_row.add_child(en_btn)
+	language_buttons.add_child(en_btn)
 
 	var div1 := HSeparator.new()
 	_overlay_body.add_child(div1)
@@ -356,7 +580,9 @@ func _show_in_game_settings() -> void:
 	var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 13, GOLD)
 	_overlay_body.add_child(res_label)
 
-	var res_row := HBoxContainer.new()
+	var res_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
+	if portrait:
+		(res_row as GridContainer).columns = 2
 	res_row.add_theme_constant_override("separation", 8)
 	_overlay_body.add_child(res_row)
 
@@ -366,19 +592,23 @@ func _show_in_game_settings() -> void:
 		r_btn.text = resolutions[r_idx]
 		r_btn.custom_minimum_size = Vector2(110, 34)
 		r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_settings_button(r_btn)
 		r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
 		r_btn.pressed.connect(func() -> void:
 			DisplayManager.set_resolution_index(r_idx)
 			BakkalAudio.play_sfx(&"ui_confirm")
 			_show_in_game_settings()
 		)
+		r_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
 		res_row.add_child(r_btn)
 
 	# Window Mode row
 	var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 13, GOLD)
 	_overlay_body.add_child(mode_label)
 
-	var mode_row := HBoxContainer.new()
+	var mode_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
+	if portrait:
+		(mode_row as GridContainer).columns = 2
 	mode_row.add_theme_constant_override("separation", 8)
 	_overlay_body.add_child(mode_row)
 
@@ -392,12 +622,14 @@ func _show_in_game_settings() -> void:
 		m_btn.text = mode_names[m_idx]
 		m_btn.custom_minimum_size = Vector2(140, 34)
 		m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_settings_button(m_btn)
 		m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
 		m_btn.pressed.connect(func() -> void:
 			DisplayManager.set_window_mode(m_idx)
 			BakkalAudio.play_sfx(&"ui_confirm")
 			_show_in_game_settings()
 		)
+		m_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
 		mode_row.add_child(m_btn)
 
 	var div2 := HSeparator.new()
@@ -449,26 +681,80 @@ func show_results(report: Dictionary, victory: bool) -> void:
 	var headline := "Shift survived" if victory else ("Endless night over" if endless else "Shift cut short")
 	var subline := "The bakkal made it to morning." if victory else ("You held the store through wave %02d." % int(report.get("round", 1)) if endless else "The night shift got the better of you.")
 	_open_overlay(&"results", headline, subline)
-	var details := _label(
-		"MODE  %s\nTIME  %s\nKNOCKED OUT  %d\nLEVEL  %d\nWEAPONS  %s\nRETURN CART  %s\nSCORE  %d\nBEST  %d%s" % [
-			String(report.get("mode", "CAMPAIGN")),
-			_format_clock(float(report.get("time", 0.0))),
-			int(report.get("kills", 0)),
-			int(report.get("level", 1)),
-			String(report.get("weapons", "Can Launcher")),
-			String(report.get("boss", "NOT CLEARED")),
-			int(report.get("score", 0)),
-			int(report.get("best_score", 0)),
-			("\nBEST WAVE  %02d" % int(report.get("best_wave", 0))) if endless else "",
-		],
-		16,
-		TEXT
+	var metrics := GridContainer.new()
+	metrics.columns = 2
+	metrics.add_theme_constant_override("h_separation", 28)
+	metrics.add_theme_constant_override("v_separation", 8)
+	metrics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_overlay_body.add_child(metrics)
+	_add_result_metric(metrics, "SHIFT", String(report.get("mode", "CAMPAIGN")))
+	_add_result_metric(metrics, "TIME ON CLOCK", _format_clock(float(report.get("time", 0.0))))
+	_add_result_metric(metrics, "AISLES CLEARED", "%03d" % int(report.get("kills", 0)))
+	_add_result_metric(metrics, "SHIFT LEVEL", "%02d" % int(report.get("level", 1)))
+	_add_result_metric(metrics, "RETURN CART", String(report.get("boss", "NOT CLEARED")))
+	_add_result_metric(metrics, "SHIFT SCORE", "%06d" % int(report.get("score", 0)))
+	_add_result_metric(metrics, "PERSONAL BEST", "%06d" % int(report.get("best_score", 0)))
+	if endless:
+		_add_result_metric(metrics, "BEST WAVE", "WAVE %02d" % int(report.get("best_wave", 0)))
+	_overlay_body.add_child(HSeparator.new())
+	var tools_heading := _label("TOOLS ON THE RECEIPT", 15, GOLD, true)
+	_overlay_body.add_child(tools_heading)
+	var tools := _label(String(report.get("weapons", "Can Launcher")).replace(" / ", "   ·   "), 18, TEXT)
+	tools.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_overlay_body.add_child(tools)
+	if _is_mobile_platform():
+		var actions := HBoxContainer.new()
+		actions.add_theme_constant_override("separation", _mobile_spacing(8))
+		actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_overlay_body.add_child(actions)
+		var retry_button := _result_action_button("Run it back", true, func() -> void: restart_requested.emit())
+		retry_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		actions.add_child(retry_button)
+		retry_button.grab_focus.call_deferred()
+		var menu_button := _result_action_button("Main menu", false, func() -> void: title_requested.emit())
+		menu_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		actions.add_child(menu_button)
+	else:
+		_add_menu_button("Run it back", func() -> void: restart_requested.emit(), true)
+		_add_menu_button("Main menu", func() -> void: title_requested.emit())
+
+
+func _result_action_button(text: String, primary: bool, callback: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_ALL
+	button.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size)
+	button.add_theme_font_size_override("font_size", _responsive_font_size(18))
+	button.add_theme_color_override("font_color", INK)
+	button.add_theme_color_override("font_hover_color", INK)
+	button.add_theme_color_override("font_focus_color", INK)
+	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24) if primary else RECEIPT_LIGHT, GOLD if primary else PANEL_EDGE, 0, 1))
+	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32) if primary else Color("fffdf4"), GOLD, 0, 2))
+	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+	button.pressed.connect(func() -> void:
+		BakkalAudio.play_sfx(&"ui_confirm")
+		callback.call()
 	)
-	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_overlay_body.add_child(details)
-	_add_menu_button("Run it back", func() -> void: restart_requested.emit(), true)
-	_add_menu_button("Main menu", func() -> void: title_requested.emit())
+	return button
+
+
+func _add_result_metric(parent: GridContainer, label_text: String, value_text: String) -> void:
+	var item := VBoxContainer.new()
+	item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	item.add_theme_constant_override("separation", 2)
+	var label := _label(label_text, 14, MUTED, true)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var value := _label(value_text, 19, TEXT)
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if _is_mobile_platform():
+		var viewport_size := get_viewport().get_visible_rect().size
+		label.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 14.0)))
+		value.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 19.0)))
+	value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	item.add_child(label)
+	item.add_child(value)
+	parent.add_child(item)
 
 
 func hide_overlay() -> void:
@@ -479,6 +765,8 @@ func hide_overlay() -> void:
 	_overlay_mode = &""
 	_level_up_choice_count = 0
 	_stat_choice_ids.clear()
+	if is_instance_valid(_touch_pause_button):
+		_touch_pause_button.visible = true
 
 
 func _build_hud() -> void:
@@ -488,80 +776,226 @@ func _build_hud() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	var vitals := _panel(Vector2(24, 20), Vector2(360, 115))
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var portrait := viewport_size.x < viewport_size.y
+	var mobile := _is_mobile_platform()
+	var usable_width := maxf(280.0, viewport_size.x - safe.x - safe.z - 40.0)
+	var vitals_width := minf(440.0, usable_width * 0.48) if portrait else (minf(400.0, usable_width * 0.32) if mobile else 440.0)
+	var vitals_height := 106.0 if mobile else 142.0
+	var vitals := _panel(Vector2.ZERO, Vector2(vitals_width, vitals_height))
+	vitals.anchor_left = 1.0
+	vitals.anchor_right = 1.0
+	vitals.offset_left = -safe.z - 20.0 - vitals_width
+	vitals.offset_right = -safe.z - 20.0
+	vitals.offset_top = safe.y + (12.0 if mobile else 20.0)
+	vitals.offset_bottom = vitals.offset_top + vitals_height
+	vitals.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_root.add_child(vitals)
 	var vitals_stack := VBoxContainer.new()
-	vitals_stack.add_theme_constant_override("separation", 4)
-	vitals.add_child(_margin_content(vitals_stack, 10))
-	_health_text = _label("Health  100 / 100", 15, TEXT)
+	vitals_stack.add_theme_constant_override("separation", 2 if mobile else 4)
+	vitals.add_child(_margin_content(vitals_stack, 6 if mobile else 10))
+	_health_text = _label("HP  100 / 100" if mobile else "Health  100 / 100", 18 if mobile else 20, RECEIPT_LIGHT)
+	_apply_world_text_contrast(_health_text)
 	vitals_stack.add_child(_health_text)
 	_health_bar = _bar(RED)
-	_health_bar.custom_minimum_size = Vector2(0, 16)
+	_health_bar.custom_minimum_size = Vector2(0, 12 if mobile else 20)
 	vitals_stack.add_child(_health_bar)
-	_level_text = _label("Level 01   /   Stock XP 0 / 5", 14, MUTED)
+	_level_text = _label("LV 01 · XP 0 / 5" if mobile else "Level 01   /   Stock XP 0 / 5", 16 if mobile else 18, RECEIPT_LIGHT)
+	_apply_world_text_contrast(_level_text)
 	vitals_stack.add_child(_level_text)
 	_xp_bar = _bar(TEAL)
-	_xp_bar.custom_minimum_size = Vector2(0, 12)
+	_xp_bar.custom_minimum_size = Vector2(0, 9 if mobile else 14)
 	vitals_stack.add_child(_xp_bar)
 
-	var wave_panel := _panel(Vector2(-160, 20), Vector2(320, 92))
-	wave_panel.anchor_left = 0.5
-	wave_panel.anchor_right = 0.5
-	_root.add_child(wave_panel)
-	_clock_text = _label("WAVE 01\n00:00 / 00:50", 20, TEXT, true)
+	_clock_text = _label("00:50" if mobile else "TIME   00:50", 12 if mobile else 12, RECEIPT_LIGHT, true)
+	_apply_world_text_contrast(_clock_text)
 	_clock_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_clock_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	wave_panel.add_child(_clock_text)
+	_clock_text.clip_text = true
+	_clock_text.anchor_left = 1.0
+	_clock_text.anchor_right = 1.0
+	_clock_text.anchor_top = 1.0
+	_clock_text.anchor_bottom = 1.0
+	_clock_text.offset_left = -(120.0 if mobile else 236.0) - safe.z
+	_clock_text.offset_right = -16.0 - safe.z
+	_clock_text.offset_top = -(34.0 if mobile else 52.0) - safe.w
+	_clock_text.offset_bottom = -12.0 - safe.w
+	_root.add_child(_clock_text)
 
-	var report_panel := _panel(Vector2(-360, 20), Vector2(336, 92))
-	report_panel.anchor_left = 1.0
-	report_panel.anchor_right = 1.0
+	var report_panel := _panel(Vector2(-404.0 - safe.z, safe.y + 20.0), Vector2(380, 104))
+	if mobile:
+		report_panel.anchor_left = 0.0
+		report_panel.anchor_right = 0.0
+		report_panel.position = Vector2(safe.x + 20.0, safe.y + 20.0)
+		report_panel.custom_minimum_size = Vector2(minf(360.0, usable_width * 0.38), 78.0)
+		report_panel.size = report_panel.custom_minimum_size
+	elif portrait:
+		report_panel.position = Vector2(safe.x + 20.0, safe.y + 174.0)
+		report_panel.custom_minimum_size = Vector2(usable_width, 90.0)
+		report_panel.size = report_panel.custom_minimum_size
+	else:
+		report_panel.anchor_left = 1.0
+		report_panel.anchor_right = 1.0
 	_root.add_child(report_panel)
 	var report_stack := VBoxContainer.new()
 	report_stack.add_theme_constant_override("separation", 4)
 	report_panel.add_child(_margin_content(report_stack, 10))
-	_kills_text = _label("Cleared  000", 16, GOLD)
+	_kills_text = _label("Cleared  000", 20, GOLD)
 	_kills_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if mobile:
+		_kills_text.add_theme_font_size_override("font_size", roundi(_mobile_hud_font(viewport_size, 18.0)))
 	report_stack.add_child(_kills_text)
-	_phase_text = _label("Opening shift", 14, MUTED)
+	_phase_text = _label("Opening shift", 17, MUTED)
 	_phase_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_phase_text.clip_text = true
+	if mobile:
+		_phase_text.add_theme_font_size_override("font_size", roundi(_mobile_hud_font(viewport_size, 15.0)))
 	report_stack.add_child(_phase_text)
 
-	_boss_panel = _panel(Vector2(-320, 125), Vector2(640, 72))
+	var layout_scale := _mobile_layout_scale(viewport_size) if mobile else 1.0
+	var boss_width := minf(760.0 * layout_scale, maxf(320.0 * layout_scale, viewport_size.x - safe.x - safe.z - 48.0 * layout_scale))
+	var boss_height := 92.0 * layout_scale
+	_boss_panel = _panel(Vector2(-boss_width / 2.0, (200.0 if portrait else 132.0) * layout_scale + safe.y), Vector2(boss_width, boss_height))
 	_boss_panel.anchor_left = 0.5
 	_boss_panel.anchor_right = 0.5
+	_boss_panel.offset_left = (safe.x - safe.z) / 2.0 - boss_width / 2.0
+	_boss_panel.offset_right = (safe.x - safe.z) / 2.0 + boss_width / 2.0
+	_boss_panel.offset_bottom = _boss_panel.offset_top + boss_height
 	_boss_panel.visible = false
 	_root.add_child(_boss_panel)
 	var boss_stack := VBoxContainer.new()
 	boss_stack.add_theme_constant_override("separation", 3)
 	_boss_panel.add_child(_margin_content(boss_stack, 8))
-	_boss_title = _label("The Return Cart", 16, RED, true)
+	_boss_title = _label("The Return Cart", 19, RED, true)
 	_boss_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	boss_stack.add_child(_boss_title)
 	_boss_bar = _bar(RED)
-	_boss_bar.custom_minimum_size = Vector2(0, 18)
+	_boss_bar.custom_minimum_size = Vector2(0, 22)
 	boss_stack.add_child(_boss_bar)
 
-	var loadout_panel := _panel(Vector2(24, -64), Vector2(580, 46))
-	loadout_panel.anchor_top = 1.0
-	loadout_panel.anchor_bottom = 1.0
-	_root.add_child(loadout_panel)
-	_weapons_text = _label("Equipped  /  Can Launcher", 15, TEXT)
-	_weapons_text.clip_text = true
-	loadout_panel.add_child(_weapons_text)
+	_weapons_text = null
+	if mobile or DisplayServer.is_touchscreen_available() or portrait:
+		_touch_pause_button = Button.new()
+		_touch_pause_button.name = "TouchPause"
+		_touch_pause_button.text = ""
+		_touch_pause_button.tooltip_text = "Pause shift"
+		_touch_pause_button.mouse_filter = Control.MOUSE_FILTER_STOP
+		_touch_pause_button.process_mode = Node.PROCESS_MODE_ALWAYS
+		_touch_pause_button.z_index = 100
+		var target_size := _touch_target_size(viewport_size)
+		_touch_pause_button.custom_minimum_size = Vector2(target_size, target_size)
+		_touch_pause_button.anchor_left = 0.5
+		_touch_pause_button.anchor_right = 0.5
+		_touch_pause_button.offset_left = -target_size * 0.5
+		_touch_pause_button.offset_right = target_size * 0.5
+		_touch_pause_button.offset_top = safe.y + 8.0 * layout_scale
+		_touch_pause_button.offset_bottom = _touch_pause_button.offset_top + target_size
+		_touch_pause_button.focus_mode = Control.FOCUS_ALL
+		_touch_pause_button.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+		_touch_pause_button.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+		_touch_pause_button.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+		var pause_chip := PanelContainer.new()
+		pause_chip.name = "PauseGlyphChip"
+		pause_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pause_chip.set_anchors_preset(Control.PRESET_CENTER)
+		var chip_size := 32.0 * layout_scale
+		pause_chip.offset_left = -chip_size * 0.5
+		pause_chip.offset_right = chip_size * 0.5
+		pause_chip.offset_top = -chip_size * 0.5
+		pause_chip.offset_bottom = chip_size * 0.5
+		pause_chip.add_theme_stylebox_override("panel", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+		var pause_glyph := _label("Ⅱ", 18, INK)
+		pause_glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pause_glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		pause_glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pause_chip.add_child(pause_glyph)
+		_touch_pause_button.add_child(pause_chip)
+		_touch_pause_button.pressed.connect(_on_touch_pause_pressed)
+		_root.add_child(_touch_pause_button)
+
+
+func _on_touch_pause_pressed() -> void:
+	if not _overlay_mode.is_empty():
+		return
+	var scene := get_tree().current_scene
+	var shop := scene.find_child("ShiftShop", true, false) as ShiftShop if is_instance_valid(scene) else null
+	if is_instance_valid(shop) and shop.visible:
+		return
+	_request_pause()
+
+
+func _request_pause() -> void:
+	if not _overlay_mode.is_empty():
+		return
+	var scene := get_tree().current_scene
+	var shop := scene.find_child("ShiftShop", true, false) as ShiftShop if is_instance_valid(scene) else null
+	if is_instance_valid(shop) and shop.visible:
+		return
+	pause_requested.emit()
+	if _overlay_mode.is_empty():
+		show_pause_menu()
+
+
+func _safe_insets(viewport_size: Vector2) -> Vector4:
+	if not _is_mobile_platform() or get_window() == null:
+		return Vector4.ZERO
+	var safe_area := DisplayServer.get_display_safe_area()
+	var window_position := DisplayServer.window_get_position()
+	var window_size := get_window().size
+	if safe_area.size.x <= 0 or safe_area.size.y <= 0 or window_size.x <= 0 or window_size.y <= 0:
+		return Vector4.ZERO
+	var left_px := clampf(float(safe_area.position.x - window_position.x), 0.0, float(window_size.x))
+	var top_px := clampf(float(safe_area.position.y - window_position.y), 0.0, float(window_size.y))
+	var right_px := clampf(float(window_position.x + window_size.x - safe_area.end.x), 0.0, float(window_size.x))
+	var bottom_px := clampf(float(window_position.y + window_size.y - safe_area.end.y), 0.0, float(window_size.y))
+	return Vector4(left_px * viewport_size.x / window_size.x, top_px * viewport_size.y / window_size.y, right_px * viewport_size.x / window_size.x, bottom_px * viewport_size.y / window_size.y)
+
+
+func _touch_target_size(viewport_size: Vector2) -> float:
+	return 48.0 * _mobile_density_scale(viewport_size)
+
+
+func _mobile_spacing(value: float) -> int:
+	if not _is_mobile_platform():
+		return roundi(value)
+	return roundi(value * _mobile_layout_scale(get_viewport().get_visible_rect().size))
+
+
+func _mobile_layout_scale(viewport_size: Vector2) -> float:
+	return clampf(viewport_size.y / 1080.0, 0.75, 1.0)
+
+
+func _mobile_density_scale(viewport_size: Vector2) -> float:
+	var window_width := float(get_window().size.x) if get_window() != null else viewport_size.x
+	var dpi := float(DisplayServer.screen_get_dpi())
+	if dpi <= 0.0:
+		dpi = 160.0 if _is_mobile_platform() else 96.0
+	return clampf(dpi / 160.0 * viewport_size.x / maxf(window_width, 1.0), 1.0, 4.0)
+
+
+func _is_mobile_platform() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
+
+
+func _is_portrait() -> bool:
+	var viewport_size := get_viewport().get_visible_rect().size
+	return viewport_size.x < viewport_size.y
 
 
 func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	hide_overlay()
 	_overlay_mode = mode
+	var is_choice := mode == &"level_up" or mode == &"stat_choice"
+	if is_instance_valid(_touch_pause_button):
+		_touch_pause_button.visible = false
 	_overlay = Control.new()
 	_overlay.name = "ModalOverlay"
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	var shade := ColorRect.new()
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0.04, 0.075, 0.09, 0.88)
+	shade.color = Color(0.04, 0.075, 0.09, 0.66 if is_choice else 0.84)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	_overlay.add_child(shade)
 	var center := CenterContainer.new()
@@ -569,20 +1003,64 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_PASS
 	_overlay.add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(760 if mode in [&"level_up", &"stat_choice", &"in_game_settings"] else (660 if mode == &"results" else 500), 0)
-	panel.add_theme_stylebox_override("panel", _style(PANEL, GOLD, 6, 2))
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var available_width := viewport_size.x - safe.x - safe.z
+	var available_height := viewport_size.y - safe.y - safe.w
+	center.offset_left = safe.x
+	center.offset_right = -safe.z
+	center.offset_top = safe.y
+	center.offset_bottom = -safe.w
+	if _is_mobile_platform():
+		if is_choice:
+			panel.custom_minimum_size = Vector2(available_width * 0.96, available_height * 0.88)
+		elif mode == &"results":
+			panel.custom_minimum_size = Vector2(available_width * 0.66, available_height * 0.66)
+		else:
+			panel.custom_minimum_size = Vector2(available_width * 0.90, available_height * 0.90)
+	else:
+		panel.custom_minimum_size = Vector2(available_width * 0.92 if is_choice else minf(760 if mode == &"in_game_settings" else (660 if mode == &"results" else 500), available_width * 0.92), available_height * 0.84 if is_choice else 0.0)
+	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new() if is_choice else _style(PANEL, PANEL_EDGE, 0, 1))
 	center.add_child(panel)
 	_overlay_body = VBoxContainer.new()
-	_overlay_body.add_theme_constant_override("separation", 16)
-	panel.add_child(_margin_content(_overlay_body, 24))
-	var receipt := _label("SUPERMARKET: THE NIGHT    /    SHIFT RECORD", 13, MUTED, true)
+	_overlay_body.add_theme_constant_override("separation", _mobile_spacing(8) if _is_mobile_platform() else 16)
+	var body_margin := _mobile_spacing(8) if _is_mobile_platform() else 24
+	var body_margins := _margin_content(_overlay_body, body_margin)
+	_overlay_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var body_width := available_width * 0.66 if _is_mobile_platform() and mode == &"results" else available_width
+	_overlay_body.custom_minimum_size.x = maxf(0.0, body_width - body_margin * 2.0)
+	body_margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_margins.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	if _is_mobile_platform():
+		var scroll := ScrollContainer.new()
+		var scroll_height_ratio := 0.84 if is_choice else (0.60 if mode == &"results" else 0.86)
+		scroll.custom_minimum_size.y = maxf(120.0, available_height * scroll_height_ratio - body_margin * 2.0)
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		scroll.follow_focus = false
+		scroll.add_child(body_margins)
+		panel.add_child(scroll)
+	else:
+		panel.add_child(body_margins)
+	var receipt := _label("SUPERMARKET: THE NIGHT    /    SHIFT RECORD", 15, TEAL, true)
+	if _is_mobile_platform():
+		receipt.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 16.0)))
 	receipt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	receipt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _is_mobile_platform() else TextServer.AUTOWRAP_OFF
+	receipt.visible = not is_choice
 	_overlay_body.add_child(receipt)
-	var heading := _label(title, 28, TEXT, true)
+	var heading := _label(title, 34, RECEIPT_LIGHT if is_choice else TEXT, true)
+	if _is_mobile_platform():
+		heading.add_theme_font_size_override("font_size", roundi(clampf(viewport_size.y * 0.032, 24.0, 34.0)))
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _is_mobile_platform() else TextServer.AUTOWRAP_OFF
 	_overlay_body.add_child(heading)
 	if not subtitle.is_empty():
-		var description := _label(subtitle, 15, MUTED)
+		var description := _label(subtitle, 19, RECEIPT_LIGHT if is_choice else MUTED)
+		if _is_mobile_platform():
+			description.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 19.0)))
 		description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_overlay_body.add_child(description)
@@ -598,27 +1076,48 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 func _add_menu_button(text: String, callback: Callable, primary: bool = false) -> void:
 	var button := Button.new()
 	button.text = text
-	button.custom_minimum_size = Vector2(320, 48)
+	var viewport_size := get_viewport().get_visible_rect().size
+	var button_width := minf(360.0, viewport_size.x * 0.78)
+	if _is_mobile_platform():
+		button_width = minf(360.0 * _mobile_density_scale(viewport_size), viewport_size.x * 0.70)
+	button.custom_minimum_size = Vector2(button_width, maxf(54.0, _touch_target_size(viewport_size)))
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.focus_mode = Control.FOCUS_ALL
-	button.add_theme_font_size_override("font_size", 16)
-	button.add_theme_color_override("font_color", INK if primary else TEXT)
-	button.add_theme_color_override("font_hover_color", INK if primary else GOLD)
-	button.add_theme_stylebox_override("normal", _style(GOLD if primary else Color("22363b"), GOLD if primary else PANEL_EDGE, 4, 1))
-	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.1) if primary else Color("294046"), GOLD, 4, 2))
-	button.add_theme_stylebox_override("pressed", _style(TEAL if primary else Color("17282c"), TEAL, 4, 2))
-	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEXT, 4, 2))
+	button.add_theme_font_size_override("font_size", _responsive_font_size(20))
+	button.add_theme_color_override("font_color", INK)
+	button.add_theme_color_override("font_hover_color", INK)
+	button.add_theme_color_override("font_focus_color", INK)
+	button.add_theme_color_override("font_pressed_color", INK)
+	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24) if primary else RECEIPT_LIGHT, GOLD if primary else PANEL_EDGE, 0, 1))
+	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32) if primary else Color("fffdf4"), GOLD, 0, 2))
+	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
 	button.pressed.connect(func() -> void: BakkalAudio.play_sfx(&"ui_confirm"); callback.call())
 	_overlay_body.add_child(button)
 	if primary:
 		button.grab_focus.call_deferred()
 
 
+func _style_settings_button(button: Button) -> void:
+	button.focus_mode = Control.FOCUS_ALL
+	if _is_mobile_platform():
+		button.custom_minimum_size.y = maxf(button.custom_minimum_size.y, _touch_target_size(get_viewport().get_visible_rect().size))
+	button.add_theme_font_size_override("font_size", _responsive_font_size(16))
+	button.add_theme_color_override("font_color", INK)
+	button.add_theme_color_override("font_hover_color", INK)
+	button.add_theme_color_override("font_focus_color", INK)
+	button.add_theme_color_override("font_pressed_color", INK)
+	button.add_theme_stylebox_override("normal", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+	button.add_theme_stylebox_override("hover", _style(Color("fffdf4"), GOLD, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(RECEIPT_LIGHT, TEAL, 0, 2))
+	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
+
+
 func _panel(position: Vector2, size: Vector2) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.position = position
 	panel.size = size
-	panel.add_theme_stylebox_override("panel", _style(PANEL, PANEL_EDGE, 4, 1))
+	panel.add_theme_stylebox_override("panel", _style(PANEL, PANEL_EDGE, 0, 1))
 	return panel
 
 
@@ -634,14 +1133,35 @@ func _bar(fill_color: Color) -> ProgressBar:
 func _label(text: String, size: int, color: Color, pixel_accent: bool = false) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_font_size_override("font_size", _responsive_font_size(size))
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.14))
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
 	if pixel_accent and display_font != null:
 		label.add_theme_font_override("font", display_font)
 	return label
+
+
+func _apply_world_text_contrast(label: Label) -> void:
+	label.add_theme_color_override("font_outline_color", INK)
+	label.add_theme_constant_override("outline_size", 3)
+
+
+func _responsive_font_size(size: int) -> int:
+	if _is_mobile_platform():
+		var viewport_size := get_viewport().get_visible_rect().size
+		return maxi(12, roundi(float(size) * clampf(viewport_size.y / 1080.0, 0.75, 1.0)))
+	var window_width := float(get_window().size.x) if get_window() != null else 1920.0
+	return roundi(float(size) * clampf(1920.0 / maxf(window_width, 1.0), 1.0, 1.4))
+
+
+func _mobile_hud_font(viewport_size: Vector2, preferred: float) -> float:
+	return clampf(viewport_size.y * 0.018, 14.0, preferred)
+
+
+func _mobile_overlay_font(viewport_size: Vector2, preferred: float) -> float:
+	return clampf(viewport_size.y * 0.018, 14.0, preferred)
 
 
 func _margin_content(child: Control, margin: int) -> MarginContainer:
