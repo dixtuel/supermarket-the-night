@@ -378,7 +378,7 @@ func _build_inventory_strip(viewport_size: Vector2, mobile: bool, layout_scale: 
 	active_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	active_column.add_theme_constant_override("separation", 4)
 	body.add_child(active_column)
-	var active_title := _label("ACTIVE  /  UPGRADES · TURRETS · MINES", 16, TEXT)
+	var active_title := _label("SKILLS  /  UPGRADES · TURRETS · MINES", 16, TEXT)
 	_inventory_items_label = active_title
 	active_column.add_child(active_title)
 	_inventory_upgrades_row = HBoxContainer.new()
@@ -703,15 +703,16 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	if offer is WeaponDefinition:
 		var weapon := offer as WeaponDefinition
 		var tier_name := _format_tier(weapon.tier)
+		var deployable_kind := "TURRET" if weapon.attack_mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else ("MINE" if weapon.attack_mode == WeaponDefinition.AttackMode.DEPLOYED_MINE else "")
 		match weapon.shop_offer_kind:
 			WeaponDefinition.ShopOfferKind.MERGE_COPY:
-				type_name = "COPY / MERGE  ·  %s" % tier_name
+				type_name = "%s COPY / MERGE  ·  %s" % ["SKILL · " + deployable_kind if not deployable_kind.is_empty() else "WEAPON", tier_name]
 				purchase_text = "BUY MERGE COPY"
 			WeaponDefinition.ShopOfferKind.DIRECT_TIER:
-				type_name = "DIRECT %s" % tier_name
+				type_name = "%s DIRECT %s" % ["SKILL · " + deployable_kind if not deployable_kind.is_empty() else "WEAPON", tier_name]
 				purchase_text = "BUY %s" % tier_name
 			_:
-				type_name = "NEW WEAPON  ·  %s" % tier_name
+				type_name = "NEW SKILL · %s  ·  %s" % [deployable_kind, tier_name] if not deployable_kind.is_empty() else "NEW WEAPON  ·  %s" % tier_name
 				purchase_text = "BUY WEAPON"
 		display_name = weapon.display_name
 		description = weapon.description

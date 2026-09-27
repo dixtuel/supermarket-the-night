@@ -129,7 +129,8 @@ func update_health(current: int, maximum: int) -> void:
 		return
 	_health_bar.max_value = maxi(1, maximum)
 	_health_bar.value = clampi(current, 0, maxi(1, maximum))
-	_health_text.text = ("HP   %d / %d" if _is_mobile_platform() else "Health     %d / %d") % [current, maximum]
+	var compact_desktop := not _is_mobile_platform() and get_viewport().get_visible_rect().size.x < 900.0
+	_health_text.text = ("HP   %d / %d" if _is_mobile_platform() or compact_desktop else "Health     %d / %d") % [current, maximum]
 
 
 func update_progress(xp: int, needed: int, level: int) -> void:
@@ -137,7 +138,8 @@ func update_progress(xp: int, needed: int, level: int) -> void:
 		return
 	_xp_bar.max_value = maxi(1, needed)
 	_xp_bar.value = clampi(xp, 0, maxi(1, needed))
-	_level_text.text = ("LV %02d   ·   XP %d / %d" if _is_mobile_platform() else "Level %02d   /   Stock XP %d / %d") % [level, xp, needed]
+	var compact_desktop := not _is_mobile_platform() and get_viewport().get_visible_rect().size.x < 900.0
+	_level_text.text = ("LV %02d · XP %d/%d" if _is_mobile_platform() or compact_desktop else "Level %02d   /   Stock XP %d / %d") % [level, xp, needed]
 
 
 func set_kill_count(kills: int) -> void:
@@ -780,32 +782,37 @@ func _build_hud() -> void:
 	var safe := _safe_insets(viewport_size)
 	var portrait := viewport_size.x < viewport_size.y
 	var mobile := _is_mobile_platform()
+	var compact_desktop := not mobile and viewport_size.x < 900.0
 	var usable_width := maxf(280.0, viewport_size.x - safe.x - safe.z - 40.0)
-	var vitals_width := minf(440.0, usable_width * 0.48) if portrait else (minf(400.0, usable_width * 0.32) if mobile else 440.0)
-	var vitals_height := 106.0 if mobile else 142.0
+	var vitals_width := minf(440.0, usable_width * 0.48) if portrait else (minf(400.0, usable_width * 0.32) if mobile else (minf(440.0, usable_width * 0.46) if compact_desktop else 440.0))
+	var vitals_height := 106.0 if mobile else (116.0 if compact_desktop else 142.0)
 	var vitals := _panel(Vector2.ZERO, Vector2(vitals_width, vitals_height))
-	vitals.anchor_left = 1.0
-	vitals.anchor_right = 1.0
-	vitals.offset_left = -safe.z - 20.0 - vitals_width
-	vitals.offset_right = -safe.z - 20.0
+	if mobile:
+		vitals.anchor_left = 1.0
+		vitals.anchor_right = 1.0
+		vitals.offset_left = -safe.z - 20.0 - vitals_width
+		vitals.offset_right = -safe.z - 20.0
+	else:
+		vitals.offset_left = safe.x + 20.0
+		vitals.offset_right = safe.x + 20.0 + vitals_width
 	vitals.offset_top = safe.y + (12.0 if mobile else 20.0)
 	vitals.offset_bottom = vitals.offset_top + vitals_height
 	vitals.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_root.add_child(vitals)
 	var vitals_stack := VBoxContainer.new()
-	vitals_stack.add_theme_constant_override("separation", 2 if mobile else 4)
-	vitals.add_child(_margin_content(vitals_stack, 6 if mobile else 10))
-	_health_text = _label("HP  100 / 100" if mobile else "Health  100 / 100", 18 if mobile else 20, RECEIPT_LIGHT)
+	vitals_stack.add_theme_constant_override("separation", 2 if mobile or compact_desktop else 4)
+	vitals.add_child(_margin_content(vitals_stack, 6 if mobile or compact_desktop else 10))
+	_health_text = _label("HP  100 / 100" if mobile or compact_desktop else "Health  100 / 100", 18 if mobile else (16 if compact_desktop else 20), RECEIPT_LIGHT)
 	_apply_world_text_contrast(_health_text)
 	vitals_stack.add_child(_health_text)
 	_health_bar = _bar(RED)
-	_health_bar.custom_minimum_size = Vector2(0, 12 if mobile else 20)
+	_health_bar.custom_minimum_size = Vector2(0, 12 if mobile else (16 if compact_desktop else 20))
 	vitals_stack.add_child(_health_bar)
-	_level_text = _label("LV 01 · XP 0 / 5" if mobile else "Level 01   /   Stock XP 0 / 5", 16 if mobile else 18, RECEIPT_LIGHT)
+	_level_text = _label("LV 01 · XP 0 / 5" if mobile or compact_desktop else "Level 01   /   Stock XP 0 / 5", 16 if mobile else (14 if compact_desktop else 18), RECEIPT_LIGHT)
 	_apply_world_text_contrast(_level_text)
 	vitals_stack.add_child(_level_text)
 	_xp_bar = _bar(TEAL)
-	_xp_bar.custom_minimum_size = Vector2(0, 9 if mobile else 14)
+	_xp_bar.custom_minimum_size = Vector2(0, 9 if mobile else (10 if compact_desktop else 14))
 	vitals_stack.add_child(_xp_bar)
 
 	_clock_text = _label("00:50" if mobile else "TIME   00:50", 12 if mobile else 12, RECEIPT_LIGHT, true)
@@ -823,7 +830,9 @@ func _build_hud() -> void:
 	_clock_text.offset_bottom = -12.0 - safe.w
 	_root.add_child(_clock_text)
 
-	var report_panel := _panel(Vector2(-404.0 - safe.z, safe.y + 20.0), Vector2(380, 104))
+	var report_width := minf(380.0, usable_width * 0.40) if compact_desktop else 380.0
+	var report_height := 90.0 if compact_desktop else 104.0
+	var report_panel := _panel(Vector2(-report_width - 20.0 - safe.z, safe.y + 20.0), Vector2(report_width, report_height))
 	if mobile:
 		report_panel.anchor_left = 0.0
 		report_panel.anchor_right = 0.0
@@ -839,9 +848,9 @@ func _build_hud() -> void:
 		report_panel.anchor_right = 1.0
 	_root.add_child(report_panel)
 	var report_stack := VBoxContainer.new()
-	report_stack.add_theme_constant_override("separation", 4)
-	report_panel.add_child(_margin_content(report_stack, 10))
-	_kills_text = _label("Cleared  000", 20, GOLD)
+	report_stack.add_theme_constant_override("separation", 4 if not compact_desktop else 2)
+	report_panel.add_child(_margin_content(report_stack, 6 if compact_desktop else 10))
+	_kills_text = _label("Cleared  000", 16 if compact_desktop else 20, GOLD)
 	_kills_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	if mobile:
 		_kills_text.add_theme_font_size_override("font_size", roundi(_mobile_hud_font(viewport_size, 18.0)))
@@ -849,8 +858,11 @@ func _build_hud() -> void:
 	_phase_text = _label("Opening shift", 17, MUTED)
 	_phase_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_phase_text.clip_text = true
+	_phase_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	if mobile:
 		_phase_text.add_theme_font_size_override("font_size", roundi(_mobile_hud_font(viewport_size, 15.0)))
+	elif compact_desktop:
+		_phase_text.add_theme_font_size_override("font_size", 14)
 	report_stack.add_child(_phase_text)
 
 	var layout_scale := _mobile_layout_scale(viewport_size) if mobile else 1.0

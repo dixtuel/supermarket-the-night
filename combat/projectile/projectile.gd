@@ -1,6 +1,8 @@
 extends Area2D
 class_name SurvivorProjectile
 
+signal mine_detonated
+
 enum FlightMode { STRAIGHT, RETURNING, ORBITING, ZONE, TURRET, MINE }
 
 @export var speed: float = 560.0
@@ -35,6 +37,7 @@ var _mine_radius: float = 0.0
 var _structure_owner: Node2D
 var _structure_room_id: StringName = &"market"
 var _mine_detonated: bool = false
+var _mine_scan_cooldown: float = 0.0
 
 
 func _ready() -> void:
@@ -119,14 +122,14 @@ func launch_zone(damage: int, radius: float, duration: float, slow_multiplier: f
 
 
 func launch_turret(
-		damage: int, range: float, interval: float, duration: float, owner: Node2D, room_id: StringName,
+		damage: int, range: float, interval: float, _duration: float, owner: Node2D, room_id: StringName,
 		weapon_id: StringName = &"", weapon_name: String = "Turret", weapon_tier: int = 1) -> void:
 	_flight_mode = FlightMode.TURRET
 	_damage = maxi(1, damage)
 	_structure_range = clampf(range, 40.0, 1000.0)
 	_structure_interval = clampf(interval, 0.15, 5.0)
 	_structure_cooldown = 0.1
-	_remaining_lifetime = clampf(duration, 1.0, 30.0)
+	_remaining_lifetime = INF
 	_structure_owner = owner
 	_structure_room_id = room_id
 	_register_deployable(weapon_id, weapon_name, weapon_tier, true)
@@ -137,13 +140,14 @@ func launch_turret(
 
 
 func launch_mine(
-		damage: int, radius: float, duration: float, owner: Node2D, room_id: StringName,
+		damage: int, radius: float, _duration: float, owner: Node2D, room_id: StringName,
 		weapon_id: StringName = &"", weapon_name: String = "Mine", weapon_tier: int = 1) -> void:
 	_flight_mode = FlightMode.MINE
 	_damage = maxi(1, damage)
 	_mine_radius = clampf(radius, 28.0, 260.0)
-	_remaining_lifetime = clampf(duration, 1.0, 30.0)
+	_remaining_lifetime = INF
 	_mine_armed_in = 0.65
+	_mine_scan_cooldown = 0.0
 	_structure_owner = owner
 	_structure_room_id = room_id
 	_register_deployable(weapon_id, weapon_name, weapon_tier, false)
@@ -160,6 +164,16 @@ func _register_deployable(weapon_id: StringName, weapon_name: String, weapon_tie
 	set_meta("weapon_name", weapon_name)
 	set_meta("weapon_tier", clampi(weapon_tier, 1, 4))
 	set_meta("room_id", _structure_room_id)
+
+
+func set_deployable_room_active(active: bool) -> void:
+	if _flight_mode not in [FlightMode.TURRET, FlightMode.MINE]:
+		return
+	visible = active
+	process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
+	var should_monitor := active and _flight_mode == FlightMode.MINE
+	set_deferred("monitoring", should_monitor)
+	set_deferred("monitorable", should_monitor)
 
 
 func set_weapon_visual(texture: Texture2D, target_size: float = 28.0, keep_area_fill: bool = false) -> void:
@@ -187,11 +201,10 @@ func _physics_process(delta: float) -> void:
 			queue_free()
 		return
 	if _flight_mode == FlightMode.TURRET:
-		_remaining_lifetime -= delta
-		_structure_cooldown -= delta
-		if _remaining_lifetime <= 0.0 or not is_instance_valid(_structure_owner):
+		if not is_instance_valid(_structure_owner):
 			queue_free()
 			return
+		_structure_cooldown -= delta
 		if _structure_cooldown <= 0.0:
 			_structure_cooldown = _structure_interval
 			var target := _nearest_enemy(_structure_range, _structure_room_id)
@@ -199,13 +212,13 @@ func _physics_process(delta: float) -> void:
 				_deal_damage(target)
 		return
 	if _flight_mode == FlightMode.MINE:
-		_remaining_lifetime -= delta
 		_mine_armed_in = maxf(0.0, _mine_armed_in - delta)
-		if _remaining_lifetime <= 0.0:
-			queue_free()
-			return
-		if _mine_armed_in <= 0.0 and is_instance_valid(_nearest_enemy(0.0, _structure_room_id, _mine_radius)):
-			_detonate_mine()
+		if _mine_armed_in <= 0.0:
+			_mine_scan_cooldown -= delta
+			if _mine_scan_cooldown <= 0.0:
+				_mine_scan_cooldown = 0.15
+				if is_instance_valid(_nearest_enemy(0.0, _structure_room_id, _mine_radius)):
+					_detonate_mine()
 		return
 	if _flight_mode == FlightMode.ORBITING:
 		if not is_instance_valid(_orbit_anchor):
@@ -283,6 +296,7 @@ func _detonate_mine() -> void:
 			continue
 		if global_position.distance_squared_to(enemy.global_position) <= _mine_radius * _mine_radius:
 			_deal_damage(enemy)
+	mine_detonated.emit()
 	queue_free()
 
 

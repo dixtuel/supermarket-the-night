@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Supermarket: The Night"
-config/version="0.2.0-alpha"
+config/version="0.2.1-alpha"
 company_name="dixtuel"
 product_name="Supermarket: The Night"
 run/main_scene="res://ui/title/title.tscn"

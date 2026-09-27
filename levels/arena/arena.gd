@@ -316,6 +316,9 @@ func _select_phase(initial: bool) -> void:
 	if is_instance_valid(_room_event_director):
 		_room_event_director.start_wave(_round_number)
 		_room_event_director.enter_room(_current_room_id, _room_event_anchor(_current_room_id))
+	var weapon_controller := _player.get_node_or_null("AutoWeapon") if is_instance_valid(_player) else null
+	if weapon_controller != null and weapon_controller.has_method("begin_wave"):
+		weapon_controller.call("begin_wave", _current_room_id)
 
 
 func _room_event_anchor(room_id: StringName) -> Vector2:
@@ -401,6 +404,10 @@ func _complete_room_transition(target_room_id: StringName, arrival_position: Vec
 	if weapon_controller != null and weapon_controller.has_method("set_current_room_id"):
 		weapon_controller.call("set_current_room_id", _current_room_id)
 	for projectile: Node in _projectile_layer.get_children():
+		if projectile.is_in_group("deployed_structures"):
+			if projectile.has_method("set_deployable_room_active"):
+				projectile.call("set_deployable_room_active", StringName(projectile.get_meta("room_id", &"market")) == _current_room_id)
+			continue
 		projectile.queue_free()
 	_set_room_actor_presence()
 	await get_tree().physics_frame
@@ -518,6 +525,12 @@ func _set_room_actor_presence() -> void:
 			pickup.set_deferred("monitorable", active)
 			pickup.set_deferred("collision_layer", 8 if active else 0)
 			pickup.set_deferred("collision_mask", 2 if active else 0)
+	for structure: Node in _projectile_layer.get_children():
+		if not structure.is_in_group("deployed_structures"):
+			continue
+		var active := StringName(structure.get_meta("room_id", &"market")) == _current_room_id
+		if structure.has_method("set_deployable_room_active"):
+			structure.call("set_deployable_room_active", active)
 
 
 func _load_authored_waves() -> Array[WaveDefinition]:
@@ -1147,7 +1160,8 @@ func _complete_round() -> void:
 		if actor is EnemyActor:
 			actor.queue_free()
 	for projectile: Node in _projectile_layer.get_children():
-		projectile.queue_free()
+		if not projectile.is_in_group("deployed_structures"):
+			projectile.queue_free()
 	for pickup: Node in _pickup_layer.get_children():
 		if pickup is SurvivorXpOrb:
 			pickup.collect_for_player(_player)

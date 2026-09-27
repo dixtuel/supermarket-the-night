@@ -4,6 +4,9 @@ class_name SurvivorAutoWeapon
 signal weapon_unlocked(weapon_id: StringName, display_name: String)
 
 const MAX_WEAPON_SLOTS := 6
+const MINE_REDEPLOY_DELAY := 1.8
+const OFF_ROOM_TURRET_CHANCE := 0.06
+const DEPLOYABLE_ROOM_IDS: Array[StringName] = [&"market", &"depot", &"restroom", &"manager_office"]
 
 @export var projectile_scene: PackedScene
 @export var weapon_definitions: Array[WeaponDefinition] = []
@@ -19,10 +22,12 @@ var _weapon_catalog: Dictionary = {}
 var _weapon_states: Dictionary = {}
 var _weapon_order: Array[StringName] = []
 var _current_room_id: StringName = &"market"
+var _deployable_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	_owner_actor = get_parent() as Node2D
+	_deployable_rng.randomize()
 	if not weapon_definitions.is_empty():
 		configure_weapon_catalog(weapon_definitions, _projectile_layer)
 	elif _weapon_order.is_empty():
@@ -35,6 +40,32 @@ func configure_projectile_layer(layer: Node2D) -> void:
 
 func set_current_room_id(room_id: StringName) -> void:
 	_current_room_id = room_id
+
+
+func begin_wave(room_id: StringName) -> void:
+	_current_room_id = room_id
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		var mode := int(state.get("attack_mode", -1))
+		if mode not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			continue
+		state["deployables_active"] = true
+		_ensure_deployable_slots(state)
+		var instances: Array = state["deployable_instances"]
+		var cooldowns: Array = state["deployable_respawn"]
+		var spawn_delays: Array = state["deployable_spawn_delays"]
+		var desired_count := maxi(1, int(state.get("projectile_count", 1)))
+		for index: int in range(desired_count):
+			if index < instances.size() and is_instance_valid(instances[index]):
+				continue
+			if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+				spawn_delays[index] = _deployable_rng.randf_range(0.0, 4.0)
+				continue
+			if mode == WeaponDefinition.AttackMode.DEPLOYED_MINE and float(cooldowns[index]) > 0.0:
+				continue
+			_spawn_deployable(weapon_id, state, index)
+		state["deployable_spawn_delays"] = spawn_delays
+		_weapon_states[weapon_id] = state
 
 
 func configure_weapon_catalog(
@@ -145,7 +176,7 @@ func purchase_weapon_offer(offer: WeaponDefinition) -> bool:
 	if offer == null:
 		return false
 	if not has_weapon(offer.id):
-		if offer.shop_offer_kind != WeaponDefinition.ShopOfferKind.NEW_WEAPON or _weapon_order.size() >= MAX_WEAPON_SLOTS:
+		if offer.shop_offer_kind != WeaponDefinition.ShopOfferKind.NEW_WEAPON or get_weapon_slot_count() >= MAX_WEAPON_SLOTS:
 			return false
 		return unlock_weapon(offer)
 	var current_tier := get_weapon_tier(offer.id)
@@ -158,7 +189,12 @@ func purchase_weapon_offer(offer: WeaponDefinition) -> bool:
 
 
 func get_weapon_slot_count() -> int:
-	return _weapon_order.size()
+	var count := 0
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		if int(state.get("attack_mode", -1)) not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			count += 1
+	return count
 
 
 func _raise_weapon_tier(weapon_id: StringName, target_tier: int) -> bool:
@@ -222,6 +258,8 @@ func get_unlocked_weapon_names() -> PackedStringArray:
 	var names := PackedStringArray()
 	for weapon_id: StringName in _weapon_order:
 		var state: Dictionary = _weapon_states[weapon_id]
+		if int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			continue
 		var tier := int(state.get("tier", 1))
 		var suffix := " %s" % ["I", "II", "III", "IV"][clampi(tier, 1, 4) - 1]
 		names.append(String(state.get("display_name", weapon_id)) + suffix)
@@ -239,6 +277,13 @@ func get_shop_inventory_summary() -> Dictionary:
 		var tier := int(state.get("tier", 1))
 		var name := String(state.get("display_name", String(weapon_id)))
 		var definition := _weapon_catalog.get(weapon_id) as WeaponDefinition
+		var mode := int(state.get("attack_mode", -1))
+		if mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			var kind := "turret" if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else "mine"
+			var key := "%s:%d" % [String(weapon_id), tier]
+			deployable_indices[key] = deployables.size()
+			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
+			continue
 		weapons.append({
 			"id": String(weapon_id),
 			"name": name,
@@ -251,17 +296,8 @@ func get_shop_inventory_summary() -> Dictionary:
 			"pierce": int(state.get("pierce_count", 0)),
 			"icon": definition.sprite if definition != null else null,
 		})
-		var mode := int(state.get("attack_mode", -1))
-		if mode not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
-			continue
-		var kind := "turret" if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else "mine"
-		var key := "%s:%d" % [String(weapon_id), tier]
-		deployable_indices[key] = deployables.size()
-		deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
 	for structure: Node in get_tree().get_nodes_in_group("deployed_structures"):
 		if not is_instance_valid(structure) or structure.is_queued_for_deletion():
-			continue
-		if StringName(structure.get_meta("room_id", _current_room_id)) != _current_room_id:
 			continue
 		var weapon_id := StringName(structure.get_meta("weapon_id", &""))
 		var tier := int(structure.get_meta("weapon_tier", 1))
@@ -278,9 +314,12 @@ func get_shop_inventory_summary() -> Dictionary:
 
 
 func sell_weapon(weapon_id: StringName) -> Dictionary:
-	if not _weapon_states.has(weapon_id) or _weapon_order.size() <= 1:
+	if not _weapon_states.has(weapon_id):
 		return {}
 	var state: Dictionary = _weapon_states[weapon_id]
+	var is_deployable := int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]
+	if not is_deployable and get_weapon_slot_count() <= 1:
+		return {}
 	var tier := clampi(int(state.get("tier", 1)), 1, 4)
 	var payout := 4 + tier * 3
 	var sold := {
@@ -291,6 +330,10 @@ func sell_weapon(weapon_id: StringName) -> Dictionary:
 	}
 	_weapon_states.erase(weapon_id)
 	_weapon_order.erase(weapon_id)
+	if is_deployable:
+		for structure: Node in get_tree().get_nodes_in_group("deployed_structures"):
+			if is_instance_valid(structure) and StringName(structure.get_meta("weapon_id", &"")) == weapon_id:
+				structure.queue_free()
 	return sold
 
 
@@ -300,6 +343,9 @@ func _physics_process(delta: float) -> void:
 	for weapon_id: StringName in _weapon_order:
 		var state: Dictionary = _weapon_states[weapon_id]
 		var mode: int = int(state["attack_mode"])
+		if mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			_update_deployables(weapon_id, state, delta)
+			continue
 		if mode == WeaponDefinition.AttackMode.ORBITAL_CONTACT:
 			_ensure_orbitals(weapon_id, state)
 			_weapon_states[weapon_id] = state
@@ -484,6 +530,140 @@ func _find_nearest_enemy(range_limit: float) -> Node2D:
 	return best_target
 
 
+func _ensure_deployable_slots(state: Dictionary) -> void:
+	var instances: Array = state.get("deployable_instances", [])
+	var cooldowns: Array = state.get("deployable_respawn", [])
+	var last_positions: Array = state.get("deployable_last_positions", [])
+	var spawn_delays: Array = state.get("deployable_spawn_delays", [])
+	var desired_count := maxi(1, int(state.get("projectile_count", 1)))
+	while instances.size() < desired_count:
+		instances.append(null)
+		cooldowns.append(0.0)
+		last_positions.append(Vector2(-10000.0, -10000.0))
+		spawn_delays.append(0.0)
+	if instances.size() > desired_count:
+		instances.resize(desired_count)
+		cooldowns.resize(desired_count)
+		last_positions.resize(desired_count)
+		spawn_delays.resize(desired_count)
+	state["deployable_instances"] = instances
+	state["deployable_respawn"] = cooldowns
+	state["deployable_last_positions"] = last_positions
+	state["deployable_spawn_delays"] = spawn_delays
+
+
+func _update_deployables(weapon_id: StringName, state: Dictionary, delta: float) -> void:
+	if not bool(state.get("deployables_active", false)):
+		return
+	_ensure_deployable_slots(state)
+	var mode := int(state.get("attack_mode", -1))
+	var instances: Array = state["deployable_instances"]
+	var cooldowns: Array = state["deployable_respawn"]
+	var spawn_delays: Array = state["deployable_spawn_delays"]
+	for index: int in range(instances.size()):
+		if is_instance_valid(instances[index]):
+			continue
+		if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+			spawn_delays[index] = maxf(0.0, float(spawn_delays[index]) - delta)
+			if float(spawn_delays[index]) > 0.0:
+				continue
+			_spawn_deployable(weapon_id, state, index)
+			continue
+		if mode == WeaponDefinition.AttackMode.DEPLOYED_MINE:
+			cooldowns[index] = maxf(0.0, float(cooldowns[index]) - delta)
+			if float(cooldowns[index]) > 0.0:
+				continue
+		_spawn_deployable(weapon_id, state, index)
+	state["deployable_instances"] = instances
+	state["deployable_respawn"] = cooldowns
+	state["deployable_spawn_delays"] = spawn_delays
+	_weapon_states[weapon_id] = state
+
+
+func _spawn_deployable(weapon_id: StringName, state: Dictionary, slot_index: int) -> void:
+	if projectile_scene == null or not is_instance_valid(_projectile_layer) or not is_instance_valid(_owner_actor):
+		return
+	_ensure_deployable_slots(state)
+	var instances: Array = state["deployable_instances"]
+	if slot_index >= instances.size() or is_instance_valid(instances[slot_index]):
+		return
+	var last_positions: Array = state["deployable_last_positions"]
+	var mode := int(state.get("attack_mode", -1))
+	var is_turret := mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET
+	var placement_room := _current_room_id
+	if is_turret and _deployable_rng.randf() < OFF_ROOM_TURRET_CHANCE:
+		var other_rooms: Array[StringName] = []
+		for room_id: StringName in DEPLOYABLE_ROOM_IDS:
+			if room_id != _current_room_id:
+				other_rooms.append(room_id)
+		if not other_rooms.is_empty():
+			placement_room = other_rooms[_deployable_rng.randi_range(0, other_rooms.size() - 1)]
+	var spawn_position := _choose_deployable_position(placement_room, last_positions[slot_index] as Vector2)
+	var deployed := _create_projectile(spawn_position) as SurvivorProjectile
+	if deployed == null:
+		return
+	deployed.set_life_steal_source(_owner_actor)
+	if is_turret:
+		deployed.launch_turret(
+			_effective_structure_damage(state), float(state["target_range"]), float(state["fire_interval"]),
+			float(state["effect_duration"]), _owner_actor, placement_room,
+			weapon_id, String(state.get("display_name", "Turret")), int(state.get("tier", 1))
+		)
+	else:
+		deployed.launch_mine(
+			_effective_structure_damage(state), float(state["area_radius"]), float(state["effect_duration"]),
+			_owner_actor, placement_room, weapon_id,
+			String(state.get("display_name", "Mine")), int(state.get("tier", 1))
+		)
+		deployed.mine_detonated.connect(_on_mine_detonated.bind(weapon_id, slot_index))
+	deployed.set_weapon_visual(state.get("sprite") as Texture2D)
+	deployed.set_deployable_room_active(placement_room == _current_room_id)
+	instances[slot_index] = deployed
+	last_positions[slot_index] = spawn_position
+	state["deployable_instances"] = instances
+	state["deployable_last_positions"] = last_positions
+	_weapon_states[weapon_id] = state
+
+
+func _choose_deployable_position(room_id: StringName, previous_position: Vector2) -> Vector2:
+	var origin := _owner_actor.global_position if is_instance_valid(_owner_actor) else global_position
+	for _attempt: int in range(24):
+		var angle := _deployable_rng.randf_range(0.0, TAU)
+		var radius := _deployable_rng.randf_range(82.0, 168.0)
+		var candidate := origin + Vector2.RIGHT.rotated(angle) * radius
+		if candidate.distance_squared_to(previous_position) < 96.0 * 96.0:
+			continue
+		var occupied := false
+		for structure: Node in get_tree().get_nodes_in_group("deployed_structures"):
+			if not is_instance_valid(structure) or structure.is_queued_for_deletion():
+				continue
+			if StringName(structure.get_meta("room_id", &"market")) != room_id:
+				continue
+			if (structure as Node2D).global_position.distance_squared_to(candidate) < 68.0 * 68.0:
+				occupied = true
+				break
+		if not occupied:
+			return candidate
+	if previous_position.x > -1000.0:
+		return previous_position + Vector2.RIGHT.rotated(_deployable_rng.randf_range(0.0, TAU)) * 144.0
+	return origin + Vector2.RIGHT.rotated(_deployable_rng.randf_range(0.0, TAU)) * 112.0
+
+
+func _on_mine_detonated(weapon_id: StringName, slot_index: int) -> void:
+	if not _weapon_states.has(weapon_id):
+		return
+	var state: Dictionary = _weapon_states[weapon_id]
+	var instances: Array = state.get("deployable_instances", [])
+	var cooldowns: Array = state.get("deployable_respawn", [])
+	if slot_index < instances.size():
+		instances[slot_index] = null
+	if slot_index < cooldowns.size():
+		cooldowns[slot_index] = MINE_REDEPLOY_DELAY
+	state["deployable_instances"] = instances
+	state["deployable_respawn"] = cooldowns
+	_weapon_states[weapon_id] = state
+
+
 func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 	var state := {
 		"id": definition.id,
@@ -510,6 +690,11 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"level_fire_rate_bonus": 0.0,
 		"cooldown": minf(0.15, definition.fire_interval),
 		"orbitals": [],
+		"deployable_instances": [],
+		"deployable_respawn": [],
+		"deployable_last_positions": [],
+		"deployable_spawn_delays": [],
+		"deployables_active": false,
 	}
 	if definition.tier > 1:
 		_weapon_states[definition.id] = state
@@ -542,6 +727,11 @@ func _create_legacy_can_launcher() -> void:
 		"return_distance": 0.0,
 		"cooldown": 0.15,
 		"orbitals": [],
+		"deployable_instances": [],
+		"deployable_respawn": [],
+		"deployable_last_positions": [],
+		"deployable_spawn_delays": [],
+		"deployables_active": false,
 	}
 	_weapon_order.append(legacy_id)
 

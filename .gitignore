@@ -38,6 +38,7 @@ research/
 *.md
 !README.md
 !**/README.md
+!RELEASE_NOTES.md
 !ATTRIBUTION.md
 !ASSET_LICENSE.md
 !LICENSE.md
