@@ -1,185 +1,238 @@
-[gd_scene load_steps=34 format=3]
+[gd_scene format=3 uid="uid://da4rwbcn1g8nb"]
 
-[ext_resource type="Script" path="res://levels/rooms/survivor_room.gd" id="1_room"]
-[ext_resource type="Texture2D" path="res://assets/generated/rooms/restroom_clean_shift_start.png" id="2_art"]
-[ext_resource type="Script" path="res://levels/rooms/room_portal.gd" id="3_portal"]
+[ext_resource type="Script" uid="uid://dylvn3m35iq3v" path="res://levels/rooms/survivor_room.gd" id="1_room"]
+[ext_resource type="Texture2D" uid="uid://b06qbrp11j3w3" path="res://assets/generated/rooms/restroom_clean_shift_start.png" id="2_art"]
+[ext_resource type="Script" uid="uid://cu0c6wa2efx6j" path="res://levels/rooms/room_portal.gd" id="3_portal"]
 
 [sub_resource type="RectangleShape2D" id="sub_1_leftwall"]
-size = Vector2(88.0, 535.9)
+size = Vector2(88, 535.9)
+
 [sub_resource type="RectangleShape2D" id="sub_2_rightwall"]
 size = Vector2(93.4, 535.9)
+
 [sub_resource type="RectangleShape2D" id="sub_3_topwall"]
 size = Vector2(1098.5, 122.5)
+
 [sub_resource type="RectangleShape2D" id="sub_4_bottomwallleft"]
-size = Vector2(267.9, 85.0)
+size = Vector2(267.9, 85)
+
 [sub_resource type="RectangleShape2D" id="sub_5_bottomwallright"]
-size = Vector2(935.4, 85.0)
+size = Vector2(935.4, 85)
+
 [sub_resource type="RectangleShape2D" id="sub_6_cleaningsuppliesshelf"]
-size = Vector2(65.1, 122.5)
+size = Vector2(134.95001, 122.5)
+
 [sub_resource type="RectangleShape2D" id="sub_7_mopbucket"]
 size = Vector2(53.6, 61.2)
+
 [sub_resource type="RectangleShape2D" id="sub_8_entryplant"]
 size = Vector2(57.4, 91.9)
+
 [sub_resource type="RectangleShape2D" id="sub_9_stallpartition0"]
 size = Vector2(11.5, 172.2)
+
 [sub_resource type="RectangleShape2D" id="sub_10_stallpartition1"]
 size = Vector2(15.3, 172.2)
+
 [sub_resource type="RectangleShape2D" id="sub_11_stallpartition2"]
 size = Vector2(15.3, 172.2)
+
 [sub_resource type="RectangleShape2D" id="sub_12_stallpartition3"]
 size = Vector2(15.3, 172.2)
+
 [sub_resource type="RectangleShape2D" id="sub_13_stallpartition4"]
 size = Vector2(15.3, 172.2)
+
 [sub_resource type="RectangleShape2D" id="sub_14_toiletone"]
 size = Vector2(42.1, 61.2)
+
 [sub_resource type="RectangleShape2D" id="sub_15_toilettwo"]
 size = Vector2(42.1, 61.2)
+
 [sub_resource type="RectangleShape2D" id="sub_16_toiletthree"]
 size = Vector2(42.1, 61.2)
+
 [sub_resource type="RectangleShape2D" id="sub_17_toiletfour"]
 size = Vector2(42.1, 61.2)
+
 [sub_resource type="RectangleShape2D" id="sub_18_stalltrash1"]
-size = Vector2(23.0, 42.1)
+size = Vector2(23, 42.1)
+
 [sub_resource type="RectangleShape2D" id="sub_19_stalltrash2"]
-size = Vector2(23.0, 42.1)
+size = Vector2(23, 42.1)
+
 [sub_resource type="RectangleShape2D" id="sub_20_stalltrash3"]
-size = Vector2(23.0, 42.1)
+size = Vector2(23, 42.1)
+
 [sub_resource type="RectangleShape2D" id="sub_21_stalltrash4"]
-size = Vector2(23.0, 42.1)
+size = Vector2(23, 42.1)
+
 [sub_resource type="RectangleShape2D" id="sub_22_stalldoor1"]
 size = Vector2(65.1, 114.8)
+
 [sub_resource type="RectangleShape2D" id="sub_23_stalldoor2"]
 size = Vector2(65.1, 114.8)
+
 [sub_resource type="RectangleShape2D" id="sub_24_stalldoor3"]
 size = Vector2(65.1, 114.8)
+
 [sub_resource type="RectangleShape2D" id="sub_25_stalldoor4"]
 size = Vector2(65.1, 114.8)
+
 [sub_resource type="RectangleShape2D" id="sub_26_washbasinscounter"]
-size = Vector2(245.0, 130.1)
+size = Vector2(245, 130.1)
+
 [sub_resource type="RectangleShape2D" id="sub_27_sinkstrashbin"]
 size = Vector2(38.3, 76.5)
+
 [sub_resource type="RectangleShape2D" id="sub_28_metaltrashcanbottom"]
-size = Vector2(38.3, 68.9)
+size = Vector2(85.25, 90.84999)
+
 [sub_resource type="RectangleShape2D" id="sub_29_binandstockbottom"]
-size = Vector2(72.7, 107.2)
+size = Vector2(118.74999, 145.9)
+
 [sub_resource type="RectangleShape2D" id="sub_30_exittodepot"]
 size = Vector2(76.5, 84.2)
 
-[node name="RestroomRoom" type="Node2D"]
+[node name="RestroomRoom" type="Node2D" unique_id=1060262157]
 script = ExtResource("1_room")
 room_id = &"restroom"
 art_prefix = "restroom"
-initial_state = &"clean_shift_start"
 
-[node name="RoomArt" type="Sprite2D" parent="."]
-texture = ExtResource("2_art")
-scale = Vector2(0.7655, 0.7655)
+[node name="RoomArt" type="Sprite2D" parent="." unique_id=1551972822]
 z_index = -10
+scale = Vector2(0.7655, 0.7655)
+texture = ExtResource("2_art")
 
-[node name="Walls" type="StaticBody2D" parent="."]
-collision_layer = 1
+[node name="Walls" type="StaticBody2D" parent="." unique_id=1909578090]
 collision_mask = 0
 
-[node name="LeftWall" type="CollisionShape2D" parent="Walls"]
-position = Vector2(-595.9, 14.9)
+[node name="LeftWall" type="CollisionShape2D" parent="Walls" unique_id=1926360790]
+position = Vector2(-551, -1)
 shape = SubResource("sub_1_leftwall")
-[node name="RightWall" type="CollisionShape2D" parent="Walls"]
-position = Vector2(593.3, 14.9)
+
+[node name="RightWall" type="CollisionShape2D" parent="Walls" unique_id=253911009]
+position = Vector2(559, -18.000002)
 shape = SubResource("sub_2_rightwall")
-[node name="TopWall" type="CollisionShape2D" parent="Walls"]
+
+[node name="TopWall" type="CollisionShape2D" parent="Walls" unique_id=1153644443]
 position = Vector2(-2.7, -298.9)
 shape = SubResource("sub_3_topwall")
-[node name="BottomWallLeft" type="CollisionShape2D" parent="Walls"]
-position = Vector2(-506.0, 317.7)
+
+[node name="BottomWallLeft" type="CollisionShape2D" parent="Walls" unique_id=1767015564]
+position = Vector2(-506, 317.7)
 shape = SubResource("sub_4_bottomwallleft")
-[node name="BottomWallRight" type="CollisionShape2D" parent="Walls"]
+
+[node name="BottomWallRight" type="CollisionShape2D" parent="Walls" unique_id=60524666]
 position = Vector2(172.2, 317.7)
 shape = SubResource("sub_5_bottomwallright")
 
-[node name="Fixtures" type="StaticBody2D" parent="."]
-collision_layer = 1
+[node name="Fixtures" type="StaticBody2D" parent="." unique_id=1300594122]
 collision_mask = 0
 
-[node name="CleaningSuppliesShelf" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-519.4, -176.4)
+[node name="CleaningSuppliesShelf" type="CollisionShape2D" parent="Fixtures" unique_id=424857902]
+position = Vector2(-484.475, -176.4)
 shape = SubResource("sub_6_cleaningsuppliesshelf")
-[node name="MopBucket" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-525.1, -46.3)
+
+[node name="MopBucket" type="CollisionShape2D" parent="Fixtures" unique_id=1489054778]
+position = Vector2(-475, -91)
 shape = SubResource("sub_7_mopbucket")
-[node name="EntryPlant" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-519.4, 168.0)
+
+[node name="EntryPlant" type="CollisionShape2D" parent="Fixtures" unique_id=1339254029]
+position = Vector2(-482, 167)
 shape = SubResource("sub_8_entryplant")
-[node name="StallPartition0" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallPartition0" type="CollisionShape2D" parent="Fixtures" unique_id=152059246]
 position = Vector2(-381.6, -151.6)
 shape = SubResource("sub_9_stallpartition0")
-[node name="StallPartition1" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallPartition1" type="CollisionShape2D" parent="Fixtures" unique_id=60598619]
 position = Vector2(-257.2, -151.6)
 shape = SubResource("sub_10_stallpartition1")
-[node name="StallPartition2" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallPartition2" type="CollisionShape2D" parent="Fixtures" unique_id=543724477]
 position = Vector2(-115.6, -151.6)
 shape = SubResource("sub_11_stallpartition2")
-[node name="StallPartition3" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(26.0, -151.6)
+
+[node name="StallPartition3" type="CollisionShape2D" parent="Fixtures" unique_id=1021550138]
+position = Vector2(26, -151.6)
 shape = SubResource("sub_12_stallpartition3")
-[node name="StallPartition4" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallPartition4" type="CollisionShape2D" parent="Fixtures" unique_id=1425279925]
 position = Vector2(167.6, -151.6)
 shape = SubResource("sub_13_stallpartition4")
-[node name="ToiletOne" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="ToiletOne" type="CollisionShape2D" parent="Fixtures" unique_id=1209049525]
 position = Vector2(-320.4, -176.4)
 shape = SubResource("sub_14_toiletone")
-[node name="ToiletTwo" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="ToiletTwo" type="CollisionShape2D" parent="Fixtures" unique_id=179775704]
 position = Vector2(-178.7, -176.4)
 shape = SubResource("sub_15_toilettwo")
-[node name="ToiletThree" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="ToiletThree" type="CollisionShape2D" parent="Fixtures" unique_id=281101156]
 position = Vector2(-33.3, -176.4)
 shape = SubResource("sub_16_toiletthree")
-[node name="ToiletFour" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="ToiletFour" type="CollisionShape2D" parent="Fixtures" unique_id=132451812]
 position = Vector2(108.3, -176.4)
 shape = SubResource("sub_17_toiletfour")
-[node name="StallTrash1" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-280.2, -186.0)
+
+[node name="StallTrash1" type="CollisionShape2D" parent="Fixtures" unique_id=214482039]
+position = Vector2(-280.2, -186)
 shape = SubResource("sub_18_stalltrash1")
-[node name="StallTrash2" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-138.6, -186.0)
+
+[node name="StallTrash2" type="CollisionShape2D" parent="Fixtures" unique_id=1740076296]
+position = Vector2(-138.6, -186)
 shape = SubResource("sub_19_stalltrash2")
-[node name="StallTrash3" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(6.9, -186.0)
+
+[node name="StallTrash3" type="CollisionShape2D" parent="Fixtures" unique_id=126422219]
+position = Vector2(6.9, -186)
 shape = SubResource("sub_20_stalltrash3")
-[node name="StallTrash4" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(148.5, -186.0)
+
+[node name="StallTrash4" type="CollisionShape2D" parent="Fixtures" unique_id=662971583]
+position = Vector2(148.5, -186)
 shape = SubResource("sub_21_stalltrash4")
-[node name="StallDoor1" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallDoor1" type="CollisionShape2D" parent="Fixtures" unique_id=707189481]
 position = Vector2(-343.3, -134.3)
 shape = SubResource("sub_22_stalldoor1")
-[node name="StallDoor2" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-217.0, -134.3)
+
+[node name="StallDoor2" type="CollisionShape2D" parent="Fixtures" unique_id=1093641335]
+position = Vector2(-217, -134.3)
 shape = SubResource("sub_23_stalldoor2")
-[node name="StallDoor3" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallDoor3" type="CollisionShape2D" parent="Fixtures" unique_id=861879012]
 position = Vector2(-75.4, -134.3)
 shape = SubResource("sub_24_stalldoor3")
-[node name="StallDoor4" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="StallDoor4" type="CollisionShape2D" parent="Fixtures" unique_id=117514088]
 position = Vector2(66.2, -134.3)
 shape = SubResource("sub_25_stalldoor4")
-[node name="WashBasinsCounter" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="WashBasinsCounter" type="CollisionShape2D" parent="Fixtures" unique_id=1749459236]
 position = Vector2(324.6, -172.6)
 shape = SubResource("sub_26_washbasinscounter")
-[node name="SinksTrashBin" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(477.7, -107.6)
+
+[node name="SinksTrashBin" type="CollisionShape2D" parent="Fixtures" unique_id=1293253671]
+position = Vector2(487, -123)
 shape = SubResource("sub_27_sinkstrashbin")
-[node name="MetalTrashCanBottom" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(447.1, 225.4)
+
+[node name="MetalTrashCanBottom" type="CollisionShape2D" parent="Fixtures" unique_id=1788620274]
+position = Vector2(423.625, 214.425)
 shape = SubResource("sub_28_metaltrashcanbottom")
-[node name="BinAndStockBottom" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(506.4, 206.3)
+
+[node name="BinAndStockBottom" type="CollisionShape2D" parent="Fixtures" unique_id=315955822]
+position = Vector2(483.375, 186.95)
 shape = SubResource("sub_29_binandstockbottom")
 
-[node name="ExitToDepot" type="Area2D" parent="."]
-script = ExtResource("3_portal")
+[node name="ExitToDepot" type="Area2D" parent="." unique_id=1106873311]
 position = Vector2(-333.8, 233.1)
 collision_layer = 0
 collision_mask = 2
+script = ExtResource("3_portal")
 target_room_id = &"depot"
 arrival_position = Vector2(-391, -161)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ExitToDepot"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ExitToDepot" unique_id=1483233851]
 shape = SubResource("sub_30_exittodepot")

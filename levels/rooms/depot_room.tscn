@@ -1,283 +1,368 @@
-[gd_scene load_steps=51 format=3]
+[gd_scene format=3 uid="uid://b11o76h1qhrl1"]
 
-[ext_resource type="Script" path="res://levels/rooms/survivor_room.gd" id="1_room"]
-[ext_resource type="Texture2D" path="res://assets/generated/rooms/depot_clean_shift_start.png" id="2_art"]
-[ext_resource type="Script" path="res://levels/rooms/room_portal.gd" id="3_portal"]
+[ext_resource type="Script" uid="uid://dylvn3m35iq3v" path="res://levels/rooms/survivor_room.gd" id="1_room"]
+[ext_resource type="Texture2D" uid="uid://1vild6htxipj" path="res://assets/generated/rooms/depot_clean_shift_start.png" id="2_art"]
+[ext_resource type="Script" uid="uid://cu0c6wa2efx6j" path="res://levels/rooms/room_portal.gd" id="3_portal"]
 [ext_resource type="PackedScene" path="res://levels/room_events/supply_request_console.tscn" id="4_console"]
 
 [sub_resource type="RectangleShape2D" id="sub_1_leftwall"]
 size = Vector2(32.2, 551.2)
+
 [sub_resource type="RectangleShape2D" id="sub_2_rightwall"]
 size = Vector2(32.2, 551.2)
+
 [sub_resource type="RectangleShape2D" id="sub_3_backwalltopleft"]
-size = Vector2(186.0, 145.4)
+size = Vector2(186, 145.4)
+
 [sub_resource type="RectangleShape2D" id="sub_4_backshelfleft"]
-size = Vector2(294.7, 145.4)
+size = Vector2(225.15001, 145.4)
+
 [sub_resource type="RectangleShape2D" id="sub_5_backbulkcenter"]
 size = Vector2(306.2, 145.4)
+
 [sub_resource type="RectangleShape2D" id="sub_6_backwallladder"]
 size = Vector2(68.9, 145.4)
+
 [sub_resource type="RectangleShape2D" id="sub_7_backshelfright"]
-size = Vector2(153.1, 145.4)
+size = Vector2(127.775, 97.7)
+
 [sub_resource type="RectangleShape2D" id="sub_8_backwalltopright"]
 size = Vector2(84.2, 145.4)
+
 [sub_resource type="RectangleShape2D" id="sub_9_bottomwall"]
 size = Vector2(1279.9, 65.8)
+
 [sub_resource type="RectangleShape2D" id="sub_10_depotstandgreencrate"]
 size = Vector2(42.1, 80.4)
+
 [sub_resource type="RectangleShape2D" id="sub_11_depotsackspallet"]
 size = Vector2(61.2, 107.2)
+
 [sub_resource type="RectangleShape2D" id="sub_12_depottranspalet"]
-size = Vector2(23.0, 80.4)
+size = Vector2(23, 80.4)
+
 [sub_resource type="RectangleShape2D" id="sub_13_depotleftsidestock"]
-size = Vector2(82.7, 436.3)
+size = Vector2(105.85, 436.3)
+
 [sub_resource type="RectangleShape2D" id="sub_14_depotrackleft"]
-size = Vector2(65.1, 260.3)
+size = Vector2(65.1, 249.15)
+
 [sub_resource type="RectangleShape2D" id="sub_15_depotrackcenter"]
-size = Vector2(65.1, 260.3)
+size = Vector2(65.1, 238.15)
+
 [sub_resource type="RectangleShape2D" id="sub_16_depotrackright"]
-size = Vector2(65.1, 260.3)
+size = Vector2(65.1, 237.15)
+
 [sub_resource type="RectangleShape2D" id="sub_17_depotworkstationdesk"]
 size = Vector2(118.7, 65.1)
+
 [sub_resource type="RectangleShape2D" id="sub_18_depotdeskstool"]
 size = Vector2(30.6, 42.1)
+
 [sub_resource type="RectangleShape2D" id="sub_19_depotdesktrashcan"]
 size = Vector2(26.8, 34.4)
+
 [sub_resource type="RectangleShape2D" id="sub_20_depotdeskcrate"]
 size = Vector2(45.9, 49.8)
+
 [sub_resource type="RectangleShape2D" id="sub_21_depotrightsidestock"]
 size = Vector2(72.7, 436.3)
+
 [sub_resource type="RectangleShape2D" id="sub_22_depotbottomstockwest"]
-size = Vector2(82.7, 72.7)
-[sub_resource type="RectangleShape2D" id="sub_23_depotfireextinguisher"]
-size = Vector2(23.0, 42.1)
+size = Vector2(99.85, 72.7)
+
 [sub_resource type="RectangleShape2D" id="sub_24_depotpalletbottles1"]
 size = Vector2(72.7, 65.1)
+
 [sub_resource type="RectangleShape2D" id="sub_25_depotpalletbottles2"]
 size = Vector2(49.8, 68.9)
+
 [sub_resource type="RectangleShape2D" id="sub_26_depotpalletlargebox"]
-size = Vector2(91.9, 88.0)
+size = Vector2(91.9, 88)
+
 [sub_resource type="RectangleShape2D" id="sub_27_depotpalletwrappedboxes"]
 size = Vector2(84.2, 72.7)
+
 [sub_resource type="RectangleShape2D" id="sub_28_depotboxstackmid"]
 size = Vector2(45.9, 57.4)
+
 [sub_resource type="RectangleShape2D" id="sub_29_depotgreencratemid"]
 size = Vector2(42.1, 57.4)
+
 [sub_resource type="RectangleShape2D" id="sub_30_depotredcratemid"]
-size = Vector2(23.0, 42.1)
+size = Vector2(23, 42.1)
+
 [sub_resource type="RectangleShape2D" id="sub_31_depotbluecratesstack"]
 size = Vector2(38.3, 65.1)
+
 [sub_resource type="RectangleShape2D" id="sub_32_depotgraymachine"]
 size = Vector2(42.1, 53.6)
+
 [sub_resource type="RectangleShape2D" id="sub_33_depotplantpot"]
 size = Vector2(45.9, 34.4)
+
 [sub_resource type="RectangleShape2D" id="sub_34_depotboxstacktall1"]
 size = Vector2(42.1, 91.9)
+
 [sub_resource type="RectangleShape2D" id="sub_35_depotboxstacktall2"]
-size = Vector2(38.3, 76.5)
+size = Vector2(63.15, 76.5)
+
 [sub_resource type="RectangleShape2D" id="sub_36_depotfloursacks1"]
 size = Vector2(57.4, 53.6)
+
 [sub_resource type="RectangleShape2D" id="sub_37_depotfloursacks2"]
 size = Vector2(53.6, 57.4)
+
 [sub_resource type="RectangleShape2D" id="sub_38_depotgreenbeercrates"]
 size = Vector2(38.3, 84.2)
+
 [sub_resource type="RectangleShape2D" id="sub_39_depotyellowcrate"]
 size = Vector2(19.1, 53.6)
+
 [sub_resource type="RectangleShape2D" id="sub_40_depotbluebeercrates"]
 size = Vector2(38.3, 95.7)
+
 [sub_resource type="RectangleShape2D" id="sub_41_depotmetalkeg"]
 size = Vector2(34.4, 57.4)
+
 [sub_resource type="RectangleShape2D" id="sub_42_depotcornerboxes"]
 size = Vector2(30.6, 118.7)
+
 [sub_resource type="RectangleShape2D" id="sub_43_depotreddolly"]
 size = Vector2(38.3, 68.9)
+
 [sub_resource type="RectangleShape2D" id="sub_44_restroomexit"]
 size = Vector2(61.2, 49.8)
+
 [sub_resource type="RectangleShape2D" id="sub_45_officeexit"]
 size = Vector2(61.2, 49.8)
-[sub_resource type="RectangleShape2D" id="sub_46_marketexit"]
-size = Vector2(65.1, 103.3)
 
-[node name="DepotRoom" type="Node2D"]
+[sub_resource type="RectangleShape2D" id="sub_46_marketexit"]
+size = Vector2(100.15001, 103.3)
+
+[node name="DepotRoom" type="Node2D" unique_id=1834380414]
 script = ExtResource("1_room")
 room_id = &"depot"
 art_prefix = "depot"
-initial_state = &"clean_shift_start"
 
-[node name="RoomArt" type="Sprite2D" parent="."]
-texture = ExtResource("2_art")
-scale = Vector2(0.7655, 0.7655)
+[node name="RoomArt" type="Sprite2D" parent="." unique_id=1733826901]
 z_index = -10
+scale = Vector2(0.7655, 0.7655)
+texture = ExtResource("2_art")
 
-[node name="Walls" type="StaticBody2D" parent="."]
-collision_layer = 1
+[node name="Walls" type="StaticBody2D" parent="." unique_id=285039006]
 collision_mask = 0
 
-[node name="LeftWall" type="CollisionShape2D" parent="Walls"]
+[node name="LeftWall" type="CollisionShape2D" parent="Walls" unique_id=952631501]
 position = Vector2(-623.9, 22.6)
 shape = SubResource("sub_1_leftwall")
-[node name="RightWall" type="CollisionShape2D" parent="Walls"]
+
+[node name="RightWall" type="CollisionShape2D" parent="Walls" unique_id=336829571]
 position = Vector2(623.9, 22.6)
 shape = SubResource("sub_2_rightwall")
-[node name="BackWallTopLeft" type="CollisionShape2D" parent="Walls"]
+
+[node name="BackWallTopLeft" type="CollisionShape2D" parent="Walls" unique_id=1326673876]
 position = Vector2(-514.8, -287.4)
 shape = SubResource("sub_3_backwalltopleft")
-[node name="BackShelfLeft" type="CollisionShape2D" parent="Walls"]
-position = Vector2(-213.2, -287.4)
+
+[node name="BackShelfLeft" type="CollisionShape2D" parent="Walls" unique_id=157322969]
+position = Vector2(-178.42499, -287.4)
 shape = SubResource("sub_4_backshelfleft")
-[node name="BackBulkCenter" type="CollisionShape2D" parent="Walls"]
+
+[node name="BackBulkCenter" type="CollisionShape2D" parent="Walls" unique_id=1025260256]
 position = Vector2(87.3, -287.4)
 shape = SubResource("sub_5_backbulkcenter")
-[node name="BackWallLadder" type="CollisionShape2D" parent="Walls"]
+
+[node name="BackWallLadder" type="CollisionShape2D" parent="Walls" unique_id=1168779360]
 position = Vector2(274.8, -287.4)
 shape = SubResource("sub_6_backwallladder")
-[node name="BackShelfRight" type="CollisionShape2D" parent="Walls"]
-position = Vector2(385.8, -287.4)
+
+[node name="BackShelfRight" type="CollisionShape2D" parent="Walls" unique_id=999815137]
+position = Vector2(461, -282)
 shape = SubResource("sub_7_backshelfright")
-[node name="BackWallTopRight" type="CollisionShape2D" parent="Walls"]
+
+[node name="BackWallTopRight" type="CollisionShape2D" parent="Walls" unique_id=1670282447]
 position = Vector2(565.7, -287.4)
 shape = SubResource("sub_8_backwalltopright")
-[node name="BottomWall" type="CollisionShape2D" parent="Walls"]
-position = Vector2(0.0, 327.3)
+
+[node name="BottomWall" type="CollisionShape2D" parent="Walls" unique_id=814885394]
+position = Vector2(0, 327.3)
 shape = SubResource("sub_9_bottomwall")
 
-[node name="Fixtures" type="StaticBody2D" parent="."]
-collision_layer = 1
+[node name="BackShelfRight2" type="CollisionShape2D" parent="Walls" unique_id=679046868]
+position = Vector2(517, -178)
+shape = SubResource("sub_7_backshelfright")
+
+[node name="Fixtures" type="StaticBody2D" parent="." unique_id=1577404892]
 collision_mask = 0
 
-[node name="DepotStandGreenCrate" type="CollisionShape2D" parent="Fixtures"]
+[node name="DepotStandGreenCrate" type="CollisionShape2D" parent="Fixtures" unique_id=447041528]
 position = Vector2(-465.8, -189.8)
 shape = SubResource("sub_10_depotstandgreencrate")
-[node name="DepotSacksPallet" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotSacksPallet" type="CollisionShape2D" parent="Fixtures" unique_id=1005396884]
 position = Vector2(-471.5, -122.9)
 shape = SubResource("sub_11_depotsackspallet")
-[node name="DepotTranspalet" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotTranspalet" type="CollisionShape2D" parent="Fixtures" unique_id=233578351]
 position = Vector2(-440.9, -166.9)
 shape = SubResource("sub_12_depottranspalet")
-[node name="DepotLeftSideStock" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-566.5, 3.4)
+
+[node name="DepotLeftSideStock" type="CollisionShape2D" parent="Fixtures" unique_id=681054214]
+position = Vector2(-554.925, 3.4)
 shape = SubResource("sub_13_depotleftsidestock")
-[node name="DepotRackLeft" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-247.6, -31.0)
+
+[node name="DepotRackLeft" type="CollisionShape2D" parent="Fixtures" unique_id=1751187207]
+position = Vector2(-229, -18.425003)
 shape = SubResource("sub_14_depotrackleft")
-[node name="DepotRackCenter" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-18.0, -31.0)
+
+[node name="DepotRackCenter" type="CollisionShape2D" parent="Fixtures" unique_id=207405311]
+position = Vector2(-3, -18.925003)
 shape = SubResource("sub_15_depotrackcenter")
-[node name="DepotRackRight" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(211.7, -31.0)
+
+[node name="DepotRackRight" type="CollisionShape2D" parent="Fixtures" unique_id=1400613452]
+position = Vector2(232, -16.425003)
 shape = SubResource("sub_16_depotrackright")
-[node name="DepotWorkstationDesk" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotWorkstationDesk" type="CollisionShape2D" parent="Fixtures" unique_id=492541388]
 position = Vector2(460.4, -44.4)
 shape = SubResource("sub_17_depotworkstationdesk")
-[node name="DepotDeskStool" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotDeskStool" type="CollisionShape2D" parent="Fixtures" unique_id=2118645248]
 position = Vector2(450.9, -6.1)
 shape = SubResource("sub_18_depotdeskstool")
-[node name="DepotDeskTrashCan" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotDeskTrashCan" type="CollisionShape2D" parent="Fixtures" unique_id=340259555]
 position = Vector2(418.3, -13.8)
 shape = SubResource("sub_19_depotdesktrashcan")
-[node name="DepotDeskCrate" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(493.0, -13.8)
+
+[node name="DepotDeskCrate" type="CollisionShape2D" parent="Fixtures" unique_id=1101079747]
+position = Vector2(493, -13.8)
 shape = SubResource("sub_20_depotdeskcrate")
-[node name="DepotRightSideStock" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotRightSideStock" type="CollisionShape2D" parent="Fixtures" unique_id=1972009880]
 position = Vector2(571.4, 3.4)
 shape = SubResource("sub_21_depotrightsidestock")
-[node name="DepotBottomStockWest" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-566.5, 258.0)
+
+[node name="DepotBottomStockWest" type="CollisionShape2D" parent="Fixtures" unique_id=729761534]
+position = Vector2(-557.925, 258)
 shape = SubResource("sub_22_depotbottomstockwest")
-[node name="DepotFireExtinguisher" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-421.8, 273.3)
-shape = SubResource("sub_23_depotfireextinguisher")
-[node name="DepotPalletBottles1" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotPalletBottles1" type="CollisionShape2D" parent="Fixtures" unique_id=1221438514]
 position = Vector2(-373.9, 261.8)
 shape = SubResource("sub_24_depotpalletbottles1")
-[node name="DepotPalletBottles2" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotPalletBottles2" type="CollisionShape2D" parent="Fixtures" unique_id=1371403443]
 position = Vector2(-308.9, 259.9)
 shape = SubResource("sub_25_depotpalletbottles2")
-[node name="DepotPalletLargeBox" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotPalletLargeBox" type="CollisionShape2D" parent="Fixtures" unique_id=1976962567]
 position = Vector2(-226.6, 250.3)
 shape = SubResource("sub_26_depotpalletlargebox")
-[node name="DepotPalletWrappedBoxes" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(-123.2, 258.0)
+
+[node name="DepotPalletWrappedBoxes" type="CollisionShape2D" parent="Fixtures" unique_id=209703238]
+position = Vector2(-123.2, 258)
 shape = SubResource("sub_27_depotpalletwrappedboxes")
-[node name="DepotBoxStackMid" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotBoxStackMid" type="CollisionShape2D" parent="Fixtures" unique_id=1882229150]
 position = Vector2(-50.5, 265.6)
 shape = SubResource("sub_28_depotboxstackmid")
-[node name="DepotGreenCrateMid" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotGreenCrateMid" type="CollisionShape2D" parent="Fixtures" unique_id=1552745853]
 position = Vector2(1.1, 265.6)
 shape = SubResource("sub_29_depotgreencratemid")
-[node name="DepotRedCrateMid" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotRedCrateMid" type="CollisionShape2D" parent="Fixtures" unique_id=297624324]
 position = Vector2(37.5, 273.3)
 shape = SubResource("sub_30_depotredcratemid")
-[node name="DepotBlueCratesStack" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotBlueCratesStack" type="CollisionShape2D" parent="Fixtures" unique_id=784926113]
 position = Vector2(94.9, 261.8)
 shape = SubResource("sub_31_depotbluecratesstack")
-[node name="DepotGrayMachine" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotGrayMachine" type="CollisionShape2D" parent="Fixtures" unique_id=247627163]
 position = Vector2(138.9, 267.5)
 shape = SubResource("sub_32_depotgraymachine")
-[node name="DepotPlantPot" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotPlantPot" type="CollisionShape2D" parent="Fixtures" unique_id=1290656795]
 position = Vector2(190.6, 277.1)
 shape = SubResource("sub_33_depotplantpot")
-[node name="DepotBoxStackTall1" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotBoxStackTall1" type="CollisionShape2D" parent="Fixtures" unique_id=1142784000]
 position = Vector2(242.3, 248.4)
 shape = SubResource("sub_34_depotboxstacktall1")
-[node name="DepotBoxStackTall2" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(286.3, 256.1)
+
+[node name="DepotBoxStackTall2" type="CollisionShape2D" parent="Fixtures" unique_id=1056837581]
+position = Vector2(295.425, 252)
 shape = SubResource("sub_35_depotboxstacktall2")
-[node name="DepotFlourSacks1" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotFlourSacks1" type="CollisionShape2D" parent="Fixtures" unique_id=1270264463]
 position = Vector2(360.9, 267.5)
 shape = SubResource("sub_36_depotfloursacks1")
-[node name="DepotFlourSacks2" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotFlourSacks2" type="CollisionShape2D" parent="Fixtures" unique_id=1418804459]
 position = Vector2(420.3, 265.6)
 shape = SubResource("sub_37_depotfloursacks2")
-[node name="DepotGreenBeerCrates" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(470.0, 252.2)
+
+[node name="DepotGreenBeerCrates" type="CollisionShape2D" parent="Fixtures" unique_id=750649991]
+position = Vector2(470, 252.2)
 shape = SubResource("sub_38_depotgreenbeercrates")
-[node name="DepotYellowCrate" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotYellowCrate" type="CollisionShape2D" parent="Fixtures" unique_id=1472389519]
 position = Vector2(502.6, 267.5)
 shape = SubResource("sub_39_depotyellowcrate")
-[node name="DepotBlueBeerCrates" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotBlueBeerCrates" type="CollisionShape2D" parent="Fixtures" unique_id=987420904]
 position = Vector2(535.1, 246.5)
 shape = SubResource("sub_40_depotbluebeercrates")
-[node name="DepotMetalKeg" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotMetalKeg" type="CollisionShape2D" parent="Fixtures" unique_id=425724118]
 position = Vector2(579.1, 265.6)
 shape = SubResource("sub_41_depotmetalkeg")
-[node name="DepotCornerBoxes" type="CollisionShape2D" parent="Fixtures"]
-position = Vector2(615.5, 235.0)
+
+[node name="DepotCornerBoxes" type="CollisionShape2D" parent="Fixtures" unique_id=1883185022]
+position = Vector2(615.5, 235)
 shape = SubResource("sub_42_depotcornerboxes")
-[node name="DepotRedDolly" type="CollisionShape2D" parent="Fixtures"]
+
+[node name="DepotRedDolly" type="CollisionShape2D" parent="Fixtures" unique_id=1070319847]
 position = Vector2(588.7, 148.9)
 shape = SubResource("sub_43_depotreddolly")
 
-[node name="RestroomExit" type="Area2D" parent="."]
-script = ExtResource("3_portal")
+[node name="RestroomExit" type="Area2D" parent="." unique_id=264913553]
 position = Vector2(-391.2, -228.1)
 collision_layer = 0
 collision_mask = 2
+script = ExtResource("3_portal")
 target_room_id = &"restroom"
 arrival_position = Vector2(-334, 191)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="RestroomExit"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RestroomExit" unique_id=756652112]
+position = Vector2(33.200012, -20.899994)
 shape = SubResource("sub_44_restroomexit")
-[node name="OfficeExit" type="Area2D" parent="."]
-script = ExtResource("3_portal")
-position = Vector2(493.0, -228.1)
+
+[node name="OfficeExit" type="Area2D" parent="." unique_id=137664021]
+position = Vector2(493, -228.1)
 collision_layer = 0
 collision_mask = 2
+script = ExtResource("3_portal")
 target_room_id = &"manager_office"
 arrival_position = Vector2(225, 191)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="OfficeExit"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="OfficeExit" unique_id=716090840]
+position = Vector2(-149, -23.899994)
 shape = SubResource("sub_45_officeexit")
-[node name="MarketExit" type="Area2D" parent="."]
-script = ExtResource("3_portal")
+
+[node name="MarketExit" type="Area2D" parent="." unique_id=127175817]
 position = Vector2(-469.6, 242.7)
 collision_layer = 0
 collision_mask = 2
+script = ExtResource("3_portal")
 target_room_id = &"market"
 arrival_position = Vector2(-481, -161)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="MarketExit"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="MarketExit" unique_id=640028371]
+position = Vector2(17.524994, 0)
 shape = SubResource("sub_46_marketexit")
 
-[node name="SupplyRequestConsole" parent="." instance=ExtResource("4_console")]
+[node name="SupplyRequestConsole" parent="." unique_id=1916694254 instance=ExtResource("4_console")]
 position = Vector2(438, 35)

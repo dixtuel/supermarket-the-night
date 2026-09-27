@@ -356,6 +356,8 @@ func _set_room_actor_presence() -> void:
 		if actor is TemporaryShiftHelper:
 			actor.set_meta("room_id", _current_room_id)
 			actor.process_mode = Node.PROCESS_MODE_INHERIT
+			if actor.has_method("snap_to_owner"):
+				actor.call("snap_to_owner")
 		elif actor is EnemyActor and actor.has_meta("room_id"):
 			var active: bool = StringName(actor.get_meta("room_id")) == _current_room_id
 			actor.visible = active

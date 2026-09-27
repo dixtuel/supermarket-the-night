@@ -9,9 +9,9 @@ signal expired
 const PROJECTILE_SCENE: PackedScene = preload("res://combat/projectile/projectile.tscn")
 
 @export var follow_distance: float = 42.0
-@export var follow_speed: float = 155.0
-@export var target_range: float = 310.0
-@export var projectile_speed: float = 470.0
+@export var follow_speed: float = 190.0
+@export var target_range: float = 380.0
+@export var projectile_speed: float = 490.0
 @export var walk_atlas: Texture2D
 
 const WALK_COLUMNS := 4
@@ -127,7 +127,7 @@ func _build_walk_animations() -> void:
 
 
 func _update_walk_animation(movement: Vector2) -> void:
-	if walk_atlas == null:
+	if walk_atlas == null or _sprite == null:
 		return
 	if movement.length_squared() > 0.05:
 		if absf(movement.x) > absf(movement.y):
@@ -140,9 +140,12 @@ func _update_walk_animation(movement: Vector2) -> void:
 
 
 func _find_target() -> Node2D:
+	var tree := get_tree()
+	if tree == null:
+		return null
 	var best: Node2D
 	var best_distance_squared := target_range * target_range
-	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+	for candidate: Node in tree.get_nodes_in_group("enemies"):
 		var enemy := candidate as Node2D
 		if not is_instance_valid(enemy):
 			continue
@@ -156,14 +159,34 @@ func _find_target() -> Node2D:
 	return best
 
 
+func snap_to_owner() -> void:
+	if is_instance_valid(_owner_actor):
+		global_position = _owner_actor.global_position + Vector2(32.0, -10.0)
+
+
 func _fire_at(target: Node2D) -> bool:
 	var projectile := PROJECTILE_SCENE.instantiate() as SurvivorProjectile
 	if projectile == null:
 		return false
 	_projectile_layer.add_child(projectile)
 	var direction := global_position.direction_to(target.global_position)
-	projectile.global_position = global_position + direction * 12.0
-	projectile.launch_with_stats(direction, _damage, projectile_speed, 1.2, 0)
+	projectile.global_position = global_position + direction * 14.0
+	if has_meta("room_id"):
+		projectile.set_meta("room_id", get_meta("room_id"))
+	projectile.launch_with_stats(direction, _damage, projectile_speed, 1.4, 1)
+
+	# Distinct visual for helper's projectiles: bright glowing cyan energy bolts
+	var visual: Polygon2D = projectile.get_node_or_null("Visual") as Polygon2D
+	if visual != null:
+		visual.color = Color(0.25, 0.95, 1.0, 1.0)
+		visual.scale = Vector2(1.8, 1.8)
+
+	# Firing recoil punch on helper sprite
+	if _sprite != null:
+		var recoil_tween := create_tween()
+		recoil_tween.tween_property(_sprite, "scale", Vector2(0.26, 0.17), 0.05)
+		recoil_tween.tween_property(_sprite, "scale", Vector2(0.22, 0.22), 0.1)
+
 	return true
 
 
