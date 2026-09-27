@@ -21,8 +21,9 @@ const WALK_FRAMES_PER_DIRECTION := 4
 const WALK_ANIMATION_SPEED := 7.0
 const NORMAL_HIT_MAX_HEALTH_FRACTION := 0.24
 const BOSS_HIT_MAX_HEALTH_FRACTION := 0.38
-const OBSTACLE_STEER_CLEAR_GRACE := 0.14
-const OBSTACLE_PATH_PROBE_INTERVAL := 0.1
+const NAVIGATION_PROBE_INTERVAL := 0.12
+const NAVIGATION_LOOKAHEAD := 88.0
+const NAVIGATION_BODY_RADIUS := 18.0
 
 @onready var _sprite: AnimatedSprite2D = $Sprite
 @onready var _fallback_shape: Polygon2D = $FallbackShape
@@ -37,6 +38,7 @@ var _target: Node2D
 var _health: int = 1
 var _health_multiplier: float = 1.0
 var _damage_multiplier: float = 1.0
+var _round_number: int = 1
 var _attack_cooldown: float = 0.8
 var _phase: Phase = Phase.APPROACH
 var _pending_attack: PendingAttack = PendingAttack.NONE
@@ -48,21 +50,27 @@ var _target_refresh_timer: float = 0.0
 var _slow_effects: Dictionary = {}
 var _next_slow_id: int = 1
 var _facing: StringName = &"down"
-var _avoidance_normal: Vector2 = Vector2.ZERO
-var _avoidance_tangent: Vector2 = Vector2.ZERO
-var _avoidance_clear_timer: float = 0.0
-var _avoidance_probe_timer: float = 0.0
-var _avoidance_path_is_clear: bool = false
+var _steering_direction: Vector2 = Vector2.ZERO
+var _steering_probe_timer: float = 0.0
+var _stuck_check_timer: float = 0.0
+var _stuck_time: float = 0.0
+var _stuck_check_position: Vector2 = Vector2.ZERO
 var _contact_hit_applied: bool = false
 
 
-func configure(definition: EnemyDefinition, health_multiplier: float, target: Node2D, damage_multiplier: float = 1.0) -> void:
+func configure(
+		definition: EnemyDefinition,
+		health_multiplier: float,
+		target: Node2D,
+		damage_multiplier: float = 1.0,
+		round_number: int = 1) -> void:
 	_definition = definition
 	_health_multiplier = maxf(0.1, health_multiplier)
 	_damage_multiplier = maxf(0.0, damage_multiplier)
+	_round_number = maxi(1, round_number)
 	_target = target
 	if _definition != null:
-		_health = maxi(1, roundi(float(_definition.max_health) * _health_multiplier))
+		_health = _scaled_max_health()
 		_attack_cooldown = minf(0.7, _contact_attack_interval() * 0.25)
 	if is_inside_tree():
 		_apply_definition()
@@ -81,7 +89,7 @@ func take_damage(amount: int) -> void:
 		return
 	_health = maxi(0, _health - amount)
 	if _definition != null:
-		health_changed.emit(_health, maxi(1, roundi(float(_definition.max_health) * _health_multiplier)))
+		health_changed.emit(_health, _scaled_max_health())
 	if _health <= 0:
 		_defeat()
 	else:
@@ -105,6 +113,10 @@ func migrate_to_room(room_id: StringName, spawn_position: Vector2) -> void:
 	_attack_cooldown = maxf(_attack_cooldown, 0.45)
 	_contact_hit_applied = false
 	_target_refresh_timer = 0.0
+	_steering_direction = Vector2.ZERO
+	_steering_probe_timer = randf_range(0.0, NAVIGATION_PROBE_INTERVAL)
+	_stuck_time = 0.0
+	_stuck_check_timer = 0.0
 	velocity = Vector2.ZERO
 	_hide_telegraphs()
 	_restore_actor_color()
@@ -159,58 +171,75 @@ func _physics_process(delta: float) -> void:
 
 func _steer_around_obstacles(desired_velocity: Vector2, delta: float) -> Vector2:
 	if desired_velocity.is_zero_approx():
+		_steering_direction = Vector2.ZERO
 		return desired_velocity
-	var desired_dir := desired_velocity.normalized()
-	var blocking_normal := Vector2.ZERO
-	for collision_index: int in get_slide_collision_count():
-		var normal := get_slide_collision(collision_index).get_normal().normalized()
-		if desired_dir.dot(-normal) > 0.15:
-			blocking_normal = normal
-			break
-	if not blocking_normal.is_zero_approx():
-		if _avoidance_tangent.is_zero_approx():
-			var tangent_a := Vector2(-blocking_normal.y, blocking_normal.x)
-			var tangent_b := Vector2(blocking_normal.y, -blocking_normal.x)
-			_avoidance_tangent = tangent_a if desired_dir.dot(tangent_a) > desired_dir.dot(tangent_b) else tangent_b
-		elif not _avoidance_normal.is_zero_approx() and not _avoidance_normal.is_equal_approx(blocking_normal):
-			# Preserve the chosen side while adapting to a corner's new surface normal.
-			var projected_tangent := _avoidance_tangent - blocking_normal * _avoidance_tangent.dot(blocking_normal)
-			if projected_tangent.length_squared() > 0.01:
-				_avoidance_tangent = projected_tangent.normalized()
-		_avoidance_normal = blocking_normal
-		_avoidance_clear_timer = 0.0
-		_avoidance_probe_timer = 0.0
-		_avoidance_path_is_clear = false
-		return _avoidance_velocity(desired_velocity.length())
-	if not _avoidance_tangent.is_zero_approx():
-		_avoidance_clear_timer += delta
-		_avoidance_probe_timer -= delta
-		if _avoidance_probe_timer <= 0.0:
-			_avoidance_path_is_clear = _has_clear_path_to_target()
-			_avoidance_probe_timer = OBSTACLE_PATH_PROBE_INTERVAL
-		if _avoidance_clear_timer < OBSTACLE_STEER_CLEAR_GRACE or not _avoidance_path_is_clear:
-			return _avoidance_velocity(desired_velocity.length())
-		_avoidance_normal = Vector2.ZERO
-		_avoidance_tangent = Vector2.ZERO
-		_avoidance_clear_timer = 0.0
-		_avoidance_probe_timer = 0.0
-		_avoidance_path_is_clear = false
-	return desired_velocity
+	_steering_probe_timer -= delta
+	_stuck_check_timer -= delta
+	if _stuck_check_timer <= 0.0:
+		if _stuck_check_position != Vector2.ZERO and global_position.distance_to(_stuck_check_position) < 2.0 and velocity.length() > 24.0:
+			_stuck_time += 0.35
+		else:
+			_stuck_time = 0.0
+		_stuck_check_position = global_position
+		_stuck_check_timer = 0.35
+	if _steering_probe_timer > 0.0:
+		return _steering_direction * desired_velocity.length() if not _steering_direction.is_zero_approx() else desired_velocity
+	_steering_probe_timer = NAVIGATION_PROBE_INTERVAL
+	var target_direction := _direction_to_target()
+	var target_distance := _distance_to_target()
+	if _corridor_is_clear(global_position, _target.global_position, target_direction):
+		_steering_direction = Vector2.ZERO
+		return desired_velocity
+	var lookahead := minf(NAVIGATION_LOOKAHEAD, maxf(32.0, target_distance))
+	var offsets := [-105.0, 105.0, -75.0, 75.0, -48.0, 48.0, -28.0, 28.0, -145.0, 145.0]
+	var best_score := -INF
+	var best_direction := Vector2.ZERO
+	for offset_degrees: float in offsets:
+		var candidate := target_direction.rotated(deg_to_rad(offset_degrees)).normalized()
+		var end_point := global_position + candidate * lookahead
+		if not _corridor_is_clear(global_position, end_point, candidate):
+			continue
+		var score := candidate.dot(target_direction) * 2.0 - absf(offset_degrees) * 0.002
+		if not _steering_direction.is_zero_approx() and candidate.dot(_steering_direction) > 0.85:
+			score += 0.20
+		if _stuck_time >= 0.7:
+			score += candidate.dot(target_direction) * 0.25
+		if score > best_score:
+			best_score = score
+			best_direction = candidate
+	if best_direction.is_zero_approx():
+		var hit := _raycast_world(global_position, _target.global_position)
+		if not hit.is_empty():
+			var normal: Vector2 = hit.get("normal", Vector2.ZERO)
+			var tangent_a := Vector2(-normal.y, normal.x).normalized()
+			var tangent_b := -tangent_a
+			best_direction = tangent_a if tangent_a.dot(target_direction) >= tangent_b.dot(target_direction) else tangent_b
+	_steering_direction = best_direction
+	return _steering_direction * desired_velocity.length() if not _steering_direction.is_zero_approx() else desired_velocity
 
 
-func _avoidance_velocity(speed: float) -> Vector2:
-	var slide_direction := (_avoidance_tangent * 0.85 + _avoidance_normal * 0.15).normalized()
-	return slide_direction * speed
+func _corridor_is_clear(origin: Vector2, destination: Vector2, direction: Vector2) -> bool:
+	var span := destination - origin
+	if span.length_squared() <= 1.0:
+		return true
+	var side := Vector2(-direction.y, direction.x) * NAVIGATION_BODY_RADIUS * 0.72
+	return _raycast_world(origin, destination).is_empty() \
+		and _raycast_world(origin + side, destination + side).is_empty() \
+		and _raycast_world(origin - side, destination - side).is_empty()
+
+
+func _raycast_world(origin: Vector2, destination: Vector2) -> Dictionary:
+	var query := PhysicsRayQueryParameters2D.create(origin, destination, collision_mask)
+	query.exclude = [get_rid()]
+	if is_instance_valid(_target) and _target is CollisionObject2D:
+		query.exclude.append((_target as CollisionObject2D).get_rid())
+	return get_world_2d().direct_space_state.intersect_ray(query)
 
 
 func _has_clear_path_to_target() -> bool:
 	if not is_instance_valid(_target):
 		return false
-	var query := PhysicsRayQueryParameters2D.create(global_position, _target.global_position, collision_mask)
-	query.exclude = [get_rid()]
-	if _target is CollisionObject2D:
-		query.exclude.append((_target as CollisionObject2D).get_rid())
-	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+	return _raycast_world(global_position, _target.global_position).is_empty()
 
 
 func _tick_chaser(delta: float) -> void:
@@ -514,7 +543,10 @@ func _update_attack_area() -> void:
 func _scaled_damage(base_damage: int, simultaneous_projectiles: int = 1) -> int:
 	if base_damage <= 0:
 		return 0
-	var scaled_damage: int = maxi(1, roundi(float(base_damage) * _damage_multiplier))
+	var wave_damage := float(base_damage)
+	if _definition != null:
+		wave_damage += _definition.damage_growth_per_wave * float(maxi(0, mini(_round_number, 20) - 1))
+	var scaled_damage: int = maxi(1, roundi(wave_damage * _damage_multiplier))
 	if not (_target is SurvivorPlayer):
 		return scaled_damage
 	var player := _target as SurvivorPlayer
@@ -523,6 +555,14 @@ func _scaled_damage(base_damage: int, simultaneous_projectiles: int = 1) -> int:
 		hit_fraction /= sqrt(float(simultaneous_projectiles))
 	var per_hit_limit: int = maxi(1, floori(float(player.max_health) * hit_fraction))
 	return mini(scaled_damage, per_hit_limit)
+
+
+func _scaled_max_health() -> int:
+	if _definition == null:
+		return 1
+	var wave_health := float(_definition.max_health)
+	wave_health += _definition.health_growth_per_wave * float(maxi(0, mini(_round_number, 20) - 1))
+	return maxi(1, roundi(wave_health * _health_multiplier))
 
 
 func _defeat() -> void:
@@ -539,7 +579,7 @@ func _defeat() -> void:
 func _apply_definition() -> void:
 	if _definition == null:
 		return
-	_health = maxi(1, roundi(float(_definition.max_health) * _health_multiplier))
+	_health = _scaled_max_health()
 	health_changed.emit(_health, _health)
 	if _definition.directional_walk_atlas:
 		_build_walk_animations(_definition.sprite)

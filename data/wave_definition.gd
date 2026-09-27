@@ -6,7 +6,8 @@ extends Resource
 @export var display_name: String = ""
 @export_multiline var purpose: String = ""
 @export_range(1.0, 3600.0, 1.0) var duration_seconds: float = 60.0
-## Intended total spawn budget. The current phase director does not consume this yet.
+## Total enemy spawn budget for this wave; the arena stops normal/event spawns
+## when it is reached.
 @export_range(0, 10000, 1) var planned_spawn_count: int = 0
 ## Optional Endless-only count change applied once per completed 10-wave cycle.
 ## Negative values let a later cycle trade raw enemy count for tougher roles.

@@ -334,7 +334,10 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var content := VBoxContainer.new()
 		content.add_theme_constant_override("separation", _mobile_spacing(6) if mobile_layout else 10)
 		card.add_child(_margin_content(content, _mobile_spacing(8) if mobile_layout else 12))
-		content.add_child(_label("PICK %02d  /  KEY %d" % [index + 1, index + 1], 14, GOLD))
+		var rarity_tier := clampi(int(choice.get("rarity_tier", 1)), 1, 4)
+		var tier_names := ["I", "II", "III", "IV"]
+		var tier_colors := [MUTED, TEAL, Color("70a8d2"), GOLD]
+		content.add_child(_label("PICK %02d  /  KEY %d   ·   TIER %s" % [index + 1, index + 1, tier_names[rarity_tier - 1]], 14, tier_colors[rarity_tier - 1]))
 		var icon_panel := PanelContainer.new()
 		icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(54) if mobile_layout else 72)
 		icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
@@ -348,7 +351,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		content.add_child(icon_panel)
 		var title := _label(String(choice.get("name", "Stat adjustment")), 22, TEXT)
 		if mobile_layout:
-			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 20.0)))
+			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 21.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(title)
 		var details_scroll := ScrollContainer.new()
@@ -366,14 +369,14 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 			if effect is Dictionary:
 				var delta_row := _label(_format_stat_delta(effect), 18, TEAL if float(effect.get("value", 0.0)) >= 0.0 else RED)
 				if mobile_layout:
-					delta_row.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 18.0)))
+					delta_row.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 19.0)))
 				delta_row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				details.add_child(delta_row)
 		if effects.is_empty():
 			details.add_child(_label("No lasting stat change.", 16, MUTED))
 		var reason := _label(String(choice.get("description", "")), 15, MUTED)
 		if mobile_layout:
-			reason.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 16.0)))
+			reason.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 17.0)))
 		reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		details.add_child(reason)
 		var choose_button := _add_card_button(content, "Choose", func() -> void:
@@ -427,10 +430,26 @@ func _stat_icon(choice: Dictionary) -> Texture2D:
 				return load("res://assets/generated/shop_icons/longer_shift.png") as Texture2D
 			"protection":
 				return load("res://assets/generated/shop_icons/fresh_apron.png") as Texture2D
+			"armor":
+				return load("res://assets/generated/shop_icons/fresh_apron.png") as Texture2D
+			"luck":
+				return load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
 			"elemental_damage":
 				return load("res://assets/generated/weapons/shelf_rinse_sprayer.png") as Texture2D
 			"engineering":
 				return load("res://assets/generated/content_pack/engineering_caddy.png") as Texture2D
+			"harvesting":
+				return load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
+			"xp_gain":
+				return load("res://assets/generated/pickups/pickup_xp_token.png") as Texture2D
+			"melee_damage":
+				return load("res://assets/generated/weapons/mop_whirl.png") as Texture2D
+			"ranged_damage":
+				return load("res://assets/generated/weapons/projectile_tomato_can.png") as Texture2D
+			"attack_speed":
+				return load("res://assets/generated/shop_icons/comfortable_shoes.png") as Texture2D
+			"crit_chance":
+				return load("res://assets/generated/shop_icons/heavier_cans.png") as Texture2D
 	return null
 
 
@@ -458,7 +477,7 @@ func _format_stat_delta(effect: Dictionary) -> String:
 	var stat_name := custom_label if not custom_label.is_empty() else _stat_display_name(stat_key)
 	var value := float(effect.get("value", 0.0))
 	var unit := String(effect.get("unit", effect.get("format", ""))).to_lower()
-	var is_percent := unit in ["percent", "%", "percentage"] or stat_key in ["damage", "move_speed", "lifesteal", "dodge", "protection", "weapon_fire_rate"]
+	var is_percent := unit in ["percent", "%", "percentage"] or stat_key in ["damage", "move_speed", "lifesteal", "dodge", "protection", "xp_gain", "attack_speed", "crit_chance", "weapon_fire_rate"]
 	var amount := "%+d%%" % roundi(value * 100.0) if is_percent else "%+d" % roundi(value)
 	return "%s  %s" % [amount, stat_name]
 
@@ -499,7 +518,7 @@ func _build_stat_ledger(stats: Dictionary) -> PanelContainer:
 		level_line.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 17.0)))
 	content.add_child(heading)
 	content.add_child(level_line)
-	for key: String in ["health", "damage", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection"]:
+	for key: String in ["health", "damage", "melee_damage", "ranged_damage", "attack_speed", "crit_chance", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection", "armor", "harvesting", "luck", "xp_gain"]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		var stat_label := "Elemental Damage" if key == "elemental_damage" else ("Engineering" if key == "engineering" else key.replace("_", " ").capitalize())
@@ -633,6 +652,9 @@ func _show_in_game_settings() -> void:
 		)
 		m_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
 		mode_row.add_child(m_btn)
+
+	if not _is_native_mobile_platform():
+		_add_touch_controls_setting(_overlay_body)
 
 	var div2 := HSeparator.new()
 	_overlay_body.add_child(div2)
@@ -990,6 +1012,10 @@ func _is_mobile_platform() -> bool:
 	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
 
 
+func _is_native_mobile_platform() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+
+
 func _is_portrait() -> bool:
 	var viewport_size := get_viewport().get_visible_rect().size
 	return viewport_size.x < viewport_size.y
@@ -1125,6 +1151,20 @@ func _style_settings_button(button: Button) -> void:
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 
 
+func _add_touch_controls_setting(parent: Control) -> void:
+	var toggle := CheckButton.new()
+	toggle.text = I18n.t("SETTINGS_TOUCH_CONTROLS", "Dokunmatik joystick kullan")
+	toggle.button_pressed = DisplayManager.touch_controls_enabled
+	toggle.custom_minimum_size.y = 40
+	_style_settings_button(toggle)
+	toggle.toggled.connect(func(enabled: bool) -> void:
+		DisplayManager.set_touch_controls_enabled(enabled)
+		BakkalAudio.play_sfx(&"ui_confirm")
+		_show_in_game_settings()
+	)
+	parent.add_child(toggle)
+
+
 func _panel(position: Vector2, size: Vector2) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.position = position
@@ -1173,7 +1213,7 @@ func _mobile_hud_font(viewport_size: Vector2, preferred: float) -> float:
 
 
 func _mobile_overlay_font(viewport_size: Vector2, preferred: float) -> float:
-	return clampf(viewport_size.y * 0.018, 14.0, preferred)
+	return clampf(viewport_size.y * 0.020, 15.0, preferred)
 
 
 func _margin_content(child: Control, margin: int) -> MarginContainer:

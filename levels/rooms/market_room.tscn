@@ -59,13 +59,13 @@ size = Vector2(45.9, 302.4)
 size = Vector2(45.9, 302.4)
 
 [sub_resource type="RectangleShape2D" id="sub_19_aislefive"]
-size = Vector2(45.9, 302.4)
+size = Vector2(46.849995, 302)
 
 [sub_resource type="RectangleShape2D" id="sub_20_checkoutfront"]
 size = Vector2(95.7, 49.8)
 
 [sub_resource type="RectangleShape2D" id="sub_21_checkoutregisterside"]
-size = Vector2(34.4, 88)
+size = Vector2(35.099995, 78.7)
 
 [sub_resource type="RectangleShape2D" id="sub_22_checkoutredstand"]
 size = Vector2(23, 42.1)
@@ -215,7 +215,7 @@ position = Vector2(170, 9)
 shape = SubResource("sub_18_aislefour")
 
 [node name="AisleFive" type="CollisionShape2D" parent="Fixtures" unique_id=1700338234]
-position = Vector2(336.1, 16.8)
+position = Vector2(336.575, 16.999996)
 shape = SubResource("sub_19_aislefive")
 
 [node name="CheckoutFront" type="CollisionShape2D" parent="Fixtures" unique_id=1086709263]
@@ -223,7 +223,7 @@ position = Vector2(471.9, -151.6)
 shape = SubResource("sub_20_checkoutfront")
 
 [node name="CheckoutRegisterSide" type="CollisionShape2D" parent="Fixtures" unique_id=1431724031]
-position = Vector2(406.9, -170.7)
+position = Vector2(406.55, -175.35)
 shape = SubResource("sub_21_checkoutregisterside")
 
 [node name="CheckoutRedStand" type="CollisionShape2D" parent="Fixtures" unique_id=2024024737]

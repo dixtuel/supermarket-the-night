@@ -279,8 +279,12 @@ func _on_body_entered(body: Node2D) -> void:
 func _deal_damage(body: Node2D) -> void:
 	if _damage > 0 and body.has_method("take_damage"):
 		var health_before: int = int(body.call("get_health")) if body.has_method("get_health") else _damage
-		body.call("take_damage", _damage)
-		var health_after: int = int(body.call("get_health")) if body.has_method("get_health") else maxi(0, health_before - _damage)
+		var hit_damage := _damage
+		if _flight_mode not in [FlightMode.TURRET, FlightMode.MINE] and is_instance_valid(_life_steal_source) and _life_steal_source.has_method("get_critical_chance"):
+			if randf() < clampf(float(_life_steal_source.call("get_critical_chance")), 0.0, 0.75):
+				hit_damage = roundi(float(hit_damage) * 1.5)
+		body.call("take_damage", hit_damage)
+		var health_after: int = int(body.call("get_health")) if body.has_method("get_health") else maxi(0, health_before - hit_damage)
 		var dealt_damage := maxi(0, health_before - health_after)
 		if dealt_damage > 0 and is_instance_valid(_life_steal_source) and _life_steal_source.has_method("recover_from_damage_dealt"):
 			_life_steal_source.call("recover_from_damage_dealt", dealt_damage)

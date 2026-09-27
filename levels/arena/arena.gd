@@ -10,6 +10,7 @@ enum RunState { RUNNING, ROUND_CLEAR, LEVEL_UP, SHOP, PAUSED, RESULTS }
 const ENEMY_SCENE: PackedScene = preload("res://entities/enemy/enemy_actor.tscn")
 const XP_ORB_SCENE: PackedScene = preload("res://progression/xp_orb/xp_orb.tscn")
 const CONSUMABLE_SCENE: PackedScene = preload("res://progression/consumable_pickup/consumable_pickup.tscn")
+const MATERIAL_PICKUP_SCENE: PackedScene = preload("res://progression/material_pickup/material_pickup.tscn")
 const ROOM_SCENES: Dictionary = {
 	&"market": preload("res://levels/rooms/market_room.tscn"),
 	&"depot": preload("res://levels/rooms/depot_room.tscn"),
@@ -18,6 +19,8 @@ const ROOM_SCENES: Dictionary = {
 }
 const STARTER_WEAPON_IDS: Array[StringName] = [&"can_launcher"]
 const CAMPAIGN_WAVE_COUNT := 20
+const ENDLESS_MAX_PLANNED_SPAWNS := 72
+const ENDLESS_MAX_ALIVE := 54
 const ENDLESS_WAVE_PATTERNS: Array[WaveDefinition] = [
 	preload("res://data/endless/wave_01.tres"),
 	preload("res://data/endless/wave_02.tres"),
@@ -565,9 +568,9 @@ func _wave_for_round(round_number: int) -> WaveDefinition:
 		var cycle_index := floori(float(endless_round_index) / float(ENDLESS_WAVE_PATTERNS.size()))
 		var wave := ENDLESS_WAVE_PATTERNS[pattern_index].duplicate(true) as WaveDefinition
 		wave.id = StringName("endless_%03d" % round_number)
-		wave.planned_spawn_count = maxi(16, wave.planned_spawn_count + wave.endless_cycle_spawn_delta * cycle_index)
+		wave.planned_spawn_count = clampi(wave.planned_spawn_count + wave.endless_cycle_spawn_delta * cycle_index, 16, ENDLESS_MAX_PLANNED_SPAWNS)
 		wave.enemy_health_multiplier += float(cycle_index) * 0.14
-		wave.max_alive += mini(cycle_index, 24)
+		wave.max_alive = mini(ENDLESS_MAX_ALIVE, wave.max_alive + mini(cycle_index, 24))
 		wave.spawn_interval = maxf(0.55, wave.spawn_interval / (1.0 + float(cycle_index) * 0.025))
 		_extend_endless_roster(wave, pattern_index, cycle_index, round_number)
 		return wave
@@ -586,11 +589,14 @@ func _run_cycle_multiplier() -> int:
 
 
 func _current_health_multiplier() -> float:
+	var authored_scale := 1.0
 	if _current_wave != null:
-		return _current_wave.enemy_health_multiplier
-	if _current_phase == null:
-		return 1.0
-	return _current_phase.enemy_health_multiplier * (1.0 + float(_run_cycle_multiplier()) * 0.15)
+		authored_scale = _current_wave.enemy_health_multiplier
+	else:
+		if _current_phase == null:
+			return 1.0
+		authored_scale = _current_phase.enemy_health_multiplier * (1.0 + float(_run_cycle_multiplier()) * 0.15)
+	return maxf(0.1, authored_scale)
 
 
 func _current_spawn_interval() -> float:
@@ -969,7 +975,7 @@ func _spawn_enemy(
 	if enemy == null:
 		push_error("Enemy scene must have an EnemyActor root.")
 		return
-	enemy.configure(definition, health_multiplier, _player, _current_damage_multiplier())
+	enemy.configure(definition, health_multiplier, _player, _current_damage_multiplier(), _round_number)
 	enemy.set_meta("room_id", _current_room_id)
 	if boss:
 		enemy.health_changed.connect(_on_boss_health_changed)
@@ -1021,9 +1027,11 @@ func _spawn_point_is_clear(point: Vector2) -> bool:
 
 func _on_enemy_defeated(definition: EnemyDefinition, death_position: Vector2) -> void:
 	_kills += 1
-	_currency += maxi(1, definition.xp_reward * 2)
 	_hud.set_kill_count(_kills)
 	_spawn_xp_orb(definition.xp_reward, death_position)
+	var material_reward := _scaled_material_reward(definition.material_reward)
+	if material_reward > 0:
+		_spawn_material_pickup(material_reward, death_position + Vector2(10.0, -5.0))
 	if _current_room_id == &"depot" and is_instance_valid(_room_event_director):
 		_room_event_director.roll_requested_supply_drop(death_position)
 	if definition.role == EnemyDefinition.Role.BOSS:
@@ -1034,23 +1042,66 @@ func _on_enemy_defeated(definition: EnemyDefinition, death_position: Vector2) ->
 		_spawn_xp_orb(maxi(6, roundi(float(definition.xp_reward) * 0.5)), death_position + Vector2(0, -24))
 		_spawn_consumable(death_position + Vector2(30, 0), ConsumablePickup.Reward.HEALTH)
 		_spawn_consumable(death_position + Vector2(-30, 0), ConsumablePickup.Reward.ENERGY)
-	elif randf() < 0.035:
+	elif randf() < minf(0.20, 0.035 * (1.0 + float(_player.get_luck()) / 100.0)):
 		_spawn_consumable(death_position, ConsumablePickup.Reward.HEALTH)
 
 
+func _scaled_material_reward(base_reward: int) -> int:
+	if base_reward <= 0:
+		return 0
+	# Normal enemies used to drop their full authored material reward every kill.
+	# This early-game multiplier now rises gently through campaign, then Endless
+	# has its own capped ramp. XP and Harvesting remain separate progression paths.
+	var reward_scale := minf(0.22, 0.18 + float(maxi(0, _round_number - 1)) * 0.002)
+	if _endless_mode and _round_number > CAMPAIGN_WAVE_COUNT:
+		reward_scale = minf(0.38, 0.22 + float(_round_number - CAMPAIGN_WAVE_COUNT) * 0.004)
+	var scaled_reward := float(base_reward) * reward_scale
+	var whole_reward := floori(scaled_reward)
+	var fractional_reward := scaled_reward - float(whole_reward)
+	if randf() < fractional_reward:
+		whole_reward += 1
+	return whole_reward
+
+
 func _spawn_xp_orb(amount: int, position: Vector2) -> void:
+	if amount <= 0:
+		return
 	call_deferred("_spawn_xp_orb_now", amount, position)
 
 
 func _spawn_xp_orb_now(amount: int, position: Vector2) -> void:
+	if amount <= 0:
+		return
 	var orb := XP_ORB_SCENE.instantiate() as Node2D
 	if orb == null:
 		return
 	_pickup_layer.add_child(orb)
 	orb.set_meta("room_id", _current_room_id)
 	orb.global_position = position
-	orb.set("xp_amount", maxi(1, amount))
+	orb.set("xp_amount", amount)
 	_set_pickup_room_presence(orb)
+
+
+func _spawn_material_pickup(amount: int, position: Vector2) -> void:
+	call_deferred("_spawn_material_pickup_now", amount, position)
+
+
+func _spawn_material_pickup_now(amount: int, position: Vector2) -> void:
+	if amount <= 0:
+		return
+	var pickup := MATERIAL_PICKUP_SCENE.instantiate() as SurvivorMaterialPickup
+	if pickup == null:
+		return
+	pickup.amount = amount
+	pickup.collected.connect(_on_material_pickup_collected)
+	_pickup_layer.add_child(pickup)
+	pickup.set_meta("room_id", _current_room_id)
+	pickup.global_position = position
+	_set_pickup_room_presence(pickup)
+
+
+func _on_material_pickup_collected(amount: int) -> void:
+	_currency = maxi(0, _currency + amount)
 
 
 func _spawn_consumable(position: Vector2, reward: int) -> void:
@@ -1165,11 +1216,15 @@ func _complete_round() -> void:
 	for pickup: Node in _pickup_layer.get_children():
 		if pickup is SurvivorXpOrb:
 			pickup.collect_for_player(_player)
+		elif pickup is SurvivorMaterialPickup:
+			pickup.collect_for_player(_player)
 		elif pickup is ConsumablePickup:
 			pickup.collect_for_player(_player)
 			pickup.queue_free()
 		elif pickup is RoomSupplyPickup:
 			pickup.queue_free()
+	var wave_harvest: Dictionary = _player.resolve_wave_harvesting()
+	_currency = maxi(0, _currency + int(wave_harvest.get("materials", 0)))
 	call_deferred("_open_intermission")
 
 
@@ -1189,8 +1244,9 @@ func _show_next_stat_choice() -> void:
 	_pending_level_ups -= 1
 	_active_stat_choices.clear()
 	for choice: Dictionary in _build_level_choices():
-		if _player.can_apply_level_choice(choice):
-			_active_stat_choices.append(choice)
+		var adjusted_choice := _apply_level_choice_rarity(choice)
+		if _player.can_apply_level_choice(adjusted_choice):
+			_active_stat_choices.append(adjusted_choice)
 	_active_stat_choices.shuffle()
 	if _active_stat_choices.size() > 4:
 		_active_stat_choices.resize(4)
@@ -1210,12 +1266,27 @@ func _build_level_choices() -> Array[Dictionary]:
 	var bundle_protection := minf(0.04, 0.02 + float(progress_tier) * 0.005)
 	var bundle_speed := minf(0.055, 0.035 + float(progress_tier) * 0.005)
 	var bundle_dodge := minf(0.03, 0.015 + float(progress_tier) * 0.00375)
+	var flat_damage_bonus := 1 + floori(float(progress_tier) / 2.0)
+	var attack_speed_bonus := minf(0.10, 0.04 + float(progress_tier) * 0.015)
+	var crit_chance_bonus := minf(0.08, 0.04 + float(progress_tier) * 0.01)
+	var harvesting_bonus := 3 + progress_tier * 2
+	var xp_gain_bonus := minf(0.10, 0.04 + float(progress_tier) * 0.015)
+	var luck_bonus := 5 + progress_tier * 2
+	var armor_bonus := 1 + floori(float(progress_tier) / 2.0)
 	var choices: Array[Dictionary] = [
 		{"id": &"health_pickup", "name": "Break-room soup", "description": "A hearty meal raises your maximum health.", "effects": [{"stat": &"max_health", "value": health_bonus}]},
 		{"id": &"damage_pickup", "name": "Heavy-duty price gun", "description": "A sturdier grip improves every hit.", "effects": [{"stat": &"damage", "value": minf(0.10, 0.04 + float(progress_tier) * 0.015)}]},
 		{"id": &"steady_footing_bundle", "name": "Fresh aisle runners", "description": "A better pace helps you slip past trouble.", "effects": [{"stat": &"move_speed", "value": bundle_speed}, {"stat": &"dodge", "value": bundle_dodge}]},
 		{"id": &"apron_bundle", "name": "Reinforced apron", "description": "Extra padding and a little more room to take a hit.", "effects": [{"stat": &"protection", "value": bundle_protection}, {"stat": &"max_health", "value": bundle_health}]},
 		{"id": &"elemental_bundle", "name": "Aisle-rinse concentrate", "description": "Stronger mist and a small reserve of extra health.", "effects": [{"stat": &"elemental_damage", "value": elemental_bonus}, {"stat": &"max_health", "value": 1 + floori(float(progress_tier) / 2.0)}]},
+		{"id": &"melee_damage", "name": "Reinforced stock hook", "description": "Melee tools hit harder using your tool-specific scaling.", "effects": [{"stat": &"melee_damage", "value": flat_damage_bonus}]},
+		{"id": &"ranged_damage", "name": "Calibrated price gun", "description": "Ranged tools gain flat damage through their authored scaling.", "effects": [{"stat": &"ranged_damage", "value": flat_damage_bonus}]},
+		{"id": &"attack_speed", "name": "Quick-reload spring", "description": "All handheld weapons cycle faster; deployed structures keep their own rate.", "effects": [{"stat": &"attack_speed", "value": attack_speed_bonus}]},
+		{"id": &"critical_chance", "name": "Precision barcode", "description": "A small chance for each weapon hit to deal 50% extra damage.", "effects": [{"stat": &"crit_chance", "value": crit_chance_bonus}]},
+		{"id": &"armor", "name": "Reinforced shelf apron", "description": "Reduce incoming hits by a flat amount before protection is applied.", "effects": [{"stat": &"armor", "value": armor_bonus}]},
+		{"id": &"harvesting", "name": "After-hours collection", "description": "Gain extra stock tokens and XP at each shift end; the payout grows by 5% per shift.", "effects": [{"stat": &"harvesting", "value": harvesting_bonus}]},
+		{"id": &"luck", "name": "Lucky price sticker", "description": "Improve upgrade rarity and the chance of finding a small health pickup.", "effects": [{"stat": &"luck", "value": luck_bonus}]},
+		{"id": &"xp_gain", "name": "Training manual", "description": "Gain a little more XP from every source.", "effects": [{"stat": &"xp_gain", "value": xp_gain_bonus}]},
 		{"id": &"damage_tradeoff", "name": "Marked-down cans", "description": "Pack a harder hit, take on less maximum health.", "effects": [{"stat": &"damage", "value": damage_bonus}, {"stat": &"max_health", "value": -3}]},
 		{"id": &"speed_tradeoff", "name": "Non-slip shoes", "description": "Move faster, give up a little force.", "effects": [{"stat": &"move_speed", "value": speed_bonus}, {"stat": &"damage", "value": -0.04}]},
 		{"id": &"lifesteal_tradeoff", "name": "Energy drink", "description": "Recover on hits, lose some staying power.", "effects": [{"stat": &"lifesteal", "value": lifesteal_bonus}, {"stat": &"max_health", "value": -3}]},
@@ -1332,6 +1403,52 @@ func _build_level_choices() -> Array[Dictionary]:
 	return choices
 
 
+func _apply_level_choice_rarity(source: Dictionary) -> Dictionary:
+	var choice := source.duplicate(true)
+	var tier := _roll_progression_tier(_player.current_level, true)
+	choice["rarity_tier"] = tier
+	var amount_scale: float = [1.0, 1.20, 1.42, 1.68][tier - 1]
+	var effects: Array = choice.get("effects", [])
+	for index: int in range(effects.size()):
+		var effect: Dictionary = effects[index]
+		var value := float(effect.get("value", 0.0))
+		if is_zero_approx(value):
+			continue
+		var scaled: float = absf(value) * amount_scale
+		var stat_id := StringName(effect.get("stat", &""))
+		if stat_id in [&"max_health", &"melee_damage", &"ranged_damage", &"elemental_damage", &"engineering", &"armor", &"harvesting", &"luck", &"weapon_damage"]:
+			scaled = ceilf(scaled)
+		effect["value"] = signf(value) * scaled
+		effects[index] = effect
+	choice["effects"] = effects
+	return choice
+
+
+func _roll_progression_tier(progress: int, is_level_up: bool) -> int:
+	if is_level_up:
+		if progress == 1:
+			return 1
+		if progress == 5:
+			return 2
+		if progress in [10, 15, 20]:
+			return 3
+		if progress >= 25 and progress % 5 == 0:
+			return 4
+	var luck := int(_player.get_shop_summary().get("luck_raw", 0))
+	var luck_scale := clampf(1.0 + float(luck) / 100.0, 0.0, 4.0)
+	var tier_2_chance := minf(0.60, float(maxi(0, progress - 1)) * 0.06 * luck_scale)
+	var tier_3_chance := minf(0.25, float(maxi(0, progress - 3)) * 0.02 * luck_scale)
+	var tier_4_chance := minf(0.08, float(maxi(0, progress - 7)) * 0.0023 * luck_scale)
+	var roll := randf()
+	if roll < tier_4_chance:
+		return 4
+	if roll < tier_3_chance:
+		return 3
+	if roll < tier_2_chance:
+		return 2
+	return 1
+
+
 func _on_stat_choice_selected(choice_id: StringName) -> void:
 	if _state != RunState.LEVEL_UP:
 		return
@@ -1364,7 +1481,14 @@ func _open_shop() -> void:
 	_locked_shop_indices.clear()
 	_active_shop_offers = _roll_shop_offers()
 	_active_shop_prices = _prices_for_offers(_active_shop_offers)
-	_shop.show_shop(_round_number, _currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _player.get_shop_summary(), _weapon_names())
+	_shop.show_shop(_round_number, _currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _shop_player_summary(), _weapon_names())
+
+
+func _shop_player_summary() -> Dictionary:
+	var summary := _player.get_shop_summary()
+	summary["shop_wave"] = _round_number
+	summary["shop_endless"] = _endless_mode
+	return summary
 
 
 func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
@@ -1377,18 +1501,34 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 		if not owns_weapon:
 			if weapon_controller.has_method("get_weapon_slot_count") and int(weapon_controller.call("get_weapon_slot_count")) < SurvivorAutoWeapon.MAX_WEAPON_SLOTS:
 				var new_offer := weapon.duplicate(true) as WeaponDefinition
-				new_offer.tier = 1
+				new_offer.tier = _roll_progression_tier(_round_number, false)
 				new_offer.shop_offer_kind = WeaponDefinition.ShopOfferKind.NEW_WEAPON
 				candidates.append(new_offer)
 			continue
 		var current_tier := int(weapon_controller.call("get_weapon_tier", weapon.id)) if weapon_controller.has_method("get_weapon_tier") else 1
+		var is_deployable := weapon.attack_mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]
+		if is_deployable:
+			var deployable_count := int(weapon_controller.call("get_deployable_count", weapon.id)) if weapon_controller.has_method("get_deployable_count") else 1
+			if deployable_count < SurvivorAutoWeapon.MAX_DEPLOYABLE_INSTANCES:
+				var extra_offer := weapon.duplicate(true) as WeaponDefinition
+				extra_offer.tier = current_tier
+				extra_offer.shop_offer_kind = WeaponDefinition.ShopOfferKind.DEPLOYABLE_COPY
+				extra_offer.description = "Add one more independent %s for the next shift. Copies stay at Tier %s; they never merge." % ["turret" if weapon.attack_mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else "mine", _tier_roman(current_tier)]
+				candidates.append(extra_offer)
+			continue
 		if current_tier < 4:
 			var merge_offer := weapon.duplicate(true) as WeaponDefinition
 			merge_offer.tier = current_tier + 1
 			merge_offer.shop_offer_kind = WeaponDefinition.ShopOfferKind.MERGE_COPY
 			merge_offer.description = "Buy a matching copy to merge this tool into Tier %s." % _tier_roman(current_tier + 1)
 			candidates.append(merge_offer)
-			var available_direct_tier := clampi(1 + floori(float(_round_number + _player.current_level) / 9.0), 2, 4)
+			var available_direct_tier := 1
+			if _round_number >= 8:
+				available_direct_tier = 4
+			elif _round_number >= 4:
+				available_direct_tier = 3
+			elif _round_number >= 2:
+				available_direct_tier = 2
 			if current_tier + 1 < available_direct_tier:
 				var direct_offer := weapon.duplicate(true) as WeaponDefinition
 				direct_offer.tier = available_direct_tier
@@ -1406,14 +1546,46 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 	candidates.shuffle()
 	var offers: Array = []
 	var candidate_keys: Dictionary = {}
+	var weapon_candidates: Array = []
 	for candidate: Variant in candidates:
-		if offers.size() >= ShiftShop.MAX_OFFERS:
+		if candidate is WeaponDefinition and candidate.attack_mode not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			weapon_candidates.append(candidate)
+	# Supplied wiki data constrains the opening five shops: shops 1-2 reserve
+	# two weapon slots; shops 3-5 reserve one. Deployables occupy skill slots.
+	var guaranteed_weapon_count := 2 if _round_number <= 2 else (1 if _round_number <= 5 else 0)
+	var max_early_weapon_count := 2 if _round_number <= 2 else ShiftShop.MAX_OFFERS
+	var normal_weapon_count := 0
+	for candidate: Variant in weapon_candidates:
+		if normal_weapon_count >= guaranteed_weapon_count or offers.size() >= ShiftShop.MAX_OFFERS:
 			break
 		var key := _shop_candidate_key(candidate)
-		if candidate_keys.has(key) or excluded_keys.has(key):
+		if excluded_keys.has(key) or candidate_keys.has(key):
 			continue
 		candidate_keys[key] = true
 		offers.append(candidate)
+		normal_weapon_count += 1
+	while offers.size() < ShiftShop.MAX_OFFERS:
+		var available_weapons: Array = []
+		var available_items: Array = []
+		for candidate: Variant in candidates:
+			var key := _shop_candidate_key(candidate)
+			if candidate_keys.has(key) or excluded_keys.has(key):
+				continue
+			var is_normal_weapon: bool = candidate is WeaponDefinition and candidate.attack_mode not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]
+			if is_normal_weapon and normal_weapon_count >= max_early_weapon_count:
+				continue
+			(available_weapons if is_normal_weapon else available_items).append(candidate)
+		if available_weapons.is_empty() and available_items.is_empty():
+			break
+		var wants_weapon := randf() >= 0.65
+		var pool: Array = available_weapons if wants_weapon else available_items
+		if pool.is_empty():
+			pool = available_items if wants_weapon else available_weapons
+		var candidate: Variant = pool[randi_range(0, pool.size() - 1)]
+		candidate_keys[_shop_candidate_key(candidate)] = true
+		offers.append(candidate)
+		if candidate is WeaponDefinition and candidate.attack_mode not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			normal_weapon_count += 1
 	for stat_offer: Dictionary in _eligible_stat_shop_offers():
 		if offers.size() >= ShiftShop.MAX_OFFERS:
 			break
@@ -1462,12 +1634,16 @@ func _build_stat_choices() -> Array[Dictionary]:
 	var lifesteal_bonus := minf(0.07, 0.02 + float(progress_tier) * 0.0125)
 	var dodge_bonus := minf(0.07, 0.02 + float(progress_tier) * 0.0125)
 	var protection_bonus := minf(0.07, 0.03 + float(progress_tier) * 0.01)
+	var luck_bonus := 5 + progress_tier * 2
+	var armor_bonus := 1 + floori(float(progress_tier) / 2.0)
 	return [
 		{"id": &"speed", "name": "QUICKER FEET", "description": "+%d%% movement speed for this run." % roundi(speed_bonus * 100.0), "value": speed_bonus},
 		{"id": &"health", "name": "HEALTHIER SHIFT", "description": "+%d maximum health and restore %d health now." % [health_bonus, health_bonus], "value": float(health_bonus)},
 		{"id": &"lifesteal", "name": "RETURNING ENERGY", "description": "Recover %d%% of damage dealt as health." % roundi(lifesteal_bonus * 100.0), "value": lifesteal_bonus},
 		{"id": &"dodge", "name": "QUICK REFLEXES", "description": "+%d%% chance to dodge an incoming hit." % roundi(dodge_bonus * 100.0), "value": dodge_bonus},
 		{"id": &"protection", "name": "PROTECTIVE APRON", "description": "Reduce each hit's damage by %d%% for this run." % roundi(protection_bonus * 100.0), "value": protection_bonus},
+		{"id": &"armor", "name": "REINFORCED APRON", "description": "Reduce each incoming hit by %d flat damage." % armor_bonus, "value": float(armor_bonus)},
+		{"id": &"luck", "name": "LUCKY STICKER", "description": "+%d%% luck improves rare upgrade offers and small health drops." % luck_bonus, "value": float(luck_bonus)},
 	]
 
 
@@ -1476,7 +1652,7 @@ func _repeatable_stat_fallback(variant_index: int) -> Dictionary:
 	var repeatable_choices: Array[Dictionary] = []
 	for choice: Dictionary in choices:
 		var choice_id := StringName(choice.get("id", &""))
-		if choice_id in [&"health", &"speed", &"protection"] and _player.can_apply_level_stat_delta(choice_id, float(choice.get("value", 0.0))):
+		if choice_id in [&"health", &"speed", &"protection", &"armor", &"luck"] and _player.can_apply_level_stat_delta(choice_id, float(choice.get("value", 0.0))):
 			repeatable_choices.append(choice)
 	if repeatable_choices.is_empty():
 		return {}
@@ -1509,23 +1685,47 @@ func _tier_roman(tier: int) -> String:
 func _prices_for_offers(offers: Array) -> Array[int]:
 	var prices: Array[int] = []
 	for offer: Variant in offers:
-		var progression := _round_number + floori(float(_player.current_level) / 2.0)
 		var offer_id: StringName = StringName(offer.get("id", &"")) if offer is Dictionary else StringName(offer.id)
 		var base_price := 7 + _player.get_upgrade_rank(offer_id) * 3
 		if offer is WeaponDefinition:
 			match offer.shop_offer_kind:
 				WeaponDefinition.ShopOfferKind.NEW_WEAPON:
-					base_price = 12
+					base_price = 12 + (offer.tier - 1) * 4
 				WeaponDefinition.ShopOfferKind.MERGE_COPY:
 					base_price = 10 + offer.tier * 3
 				WeaponDefinition.ShopOfferKind.DIRECT_TIER:
 					base_price = 12 + offer.tier * offer.tier * 3
-		prices.append(clampi(base_price + floori(float(progression) * (0.8 if offer is WeaponDefinition else 0.5)), 1, 999))
+				WeaponDefinition.ShopOfferKind.DEPLOYABLE_COPY:
+					base_price = 8 + offer.tier * 2
+		prices.append(_inflated_shop_price(base_price))
 	return prices
 
 
+func _inflated_shop_price(base_price: int) -> int:
+	# Brotato's reference depends on base price, wave and price modifiers.
+	# This project's lower token scale uses a softer, still wave-linked curve.
+	var wave := _shop_economy_wave()
+	var inflation := floori(float(wave) * (0.70 + float(base_price) * 0.05))
+	var endless_factor := _endless_price_factor()
+	return clampi(floori(float(base_price + inflation) * endless_factor), 1, 999)
+
+
 func _reroll_price() -> int:
-	return 5 + _shop_reroll_count * 3
+	var wave := _shop_economy_wave()
+	var increase := maxi(1, floori(float(wave) * 0.40))
+	var first_price := floori(float(wave) * 0.75) + increase
+	var raw_price := first_price + _shop_reroll_count * increase
+	return maxi(1, floori(float(raw_price) * _endless_price_factor()))
+
+
+func _shop_economy_wave() -> int:
+	return clampi(_round_number, 1, 60) if _endless_mode else maxi(1, _round_number)
+
+
+func _endless_price_factor() -> float:
+	if not _endless_mode:
+		return 1.0
+	return 1.0 + minf(0.60, float(maxi(0, _round_number - CAMPAIGN_WAVE_COUNT)) * 0.01)
 
 
 func _on_shop_offer_purchased(index: int) -> void:
@@ -1553,7 +1753,7 @@ func _on_shop_offer_purchased(index: int) -> void:
 		_purchased_shop_indices.append(index)
 	_hud.set_weapons(_weapon_names())
 	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
-	_shop.set_shop_summary(_player.get_shop_summary(), _weapon_names())
+	_shop.set_shop_summary(_shop_player_summary(), _weapon_names())
 
 
 func _on_shop_weapon_sell_requested(weapon_id: StringName) -> void:
@@ -1565,10 +1765,19 @@ func _on_shop_weapon_sell_requested(weapon_id: StringName) -> void:
 	var sold: Dictionary = weapon_controller.call("sell_weapon", weapon_id)
 	if sold.is_empty():
 		return
-	_currency += int(sold.get("payout", 0))
+	var base_price := 12 + (clampi(int(sold.get("tier", 1)), 1, 4) - 1) * 4
+	for definition: WeaponDefinition in WEAPON_DEFINITIONS:
+		if definition.id == weapon_id and definition.attack_mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			base_price = 8 + clampi(int(sold.get("tier", 1)), 1, 4) * 2
+			break
+	# A sold weapon refunds a custom 45% of its current shelf value, so the
+	# return follows wave inflation without turning sales into a profit loop.
+	var refund := maxi(1, floori(float(_inflated_shop_price(base_price)) * 0.45))
+	sold["payout"] = refund
+	_currency += refund
 	_hud.set_weapons(_weapon_names())
 	_shop.set_shop_state(_currency, _active_shop_offers, _active_shop_prices, _reroll_price(), _purchased_shop_indices, _locked_shop_indices)
-	_shop.set_shop_summary(_player.get_shop_summary(), _weapon_names())
+	_shop.set_shop_summary(_shop_player_summary(), _weapon_names())
 
 
 func _on_shop_reroll_requested() -> void:

@@ -4,6 +4,7 @@ extends Node
 ## Window modes (Fullscreen, Borderless, Windowed), and settings persistence.
 
 signal display_settings_changed
+signal touch_controls_changed(enabled: bool)
 
 const SETTINGS_PATH := "user://settings.cfg"
 
@@ -29,6 +30,7 @@ enum WindowMode {
 
 var current_resolution_index: int = 0 # Default 1920x1080
 var current_window_mode: int = WindowMode.WINDOWED
+var touch_controls_enabled: bool = false
 
 
 func _ready() -> void:
@@ -66,6 +68,14 @@ func set_window_mode(mode: int) -> void:
 	display_settings_changed.emit()
 
 
+func set_touch_controls_enabled(enabled: bool) -> void:
+	if touch_controls_enabled == enabled:
+		return
+	touch_controls_enabled = enabled
+	save_settings()
+	touch_controls_changed.emit(touch_controls_enabled)
+
+
 func apply_display() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -100,6 +110,7 @@ func save_settings() -> void:
 	config.load(SETTINGS_PATH)
 	config.set_value("display", "resolution_index", current_resolution_index)
 	config.set_value("display", "window_mode", current_window_mode)
+	config.set_value("input", "touch_controls_enabled", touch_controls_enabled)
 	config.save(SETTINGS_PATH)
 
 
@@ -108,6 +119,7 @@ func load_settings() -> void:
 	if config.load(SETTINGS_PATH) == OK:
 		current_resolution_index = clampi(int(config.get_value("display", "resolution_index", 0)), 0, RESOLUTIONS.size() - 1)
 		current_window_mode = clampi(int(config.get_value("display", "window_mode", int(WindowMode.WINDOWED))), 0, 2)
+		touch_controls_enabled = bool(config.get_value("input", "touch_controls_enabled", false))
 	else:
 		# Check screen resolution to pick optimal default
 		var screen_size := DisplayServer.screen_get_size()

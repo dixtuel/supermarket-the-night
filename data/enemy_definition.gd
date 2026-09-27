@@ -34,10 +34,18 @@ enum AttackType {
 ## Fields consumed by the current chase/contact enemy implementation.
 @export_range(0.0, 1000.0, 1.0) var move_speed: float = 60.0
 @export_range(1, 100000, 1) var max_health: int = 30
+## Flat, enemy-specific additions applied for each wave after wave 1. This
+## follows the supplied reference's +HP/+damage per wave model; authored wave
+## multipliers remain a separate encounter-level pressure control.
+@export_range(0.0, 5000.0, 0.1) var health_growth_per_wave: float = 0.0
+@export_range(0.0, 1000.0, 0.1) var damage_growth_per_wave: float = 0.0
 @export_range(0, 10000, 1) var contact_damage: int = 8
 @export_range(1.0, 256.0, 1.0) var contact_range: float = 36.0
 @export_range(0.05, 60.0, 0.05) var contact_interval: float = 1.0
 @export_range(0, 10000, 1) var xp_reward: int = 1
+## Stock tokens are a separate reward from XP, so enemy and economy tuning can
+## move independently.
+@export_range(0, 10000, 1) var material_reward: int = 1
 
 ## Optional role-specific behavior data for future actor controllers.
 @export var attack_type: AttackType = AttackType.CONTACT

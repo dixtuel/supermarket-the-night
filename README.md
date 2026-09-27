@@ -10,7 +10,7 @@
 [![Assets: CC0](https://img.shields.io/badge/Assets-CC0_1.0-blue.svg)](ASSET_LICENSE.md)
 [![itch.io](https://img.shields.io/badge/itch.io-Supermarket%3A%20The%20Night-FA5C5C?logo=itchdotio&logoColor=white)](https://dixtuel.itch.io/supermarket-the-night)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20Android-blue)](https://dixtuel.itch.io/supermarket-the-night)
-[![Status](https://img.shields.io/badge/Version-0.2.1--alpha-success)](#)
+[![Status](https://img.shields.io/badge/Version-0.2.2--alpha-success)](#)
 
 <br/>
 

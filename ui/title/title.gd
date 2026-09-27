@@ -662,6 +662,33 @@ func _is_mobile_platform() -> bool:
 	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios") or DisplayServer.is_touchscreen_available()
 
 
+func _is_native_mobile_platform() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+
+
+func _add_touch_controls_setting(parent: VBoxContainer) -> void:
+	var toggle := CheckButton.new()
+	toggle.text = I18n.t("SETTINGS_TOUCH_CONTROLS", "Dokunmatik joystick kullan")
+	toggle.button_pressed = DisplayManager.touch_controls_enabled
+	toggle.custom_minimum_size.y = maxf(40.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
+	toggle.focus_mode = Control.FOCUS_ALL
+	toggle.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	toggle.add_theme_color_override("font_color", COLOR_BASE_DARK)
+	toggle.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
+	toggle.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+	toggle.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
+	toggle.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
+	toggle.add_theme_stylebox_override("focus", _receipt_button_style(true, false, &"focus"))
+	toggle.add_theme_stylebox_override("pressed", _receipt_button_style(true, false, &"pressed"))
+	toggle.toggled.connect(func(enabled: bool) -> void:
+		DisplayManager.set_touch_controls_enabled(enabled)
+		BakkalAudio.play_sfx(&"ui_confirm")
+		_close_modal()
+		_show_settings()
+	)
+	parent.add_child(toggle)
+
+
 func _safe_insets(viewport_size: Vector2) -> Vector4:
 	if not _is_mobile_platform() or get_window() == null:
 		return Vector4.ZERO
@@ -907,6 +934,9 @@ func _show_settings() -> void:
 		m_btn.custom_minimum_size.y = maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 		mode_row.add_child(m_btn)
 
+	if not _is_native_mobile_platform():
+		_add_touch_controls_setting(stack)
+
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
 
 	# 4. Audio settings
@@ -1017,8 +1047,8 @@ func _show_credits() -> void:
 
 	columns.add_child(_credit_category(
 		"PEOPLE",
-		"[center]Producer / Developer\n[b]Asrın Kılıç (dixtuel)[/b]\n\nIdea contributors\nkiyici + [b]I3aN.Ka![/b][/center]",
-		Vector2(270, 168)
+		"[center]Producer / Developer\n[b]Asrın Kılıç (dixtuel)[/b]\n\nIdea contributors\nkiyici + [b]I3aN.Ka![/b]\n\nTester: Temuchin[/center]",
+		Vector2(270, 188)
 	))
 	columns.add_child(_credit_category(
 		"PRODUCTION",

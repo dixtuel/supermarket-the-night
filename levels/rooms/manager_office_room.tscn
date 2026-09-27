@@ -200,5 +200,5 @@ target_room_id = &"depot"
 arrival_position = Vector2(493, -161)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ExitToDepot" unique_id=390468643]
-position = Vector2(34.899994, 4.424988)
+position = Vector2(32.899994, -18.100006)
 shape = SubResource("sub_25_exittodepot")

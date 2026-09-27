@@ -76,6 +76,7 @@ func damage_multiplier(context: Dictionary) -> float:
 	var dodge: float = clampf(float(profile.get("dodge_chance", 0.0)), 0.0, 0.8)
 	var lifesteal: float = clampf(float(profile.get("lifesteal_fraction", 0.0)), 0.0, 0.5)
 	var protection: float = clampf(float(profile.get("protection_fraction", 0.0)), 0.0, 0.3)
+	var armor: float = clampf(float(profile.get("armor", 0.0)), 0.0, 50.0)
 	var move_speed: float = maxf(1.0, float(profile.get("effective_move_speed", 220.0)))
 	# Effective durability is estimated from the actual run stats. Exponents keep
 	# each defensive investment meaningful while making the response sublinear;
@@ -84,8 +85,9 @@ func damage_multiplier(context: Dictionary) -> float:
 	var dodge_factor: float = pow(1.0 / maxf(0.2, 1.0 - dodge), 0.22)
 	var sustain_factor: float = pow(1.0 + lifesteal * 1.2, 0.18)
 	var protection_factor: float = pow(1.0 / (1.0 - protection), 0.24)
+	var armor_factor: float = pow(1.0 + armor / 10.0, 0.10)
 	var mobility_factor: float = pow(maxf(0.5, move_speed / 220.0), 0.14)
-	var durability_response: float = health_factor * dodge_factor * sustain_factor * protection_factor * mobility_factor
+	var durability_response: float = health_factor * dodge_factor * sustain_factor * protection_factor * armor_factor * mobility_factor
 	# Critical health eases pressure slightly, but health loss can only lower the
 	# multiplier by a small amount so taking damage is not an exploit.
 	var health_ratio: float = clampf(current_health / max_health, 0.0, 1.0)

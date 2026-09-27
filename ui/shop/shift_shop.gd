@@ -237,7 +237,7 @@ func _build_shop() -> void:
 	_reroll_button.pressed.connect(_on_reroll_pressed)
 	if mobile:
 		_reroll_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		right_header.add_child(_reroll_button)
+	right_header.add_child(_reroll_button)
 	if portrait and not mobile:
 		_round_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_round_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -318,7 +318,7 @@ func _build_shop_sidebar() -> VBoxContainer:
 	if mobile:
 		stats_title.add_theme_font_size_override("font_size", stat_title_font)
 	stats_content.add_child(stats_title)
-	for key: String in ["level", "health", "damage", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection"]:
+	for key: String in ["level", "health", "damage", "melee_damage", "ranged_damage", "attack_speed", "crit_chance", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection", "armor", "harvesting", "luck", "xp_gain"]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		var stat_label := "Elemental Damage" if key == "elemental_damage" else ("Engineering" if key == "engineering" else key.replace("_", " ").capitalize())
@@ -355,7 +355,7 @@ func _update_shop_sidebar() -> void:
 		return
 	var stats_content := _shop_sidebar.find_child("StatsContent", true, false) as VBoxContainer
 	if is_instance_valid(stats_content):
-		for key: String in ["level", "health", "damage", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection"]:
+		for key: String in ["level", "health", "damage", "melee_damage", "ranged_damage", "attack_speed", "crit_chance", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection", "armor", "harvesting", "luck", "xp_gain"]:
 			var value_label := stats_content.find_child("Value_" + key, true, false) as Label
 			if is_instance_valid(value_label):
 				value_label.text = str(_player_summary.get(key, "—"))
@@ -446,21 +446,57 @@ func _add_inventory_chip(row: HBoxContainer, record: Dictionary, kind: String, c
 	var tier := clampi(int(record.get("tier", 1)), 1, 4)
 	var name := String(record.get("name", id.replace("_", " ").capitalize()))
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(84, 42)
-	button.text = "%s  ×%d" % [name, count] if count > 0 else name
+	var icon_only := kind in ["TURRET", "MINE", "UPGRADE"]
+	button.custom_minimum_size = Vector2(58, 50) if icon_only else Vector2(84, 42)
+	button.text = "" if icon_only else ("%s  ×%d" % [name, count] if count > 0 else name)
 	button.tooltip_text = "%s · %s" % [kind, name]
 	var icon := record.get("icon") as Texture2D
 	if icon == null and ResourceLoader.exists("res://assets/generated/shop_icons/%s.png" % id):
 		icon = load("res://assets/generated/shop_icons/%s.png" % id) as Texture2D
-	if icon == null and kind == "UPGRADE":
+	if icon == null and icon_only:
 		icon = load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
 	if icon != null:
-		button.icon = icon
-		button.expand_icon = true
+		var image := TextureRect.new()
+		image.texture = icon
+		image.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		image.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		image.offset_left = 4
+		image.offset_top = 4
+		image.offset_right = -4
+		image.offset_bottom = -4
+		image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(image)
 	button.add_theme_font_size_override("font_size", 14)
 	button.add_theme_stylebox_override("normal", _tier_style(tier))
 	button.add_theme_stylebox_override("hover", _tier_style(tier).duplicate())
+	if kind in ["TURRET", "MINE"]:
+		_add_inventory_badge(button, _tier_suffix(tier), true)
+		_add_inventory_badge(button, "×%d" % maxi(1, count), false)
+	elif kind == "UPGRADE":
+		_add_inventory_badge(button, "R%d" % maxi(1, count), false)
 	row.add_child(button)
+
+
+func _add_inventory_badge(button: Button, text: String, top_right: bool) -> void:
+	var badge := Label.new()
+	badge.text = text
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_theme_font_size_override("font_size", 11)
+	badge.add_theme_color_override("font_color", INK)
+	badge.add_theme_stylebox_override("normal", _style(Color("f8f5e9", 0.94), PANEL_EDGE, 2, 1))
+	if top_right:
+		badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		badge.position = Vector2(-23, 2)
+		badge.size = Vector2(21, 17)
+	else:
+		badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		badge.position = Vector2(-34, -19)
+		badge.size = Vector2(32, 17)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(badge)
 
 
 func _add_weapon_chip(weapon: Dictionary) -> void:
@@ -524,10 +560,19 @@ func _on_weapon_chip_pressed(weapon: Dictionary) -> void:
 	_add_detail_stat("Range", str(weapon.get("range", 0)))
 	_add_detail_stat("Area", str(weapon.get("area", 0)))
 	_add_detail_stat("Pierce", str(weapon.get("pierce", 0)))
-	_weapon_detail_sell.text = "Sell · %d tokens" % (4 + clampi(int(weapon.get("tier", 1)), 1, 4) * 3)
+	_weapon_detail_sell.text = "Sell · %d tokens" % _weapon_sell_price(weapon)
 	_weapon_detail_sell.disabled = inventory_weapon_count() <= 1
 	_weapon_detail_overlay.show()
 	_layout_weapon_detail()
+
+
+func _weapon_sell_price(weapon: Dictionary) -> int:
+	var tier := clampi(int(weapon.get("tier", 1)), 1, 4)
+	var base_price := 12 + (tier - 1) * 4
+	var wave := maxi(1, int(_player_summary.get("shop_wave", _current_round_number)))
+	var inflation := floori(float(wave) * (0.70 + float(base_price) * 0.05))
+	var endless_factor := 1.0 + float(maxi(0, wave - 20)) * 0.015 if bool(_player_summary.get("shop_endless", false)) else 1.0
+	return maxi(1, floori(float(floori(float(base_price + inflation) * endless_factor)) * 0.45))
 
 
 func inventory_weapon_count() -> int:
@@ -711,6 +756,9 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 			WeaponDefinition.ShopOfferKind.DIRECT_TIER:
 				type_name = "%s DIRECT %s" % ["SKILL · " + deployable_kind if not deployable_kind.is_empty() else "WEAPON", tier_name]
 				purchase_text = "BUY %s" % tier_name
+			WeaponDefinition.ShopOfferKind.DEPLOYABLE_COPY:
+				type_name = "EXTRA %s  ·  %s" % [deployable_kind, tier_name]
+				purchase_text = "BUY EXTRA"
 			_:
 				type_name = "NEW SKILL · %s  ·  %s" % [deployable_kind, tier_name] if not deployable_kind.is_empty() else "NEW WEAPON  ·  %s" % tier_name
 				purchase_text = "BUY WEAPON"
@@ -942,7 +990,7 @@ func _touch_target_size(viewport_size: Vector2) -> float:
 func _mobile_shop_font(viewport_size: Vector2, preferred: float) -> float:
 	# Use the available landscape height as a stable cap; the OS density scale
 	# otherwise makes text enormous on high-DPI phones running a 1920-wide canvas.
-	return clampf(viewport_size.y * 0.022, 16.0, preferred)
+	return clampf(viewport_size.y * 0.024, 17.0, preferred)
 
 
 func _mobile_layout_scale(viewport_size: Vector2) -> float:

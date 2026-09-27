@@ -9,8 +9,8 @@ signal died
 
 @export var move_speed: float = 220.0
 @export var max_health: int = 100
-@export var starting_xp_to_next_level: int = 5
-@export var level_xp_growth: float = 1.35
+@export var starting_xp_to_next_level: int = 7
+@export var level_xp_growth: float = 1.34
 @export var level_up_heal: int = 10
 @export var walk_atlas: Texture2D
 
@@ -23,6 +23,15 @@ var current_health: int
 var current_xp: int = 0
 var current_level: int = 1
 var _xp_required: int
+var _xp_gain_bonus: float = 0.0
+var _xp_gain_remainder: float = 0.0
+var _harvesting: int = 0
+var _harvesting_wave_multiplier: float = 1.0
+var _luck: int = 0
+var _melee_damage: int = 0
+var _ranged_damage: int = 0
+var _attack_speed_bonus: float = 0.0
+var _critical_chance: float = 0.0
 var _is_dead: bool = false
 var _move_speed_multiplier: float = 1.0
 var _damage_multiplier: float = 1.0
@@ -32,6 +41,7 @@ var _life_steal_fraction: float = 0.0
 var _life_steal_remainder: float = 0.0
 var _dodge_chance: float = 0.0
 var _protection_fraction: float = 0.0
+var _armor: int = 0
 var _slow_effects: Dictionary = {}
 var _speed_boosts: Dictionary = {}
 var _next_slow_id: int = 1
@@ -134,7 +144,8 @@ func take_damage(amount: int) -> void:
 	if _dodge_chance > 0.0 and randf() < _dodge_chance:
 		return
 
-	var protected_damage: int = maxi(1, roundi(float(amount) * (1.0 - _protection_fraction)))
+	var armored_damage := maxi(1, amount - _armor)
+	var protected_damage: int = maxi(1, roundi(float(armored_damage) * (1.0 - _protection_fraction)))
 	current_health = maxi(0, current_health - protected_damage)
 	BakkalAudio.play_sfx(&"player_hurt")
 	health_changed.emit(current_health, max_health)
@@ -148,7 +159,12 @@ func gain_xp(amount: int) -> void:
 	if _is_dead or amount <= 0:
 		return
 
-	current_xp += amount
+	var scaled_xp: float = float(amount) * (1.0 + _xp_gain_bonus) + _xp_gain_remainder
+	var awarded_xp: int = floori(scaled_xp)
+	_xp_gain_remainder = scaled_xp - float(awarded_xp)
+	if awarded_xp <= 0:
+		return
+	current_xp += awarded_xp
 	while current_xp >= _xp_required:
 		current_xp -= _xp_required
 		current_level += 1
@@ -246,6 +262,10 @@ func apply_level_stat(choice_id: StringName, value: float) -> bool:
 			_dodge_chance = minf(0.6, _dodge_chance + maxf(0.0, value))
 		&"protection":
 			_protection_fraction = minf(0.3, _protection_fraction + maxf(0.0, value))
+		&"armor":
+			_armor = mini(50, _armor + maxi(1, roundi(value)))
+		&"luck":
+			_luck = clampi(_luck + roundi(value), -100, 300)
 		_:
 			return false
 	return true
@@ -263,6 +283,19 @@ func apply_level_choice(choice: Dictionary) -> bool:
 		else:
 			_apply_stat_delta(stat_id, float(effect.get("value", 0.0)))
 	return true
+
+
+func resolve_wave_harvesting() -> Dictionary:
+	if _is_dead or _harvesting == 0:
+		return {"materials": 0, "xp": 0}
+	var amount := ceili(absf(float(_harvesting)) * _harvesting_wave_multiplier)
+	# Preserve the reference's 5% per-shift growth without letting endless
+	# harvesting multiply currency and XP without bound.
+	_harvesting_wave_multiplier = minf(3.0, _harvesting_wave_multiplier * 1.05)
+	if _harvesting > 0:
+		gain_xp(amount)
+		return {"materials": amount, "xp": amount}
+	return {"materials": -amount, "xp": 0}
 
 
 func can_apply_level_choice(choice: Dictionary) -> bool:
@@ -284,7 +317,7 @@ func can_apply_level_choice(choice: Dictionary) -> bool:
 
 
 func _is_supported_level_stat(stat_id: StringName) -> bool:
-	return stat_id in [&"max_health", &"damage", &"elemental_damage", &"engineering", &"move_speed", &"lifesteal", &"dodge", &"protection", &"weapon_damage", &"weapon_fire_rate"]
+	return stat_id in [&"max_health", &"damage", &"melee_damage", &"ranged_damage", &"attack_speed", &"crit_chance", &"elemental_damage", &"engineering", &"move_speed", &"lifesteal", &"dodge", &"protection", &"armor", &"harvesting", &"luck", &"xp_gain", &"weapon_damage", &"weapon_fire_rate"]
 
 
 func _level_delta_changes_stat(stat_id: StringName, value: float, effect: Dictionary = {}) -> bool:
@@ -294,7 +327,7 @@ func _level_delta_changes_stat(stat_id: StringName, value: float, effect: Dictio
 		&"max_health":
 			return roundi(value) != 0 and max_health + roundi(value) >= 1
 		&"damage":
-			var next_damage := _damage_multiplier * (1.0 + value)
+			var next_damage := _damage_multiplier + value
 			return next_damage >= 0.25 and next_damage <= 2.5 and not is_equal_approx(_damage_multiplier, next_damage)
 		&"elemental_damage":
 			return roundi(value) > 0 and _elemental_damage + roundi(value) <= 99
@@ -312,6 +345,25 @@ func _level_delta_changes_stat(stat_id: StringName, value: float, effect: Dictio
 		&"protection":
 			var next_protection := _protection_fraction + value
 			return next_protection >= 0.0 and next_protection <= 0.3 and not is_equal_approx(_protection_fraction, next_protection)
+		&"armor":
+			return roundi(value) != 0 and _armor + roundi(value) >= 0 and _armor + roundi(value) <= 50
+		&"harvesting":
+			return roundi(value) != 0 and _harvesting + roundi(value) >= 0
+		&"luck":
+			return roundi(value) != 0 and _luck + roundi(value) >= -100 and _luck + roundi(value) <= 300
+		&"xp_gain":
+			var next_xp_gain := _xp_gain_bonus + value
+			return next_xp_gain >= -0.5 and next_xp_gain <= 1.0 and not is_equal_approx(_xp_gain_bonus, next_xp_gain)
+		&"melee_damage":
+			return roundi(value) != 0 and _melee_damage + roundi(value) >= 0
+		&"ranged_damage":
+			return roundi(value) != 0 and _ranged_damage + roundi(value) >= 0
+		&"attack_speed":
+			var next_attack_speed := _attack_speed_bonus + value
+			return next_attack_speed >= -0.5 and next_attack_speed <= 1.0 and not is_equal_approx(_attack_speed_bonus, next_attack_speed)
+		&"crit_chance":
+			var next_crit_chance := _critical_chance + value
+			return next_crit_chance >= 0.0 and next_crit_chance <= 0.75 and not is_equal_approx(_critical_chance, next_crit_chance)
 	return false
 
 
@@ -322,7 +374,9 @@ func _apply_stat_delta(stat_id: StringName, value: float) -> void:
 			current_health = mini(current_health, max_health)
 			health_changed.emit(current_health, max_health)
 		&"damage":
-			_damage_multiplier = clampf(_damage_multiplier * (1.0 + value), 0.25, 2.5)
+			# Global Damage is additive percentage per point in the supplied stat
+			# reference. Keep the multiplier representation, but add each modifier.
+			_damage_multiplier = clampf(_damage_multiplier + value, 0.25, 2.5)
 		&"elemental_damage":
 			_elemental_damage = mini(99, _elemental_damage + maxi(1, roundi(value)))
 		&"engineering":
@@ -335,6 +389,38 @@ func _apply_stat_delta(stat_id: StringName, value: float) -> void:
 			_dodge_chance = clampf(_dodge_chance + value, 0.0, 0.6)
 		&"protection":
 			_protection_fraction = clampf(_protection_fraction + value, 0.0, 0.3)
+		&"armor":
+			_armor = clampi(_armor + roundi(value), 0, 50)
+		&"harvesting":
+			_harvesting = maxi(0, _harvesting + roundi(value))
+		&"luck":
+			_luck = clampi(_luck + roundi(value), -100, 300)
+		&"xp_gain":
+			_xp_gain_bonus = clampf(_xp_gain_bonus + value, -0.5, 1.0)
+		&"melee_damage":
+			_melee_damage = maxi(0, _melee_damage + roundi(value))
+		&"ranged_damage":
+			_ranged_damage = maxi(0, _ranged_damage + roundi(value))
+		&"attack_speed":
+			_attack_speed_bonus = clampf(_attack_speed_bonus + value, -0.5, 1.0)
+		&"crit_chance":
+			_critical_chance = clampf(_critical_chance + value, 0.0, 0.75)
+
+
+func get_melee_damage() -> int:
+	return _melee_damage
+
+
+func get_ranged_damage() -> int:
+	return _ranged_damage
+
+
+func get_attack_speed_bonus() -> float:
+	return _attack_speed_bonus
+
+
+func get_critical_chance() -> float:
+	return _critical_chance
 
 
 func get_attack_damage_multiplier() -> float:
@@ -380,6 +466,15 @@ func get_shop_summary() -> Dictionary:
 		"lifesteal": "%d%%" % roundi(_life_steal_fraction * 100.0),
 		"dodge": "%d%%" % roundi(_dodge_chance * 100.0),
 		"protection": "%d%%" % roundi(_protection_fraction * 100.0),
+		"armor": str(_armor),
+		"harvesting": str(_harvesting),
+		"luck": "%+d%%" % _luck,
+		"luck_raw": _luck,
+		"xp_gain": "%+d%%" % roundi(_xp_gain_bonus * 100.0),
+		"melee_damage": str(_melee_damage),
+		"ranged_damage": str(_ranged_damage),
+		"attack_speed": "%+d%%" % roundi(_attack_speed_bonus * 100.0),
+		"crit_chance": "%d%%" % roundi(_critical_chance * 100.0),
 		"weapon_training": " · ".join(weapon_training),
 		"inventory": get_shop_inventory_summary(),
 	}
@@ -412,6 +507,8 @@ func can_apply_level_stat(choice_id: StringName) -> bool:
 			return _dodge_chance < 0.6
 		&"protection":
 			return _protection_fraction < 0.3
+		&"armor":
+			return _armor < 50
 	return false
 
 
@@ -433,6 +530,10 @@ func can_apply_level_stat_delta(choice_id: StringName, value: float) -> bool:
 		&"protection":
 			var next_protection := _protection_fraction + maxf(0.0, value)
 			return next_protection > _protection_fraction and next_protection <= 0.3
+		&"armor":
+			return roundi(value) > 0 and _armor + roundi(value) <= 50
+		&"luck":
+			return roundi(value) > 0 and _luck + roundi(value) <= 300
 	return false
 
 
@@ -458,6 +559,10 @@ func get_effective_move_speed() -> float:
 	return maxf(0.0, move_speed * _move_speed_multiplier * strongest_boost * strongest_slow)
 
 
+func get_luck() -> int:
+	return _luck
+
+
 func get_survivability_profile() -> Dictionary:
 	## Runtime snapshot for systems that need to adapt encounter pressure without
 	## reaching into private player state. Returned values do not mutate the actor.
@@ -467,6 +572,16 @@ func get_survivability_profile() -> Dictionary:
 		"dodge_chance": _dodge_chance,
 		"lifesteal_fraction": _life_steal_fraction,
 		"protection_fraction": _protection_fraction,
+		"armor": _armor,
+		"harvesting": _harvesting,
+		"luck": _luck,
+		"harvesting_wave_multiplier": _harvesting_wave_multiplier,
+		"xp_gain_bonus": _xp_gain_bonus,
+		"xp_gain_remainder": _xp_gain_remainder,
+		"melee_damage": _melee_damage,
+		"ranged_damage": _ranged_damage,
+		"attack_speed_bonus": _attack_speed_bonus,
+		"critical_chance": _critical_chance,
 		"effective_move_speed": get_effective_move_speed(),
 	}
 
@@ -538,6 +653,16 @@ func get_save_data() -> Dictionary:
 		"life_steal_fraction": _life_steal_fraction,
 		"dodge_chance": _dodge_chance,
 		"protection_fraction": _protection_fraction,
+		"armor": _armor,
+		"harvesting": _harvesting,
+		"luck": _luck,
+		"harvesting_wave_multiplier": _harvesting_wave_multiplier,
+		"xp_gain_bonus": _xp_gain_bonus,
+		"xp_gain_remainder": _xp_gain_remainder,
+		"melee_damage": _melee_damage,
+		"ranged_damage": _ranged_damage,
+		"attack_speed_bonus": _attack_speed_bonus,
+		"critical_chance": _critical_chance,
 		"upgrade_ranks": _upgrade_ranks.duplicate(),
 	}
 
@@ -555,6 +680,16 @@ func restore_save_data(data: Dictionary) -> void:
 	_life_steal_fraction = clampf(float(data.get("life_steal_fraction", 0.0)), 0.0, 0.25)
 	_dodge_chance = clampf(float(data.get("dodge_chance", 0.0)), 0.0, 0.6)
 	_protection_fraction = clampf(float(data.get("protection_fraction", 0.0)), 0.0, 0.3)
+	_armor = clampi(int(data.get("armor", 0)), 0, 50)
+	_harvesting = maxi(0, int(data.get("harvesting", 0)))
+	_luck = clampi(int(data.get("luck", 0)), -100, 300)
+	_harvesting_wave_multiplier = maxf(1.0, float(data.get("harvesting_wave_multiplier", 1.0)))
+	_xp_gain_bonus = clampf(float(data.get("xp_gain_bonus", 0.0)), -0.5, 1.0)
+	_xp_gain_remainder = clampf(float(data.get("xp_gain_remainder", 0.0)), 0.0, 0.999)
+	_melee_damage = maxi(0, int(data.get("melee_damage", 0)))
+	_ranged_damage = maxi(0, int(data.get("ranged_damage", 0)))
+	_attack_speed_bonus = clampf(float(data.get("attack_speed_bonus", 0.0)), -0.5, 1.0)
+	_critical_chance = clampf(float(data.get("critical_chance", 0.0)), 0.0, 0.75)
 	_upgrade_ranks = (data.get("upgrade_ranks", {}) as Dictionary).duplicate()
 	health_changed.emit(current_health, max_health)
 	progress_changed.emit(current_xp, _xp_required, current_level)

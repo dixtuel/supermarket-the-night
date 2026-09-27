@@ -4,8 +4,10 @@ class_name SurvivorAutoWeapon
 signal weapon_unlocked(weapon_id: StringName, display_name: String)
 
 const MAX_WEAPON_SLOTS := 6
+const MAX_DEPLOYABLE_INSTANCES := 6
 const MINE_REDEPLOY_DELAY := 1.8
 const OFF_ROOM_TURRET_CHANCE := 0.06
+const TURRET_INITIAL_SPAWN_DELAY := 1.5
 const DEPLOYABLE_ROOM_IDS: Array[StringName] = [&"market", &"depot", &"restroom", &"manager_office"]
 
 @export var projectile_scene: PackedScene
@@ -54,12 +56,12 @@ func begin_wave(room_id: StringName) -> void:
 		var instances: Array = state["deployable_instances"]
 		var cooldowns: Array = state["deployable_respawn"]
 		var spawn_delays: Array = state["deployable_spawn_delays"]
-		var desired_count := maxi(1, int(state.get("projectile_count", 1)))
+		var desired_count := clampi(int(state.get("deployable_count", maxi(1, int(state.get("projectile_count", 1))))), 1, MAX_DEPLOYABLE_INSTANCES)
 		for index: int in range(desired_count):
 			if index < instances.size() and is_instance_valid(instances[index]):
 				continue
 			if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
-				spawn_delays[index] = _deployable_rng.randf_range(0.0, 4.0)
+				spawn_delays[index] = _deployable_rng.randf_range(0.0, TURRET_INITIAL_SPAWN_DELAY if index == 0 else 4.0)
 				continue
 			if mode == WeaponDefinition.AttackMode.DEPLOYED_MINE and float(cooldowns[index]) > 0.0:
 				continue
@@ -119,6 +121,15 @@ func get_weapon_tier(weapon_id: StringName) -> int:
 	return int((_weapon_states[weapon_id] as Dictionary).get("tier", 1))
 
 
+func get_deployable_count(weapon_id: StringName) -> int:
+	if not _weapon_states.has(weapon_id):
+		return 0
+	var state: Dictionary = _weapon_states[weapon_id]
+	if int(state.get("attack_mode", -1)) not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+		return 0
+	return clampi(int(state.get("deployable_count", 1)), 1, MAX_DEPLOYABLE_INSTANCES)
+
+
 func get_level_choice_weapon_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
 	for weapon_id: StringName in _weapon_order:
@@ -129,6 +140,7 @@ func get_level_choice_weapon_targets() -> Array[Dictionary]:
 			"id": String(weapon_id),
 			"name": String(state.get("display_name", String(weapon_id))),
 			"damage_type": int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
+			"damage_scaling_stat": int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)),
 			"engineering_coefficient": float(state.get("engineering_coefficient", 0.0)),
 			"is_structure": int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE],
 			"supports_fire_rate": int(state.get("attack_mode", -1)) != WeaponDefinition.AttackMode.ORBITAL_CONTACT,
@@ -180,6 +192,16 @@ func purchase_weapon_offer(offer: WeaponDefinition) -> bool:
 			return false
 		return unlock_weapon(offer)
 	var current_tier := get_weapon_tier(offer.id)
+	var state: Dictionary = _weapon_states[offer.id]
+	if offer.shop_offer_kind == WeaponDefinition.ShopOfferKind.DEPLOYABLE_COPY:
+		if int(state.get("attack_mode", -1)) not in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+			return false
+		var owned_count := maxi(1, int(state.get("deployable_count", 1)))
+		if owned_count >= MAX_DEPLOYABLE_INSTANCES or offer.tier != current_tier:
+			return false
+		state["deployable_count"] = owned_count + 1
+		_weapon_states[offer.id] = state
+		return true
 	match offer.shop_offer_kind:
 		WeaponDefinition.ShopOfferKind.MERGE_COPY:
 			return current_tier < 4 and offer.tier == current_tier + 1 and _raise_weapon_tier(offer.id, current_tier + 1)
@@ -282,7 +304,7 @@ func get_shop_inventory_summary() -> Dictionary:
 			var kind := "turret" if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else "mine"
 			var key := "%s:%d" % [String(weapon_id), tier]
 			deployable_indices[key] = deployables.size()
-			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
+			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": maxi(1, int(state.get("deployable_count", 1))), "icon": definition.sprite if definition != null else null})
 			continue
 		weapons.append({
 			"id": String(weapon_id),
@@ -308,8 +330,6 @@ func get_shop_inventory_summary() -> Dictionary:
 			var definition := _weapon_catalog.get(weapon_id) as WeaponDefinition
 			deployable_indices[key] = deployables.size()
 			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
-		var record_index := int(deployable_indices[key])
-		deployables[record_index]["count"] = int(deployables[record_index].get("count", 0)) + 1
 	return {"weapons": weapons, "deployables": deployables}
 
 
@@ -432,7 +452,8 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 				float(state["projectile_lifetime"]),
 				int(state["pierce_count"])
 			)
-		projectile.set_weapon_visual(state.get("sprite") as Texture2D)
+		var sprite_size := 29.0 if StringName(state.get("id", &"")) == &"can_launcher" else 28.0
+		projectile.set_weapon_visual(state.get("sprite") as Texture2D, sprite_size)
 		fired = true
 	return fired
 
@@ -475,10 +496,13 @@ func _ensure_orbitals(weapon_id: StringName, state: Dictionary) -> void:
 	_weapon_states[weapon_id] = state
 
 
-func _effective_damage(base_damage: int, damage_type: int = WeaponDefinition.DamageType.PHYSICAL) -> int:
+func _effective_damage(
+		base_damage: int,
+		damage_type: int = WeaponDefinition.DamageType.PHYSICAL,
+		elemental_coefficient: float = 1.0) -> int:
 	var typed_damage := base_damage
 	if damage_type == WeaponDefinition.DamageType.ELEMENTAL and is_instance_valid(_owner_actor) and _owner_actor.has_method("get_elemental_damage"):
-		typed_damage += int(_owner_actor.call("get_elemental_damage"))
+		typed_damage += roundi(float(_owner_actor.call("get_elemental_damage")) * clampf(elemental_coefficient, 0.0, 2.0))
 	if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_attack_damage_multiplier"):
 		return maxi(1, roundi(float(typed_damage) * float(_owner_actor.call("get_attack_damage_multiplier"))))
 	return maxi(1, typed_damage)
@@ -486,7 +510,22 @@ func _effective_damage(base_damage: int, damage_type: int = WeaponDefinition.Dam
 
 func _effective_weapon_damage(state: Dictionary) -> int:
 	var tuned_damage := int(state.get("damage", 1)) + int(state.get("level_damage_add", 0))
-	return _effective_damage(tuned_damage, int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)))
+	var coefficient := clampf(float(state.get("damage_scaling_coefficient", 0.5)), 0.0, 2.0)
+	if is_instance_valid(_owner_actor):
+		match int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)):
+			WeaponDefinition.DamageScalingStat.MELEE:
+				if _owner_actor.has_method("get_melee_damage"):
+					tuned_damage += roundi(float(_owner_actor.call("get_melee_damage")) * coefficient)
+			WeaponDefinition.DamageScalingStat.RANGED:
+				if _owner_actor.has_method("get_ranged_damage"):
+					tuned_damage += roundi(float(_owner_actor.call("get_ranged_damage")) * coefficient)
+			WeaponDefinition.DamageScalingStat.ELEMENTAL:
+				pass
+	return _effective_damage(
+		tuned_damage,
+		int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
+		coefficient
+	)
 
 
 func _effective_structure_damage(state: Dictionary) -> int:
@@ -498,7 +537,12 @@ func _effective_structure_damage(state: Dictionary) -> int:
 
 func _effective_fire_interval(state: Dictionary) -> float:
 	var rate_bonus := clampf(float(state.get("level_fire_rate_bonus", 0.0)), 0.0, 0.3)
-	return maxf(0.05, float(state.get("fire_interval", fire_interval)) / (1.0 + rate_bonus))
+	var player_rate_bonus := 0.0
+	if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_attack_speed_bonus"):
+		player_rate_bonus = float(_owner_actor.call("get_attack_speed_bonus"))
+	# Brotato's reference caps weapon rate at 12 hits per second. Use the same
+	# readable safety ceiling for handheld weapons and thrown beacon skills.
+	return maxf(1.0 / 12.0, float(state.get("fire_interval", fire_interval)) / ((1.0 + rate_bonus) * (1.0 + player_rate_bonus)))
 
 
 func _create_projectile(spawn_position: Vector2) -> Area2D:
@@ -524,10 +568,37 @@ func _find_nearest_enemy(range_limit: float) -> Node2D:
 		if enemy.has_meta("room_id") and StringName(enemy.get_meta("room_id")) != _current_room_id:
 			continue
 		var distance_squared := global_position.distance_squared_to(enemy.global_position)
-		if distance_squared < best_distance_squared:
+		if distance_squared < best_distance_squared and _has_clear_shot_to(enemy):
 			best_distance_squared = distance_squared
 			best_target = enemy
 	return best_target
+
+
+func _has_clear_shot_to(enemy: Node2D) -> bool:
+	if not is_instance_valid(enemy) or not enemy.is_inside_tree():
+		return false
+	var direction := global_position.direction_to(enemy.global_position)
+	if direction.is_zero_approx():
+		return true
+	var perpendicular := Vector2(-direction.y, direction.x) * 5.0
+	var query := PhysicsRayQueryParameters2D.create(global_position, enemy.global_position, 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.exclude = [enemy.get_rid()] if enemy is CollisionObject2D else []
+	if is_instance_valid(_owner_actor) and _owner_actor is CollisionObject2D:
+		query.exclude.append((_owner_actor as CollisionObject2D).get_rid())
+	var space := get_world_2d().direct_space_state
+	return space.intersect_ray(query).is_empty() \
+		and _ray_to_target_is_clear(space, global_position + perpendicular, enemy.global_position + perpendicular, query.exclude) \
+		and _ray_to_target_is_clear(space, global_position - perpendicular, enemy.global_position - perpendicular, query.exclude)
+
+
+func _ray_to_target_is_clear(space: PhysicsDirectSpaceState2D, origin: Vector2, destination: Vector2, exclusions: Array[RID]) -> bool:
+	var query := PhysicsRayQueryParameters2D.create(origin, destination, 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.exclude = exclusions
+	return space.intersect_ray(query).is_empty()
 
 
 func _ensure_deployable_slots(state: Dictionary) -> void:
@@ -535,7 +606,7 @@ func _ensure_deployable_slots(state: Dictionary) -> void:
 	var cooldowns: Array = state.get("deployable_respawn", [])
 	var last_positions: Array = state.get("deployable_last_positions", [])
 	var spawn_delays: Array = state.get("deployable_spawn_delays", [])
-	var desired_count := maxi(1, int(state.get("projectile_count", 1)))
+	var desired_count := clampi(int(state.get("deployable_count", maxi(1, int(state.get("projectile_count", 1))))), 1, MAX_DEPLOYABLE_INSTANCES)
 	while instances.size() < desired_count:
 		instances.append(null)
 		cooldowns.append(0.0)
@@ -591,7 +662,7 @@ func _spawn_deployable(weapon_id: StringName, state: Dictionary, slot_index: int
 	var mode := int(state.get("attack_mode", -1))
 	var is_turret := mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET
 	var placement_room := _current_room_id
-	if is_turret and _deployable_rng.randf() < OFF_ROOM_TURRET_CHANCE:
+	if is_turret and slot_index > 0 and _deployable_rng.randf() < OFF_ROOM_TURRET_CHANCE:
 		var other_rooms: Array[StringName] = []
 		for room_id: StringName in DEPLOYABLE_ROOM_IDS:
 			if room_id != _current_room_id:
@@ -631,7 +702,11 @@ func _choose_deployable_position(room_id: StringName, previous_position: Vector2
 		var angle := _deployable_rng.randf_range(0.0, TAU)
 		var radius := _deployable_rng.randf_range(82.0, 168.0)
 		var candidate := origin + Vector2.RIGHT.rotated(angle) * radius
+		candidate.x = clampf(candidate.x, -540.0, 540.0)
+		candidate.y = clampf(candidate.y, -132.0, 240.0)
 		if candidate.distance_squared_to(previous_position) < 96.0 * 96.0:
+			continue
+		if not _deployable_position_is_clear(candidate):
 			continue
 		var occupied := false
 		for structure: Node in get_tree().get_nodes_in_group("deployed_structures"):
@@ -644,9 +719,44 @@ func _choose_deployable_position(room_id: StringName, previous_position: Vector2
 				break
 		if not occupied:
 			return candidate
+	for radius: float in [112.0, 160.0, 208.0]:
+		for step: int in range(8):
+			var candidate := origin + Vector2.RIGHT.rotated(TAU * float(step) / 8.0) * radius
+			candidate.x = clampf(candidate.x, -540.0, 540.0)
+			candidate.y = clampf(candidate.y, -132.0, 240.0)
+			if candidate.distance_squared_to(previous_position) < 96.0 * 96.0:
+				continue
+			if _deployable_position_is_clear(candidate) and not _deployable_position_is_occupied(candidate, room_id):
+				return candidate
 	if previous_position.x > -1000.0:
 		return previous_position + Vector2.RIGHT.rotated(_deployable_rng.randf_range(0.0, TAU)) * 144.0
-	return origin + Vector2.RIGHT.rotated(_deployable_rng.randf_range(0.0, TAU)) * 112.0
+	return origin
+
+
+func _deployable_position_is_clear(candidate: Vector2) -> bool:
+	if not is_instance_valid(_owner_actor) or not _owner_actor.is_inside_tree():
+		return true
+	var shape := CircleShape2D.new()
+	shape.radius = 18.0
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, candidate)
+	query.collision_mask = 5 # Store fixtures and enemies; leave the player out.
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.exclude = [_owner_actor.get_rid()]
+	return get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty()
+
+
+func _deployable_position_is_occupied(candidate: Vector2, room_id: StringName) -> bool:
+	for structure: Node in get_tree().get_nodes_in_group("deployed_structures"):
+		if not is_instance_valid(structure) or structure.is_queued_for_deletion():
+			continue
+		if StringName(structure.get_meta("room_id", &"market")) != room_id:
+			continue
+		if (structure as Node2D).global_position.distance_squared_to(candidate) < 68.0 * 68.0:
+			return true
+	return false
 
 
 func _on_mine_detonated(weapon_id: StringName, slot_index: int) -> void:
@@ -672,6 +782,8 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"attack_mode": definition.attack_mode,
 		"damage": definition.damage,
 		"damage_type": definition.damage_type,
+		"damage_scaling_stat": definition.damage_scaling_stat,
+		"damage_scaling_coefficient": definition.damage_scaling_coefficient,
 		"engineering_coefficient": definition.engineering_coefficient,
 		"fire_interval": definition.fire_interval,
 		"target_range": definition.target_range,
@@ -695,6 +807,7 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"deployable_last_positions": [],
 		"deployable_spawn_delays": [],
 		"deployables_active": false,
+		"deployable_count": 1 if definition.attack_mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE] else 0,
 	}
 	if definition.tier > 1:
 		_weapon_states[definition.id] = state
@@ -743,6 +856,7 @@ func get_save_data() -> Array:
 		list.append({
 			"id": String(wid),
 			"tier": get_weapon_tier(wid),
+			"deployable_count": int(state.get("deployable_count", 1)),
 			"level_damage_add": int(state.get("level_damage_add", 0)),
 			"level_fire_rate_bonus": float(state.get("level_fire_rate_bonus", 0.0)),
 		})
@@ -759,6 +873,8 @@ func restore_save_data(saved_list: Array) -> void:
 			_raise_weapon_tier(wid, target_tier)
 		if _weapon_states.has(wid):
 			var state: Dictionary = _weapon_states[wid]
+			if int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+				state["deployable_count"] = clampi(int(entry.get("deployable_count", 1)), 1, MAX_DEPLOYABLE_INSTANCES)
 			state["level_damage_add"] = clampi(int(entry.get("level_damage_add", 0)), -20, 20)
 			state["level_fire_rate_bonus"] = clampf(float(entry.get("level_fire_rate_bonus", 0.0)), 0.0, 0.3)
 			_weapon_states[wid] = state

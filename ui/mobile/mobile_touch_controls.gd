@@ -12,6 +12,7 @@ const MOVE_ZONE_BOTTOM_EDGE := 0.95
 
 var _enabled := false
 var _touch_index := -1
+var _mouse_stick_active := false
 var _stick_origin := Vector2.ZERO
 var _move_direction := Vector2.ZERO
 
@@ -20,8 +21,10 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_to_group("mobile_controls")
-	_enabled = _is_mobile_platform()
+	_enabled = _are_touch_controls_enabled()
 	visible = _enabled
+	if DisplayManager != null and DisplayManager.has_signal("touch_controls_changed"):
+		DisplayManager.touch_controls_changed.connect(_on_touch_controls_changed)
 
 
 func _input(event: InputEvent) -> void:
@@ -44,10 +47,29 @@ func _input(event: InputEvent) -> void:
 		if drag.index == _touch_index:
 			_update_stick(drag.position)
 			get_viewport().set_input_as_handled()
+		return
+
+	if not (DisplayManager != null and DisplayManager.touch_controls_enabled):
+		return
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var mouse_button := event as InputEventMouseButton
+		if mouse_button.pressed:
+			if not _mouse_stick_active and _touch_index == -1 and not get_tree().paused and _is_move_zone(mouse_button.position):
+				_mouse_stick_active = true
+				_begin_stick(-2, mouse_button.position)
+				get_viewport().set_input_as_handled()
+		elif _mouse_stick_active:
+			_mouse_stick_active = false
+			_end_stick()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and _mouse_stick_active:
+		_update_stick((event as InputEventMouseMotion).position)
+		get_viewport().set_input_as_handled()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED:
+		_mouse_stick_active = false
 		_end_stick()
 
 
@@ -57,6 +79,18 @@ func get_move_direction() -> Vector2:
 
 func _is_mobile_platform() -> bool:
 	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+
+
+func _are_touch_controls_enabled() -> bool:
+	return _is_mobile_platform() or (DisplayManager != null and DisplayManager.touch_controls_enabled)
+
+
+func _on_touch_controls_changed(enabled: bool) -> void:
+	_enabled = _is_mobile_platform() or enabled
+	visible = _enabled
+	if not _enabled:
+		_mouse_stick_active = false
+		_end_stick()
 
 
 func _is_move_zone(position: Vector2) -> bool:

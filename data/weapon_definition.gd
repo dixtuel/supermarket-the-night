@@ -12,8 +12,9 @@ enum AttackMode {
 	DEPLOYED_MINE,
 }
 
-enum ShopOfferKind { NEW_WEAPON, MERGE_COPY, DIRECT_TIER }
+enum ShopOfferKind { NEW_WEAPON, MERGE_COPY, DIRECT_TIER, DEPLOYABLE_COPY }
 enum DamageType { PHYSICAL, ELEMENTAL }
+enum DamageScalingStat { MELEE, RANGED, ELEMENTAL }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -24,6 +25,9 @@ enum DamageType { PHYSICAL, ELEMENTAL }
 @export var attack_mode: AttackMode = AttackMode.TARGETED_PROJECTILE
 @export_range(1, 10000, 1) var damage: int = 10
 @export var damage_type: DamageType = DamageType.PHYSICAL
+## Brotato-style flat stat scaling; structures use Engineering separately.
+@export var damage_scaling_stat: DamageScalingStat = DamageScalingStat.RANGED
+@export_range(0.0, 2.0, 0.05) var damage_scaling_coefficient: float = 0.5
 ## A bounded fraction of the player's Engineering added to this device's hit.
 @export_range(0.0, 2.0, 0.05) var engineering_coefficient: float = 0.0
 ## Matches SurvivorAutoWeapon's current authored field names.
