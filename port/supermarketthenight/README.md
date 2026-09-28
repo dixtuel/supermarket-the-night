@@ -17,7 +17,7 @@ Thanks to Asrın Kılıç (dixtuel) for creating the game.
 | Y | Restart after a run |
 | Select + Start | PortMaster's exit shortcut |
 
-The game uses keyboard-style controls through PortMaster's `gptokeyb`. The left-stick WASD actions are reserved for gameplay movement; repeating arrow keys from the D-pad drive Godot menu focus without moving the player. A sends Enter (`ui_accept`), activating the currently focused Godot button like a confirm/click; it does not send a literal mouse click. Menus set an initial focus and expose focus navigation. Start + Select exits through `gptokeyb` kill mode. Desktop, Android, and touch movement keep the existing input path.
+The game uses keyboard-style controls through PortMaster's `gptokeyb`. The left-stick WASD actions are reserved for gameplay movement; repeating arrow keys from the D-pad drive Godot menu focus without moving the player. A sends Enter (`ui_accept`), activating the currently focused Godot button like a confirm/click; it does not send a literal mouse click. Menus set an initial focus and expose focus navigation. PortMaster's `$GPTOKEYB` helper supplies the firmware-specific Start + Select exit behavior. Desktop, Android, and touch movement keep the existing input path.
 
 ## Build
 
