@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 022
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-$(command -v godot || command -v godot4 || true)}"
@@ -28,14 +29,19 @@ mkdir -p "$GAME_ROOT/licenses" "$OUTPUT_DIR"
 STAGE_DIR="$(mktemp -d)"
 trap 'rm -rf "$STAGE_DIR"' EXIT
 cp "$PORT_ROOT/Supermarket The Night.sh" "$STAGE_DIR/"
-cp "$PORT_ROOT/supermarketthenight.gptk" "$STAGE_DIR/"
 mkdir -p "$STAGE_DIR/supermarketthenight/licenses"
 cp "$PCK_PATH" "$STAGE_DIR/supermarketthenight/"
+cp "$GAME_ROOT/supermarketthenight.gptk" "$STAGE_DIR/supermarketthenight/"
 cp "$PORT_ROOT/screenshot.png" "$STAGE_DIR/supermarketthenight/"
 cp "$GAME_ROOT/licenses/"* "$STAGE_DIR/supermarketthenight/licenses/"
+# Root sessions may start with umask 077. Keep archive contents readable after
+# HarbourMaster installs them; launcher scripts intentionally remain mode 0644.
+chmod -R a+rX "$STAGE_DIR"
+find "$STAGE_DIR" -type f -exec chmod 0644 {} +
+find "$STAGE_DIR" -type d -exec chmod 0755 {} +
 (
   cd "$STAGE_DIR"
-  zip -9 -FS -r "$PACKAGE_PATH" "Supermarket The Night.sh" supermarketthenight.gptk supermarketthenight
+  zip -9 -FS -r "$PACKAGE_PATH" "Supermarket The Night.sh" supermarketthenight
 )
 
 echo "Created $PCK_PATH"

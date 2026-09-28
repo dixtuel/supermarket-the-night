@@ -8,6 +8,7 @@ signal touch_controls_changed(enabled: bool)
 
 const SETTINGS_PATH := "user://settings.cfg"
 const PORTMASTER_FEATURE := "portmaster"
+const PORTMASTER_DESIGN_SCALE := 1.5
 
 const RESOLUTIONS: Array[Vector2i] = [
 	Vector2i(1920, 1080),
@@ -38,12 +39,34 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	if OS.has_feature(PORTMASTER_FEATURE):
+		_configure_portmaster_canvas()
 		current_window_mode = WindowMode.FULLSCREEN
 		touch_controls_enabled = false
 		apply_display()
 		return
 	load_settings()
 	apply_display()
+
+
+func _configure_portmaster_canvas() -> void:
+	# R36S is a 640×480 panel. The normal 1920×1080 design canvas makes UI
+	# lettering too small at that size, so give handheld UI a 3:2 logical canvas
+	# while preserving the detected display aspect ratio. This is feature-gated
+	# and leaves every desktop/mobile export on the project defaults.
+	var display_size := DisplayServer.screen_get_size()
+	if display_size.x <= 0 or display_size.y <= 0:
+		display_size = DisplayServer.window_get_size()
+	if display_size.x <= 0 or display_size.y <= 0:
+		return
+
+	var logical_size := Vector2i(
+		maxi(1, roundi(display_size.x * PORTMASTER_DESIGN_SCALE)),
+		maxi(1, roundi(display_size.y * PORTMASTER_DESIGN_SCALE))
+	)
+	var root_window := get_tree().root
+	root_window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	root_window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	root_window.content_scale_size = logical_size
 
 
 func get_resolution_label(index: int) -> String:

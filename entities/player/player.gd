@@ -68,15 +68,18 @@ func _ready() -> void:
 
 
 func _update_mobile_camera_fit() -> void:
-	if not is_instance_valid(_camera) or not (OS.has_feature("android") or OS.has_feature("ios")):
+	var portmaster := OS.has_feature("portmaster")
+	var native_mobile := OS.has_feature("android") or OS.has_feature("ios")
+	if not is_instance_valid(_camera) or (not portmaster and not native_mobile):
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return
 	# Room art is 1672×941 at a 0.7655 scale (~1280×720 world units).
-	# Zoom to cover the full screen on phones/tablets; crop a little at unusual
-	# aspect ratios instead of exposing an empty gray border around the store.
-	var fit_zoom := maxf(viewport_size.x / 1279.9, viewport_size.y / 720.0)
+	# Phones cover the screen and accept a little crop at unusual aspect ratios.
+	# The handheld 4:3 port instead fits the full store width so aisle edges stay
+	# visible on the R36S; the extra vertical room gives the arena more space.
+	var fit_zoom := minf(viewport_size.x / 1279.9, viewport_size.y / 720.0) if portmaster else maxf(viewport_size.x / 1279.9, viewport_size.y / 720.0)
 	_camera.zoom = Vector2(fit_zoom, fit_zoom)
 
 

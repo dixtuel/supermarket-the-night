@@ -172,6 +172,7 @@ func _build_shop() -> void:
 	var safe := _safe_insets(viewport_size)
 	var portrait := viewport_size.x < viewport_size.y
 	var mobile := _is_mobile_platform()
+	var portmaster := OS.has_feature("portmaster")
 	var density_scale := _mobile_density_scale(viewport_size) if mobile else 1.0
 	var layout_scale := _mobile_layout_scale(viewport_size) if mobile else 1.0
 	var usable_width := maxf(280.0, viewport_size.x - safe.x - safe.z)
@@ -193,7 +194,7 @@ func _build_shop() -> void:
 	content.add_theme_constant_override("separation", roundi(8.0 * layout_scale) if mobile else (10 if compact else 14))
 	margins.add_child(content)
 
-	var header: Control = VBoxContainer.new() if (portrait and not mobile) else HBoxContainer.new()
+	var header: Control = VBoxContainer.new() if (portmaster or (portrait and not mobile)) else HBoxContainer.new()
 	header.add_theme_constant_override("separation", 20)
 	content.add_child(header)
 
@@ -211,7 +212,7 @@ func _build_shop() -> void:
 		_subline_label.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 18.0)))
 	title_stack.add_child(_subline_label)
 
-	var right_header: Control = HBoxContainer.new() if (portrait and not mobile) else VBoxContainer.new()
+	var right_header: Control = HBoxContainer.new() if (portmaster or (portrait and not mobile)) else VBoxContainer.new()
 	right_header.add_theme_constant_override("separation", 8)
 	if mobile:
 		right_header.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -263,30 +264,44 @@ func _build_shop() -> void:
 	divider.add_theme_stylebox_override("separator", divider_style)
 	content.add_child(divider)
 
-	var offer_layout: Control = VBoxContainer.new() if (portrait and not mobile) else HBoxContainer.new()
+	var offer_layout: Control = VBoxContainer.new() if (portmaster or (portrait and not mobile)) else HBoxContainer.new()
 	offer_layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	offer_layout.add_theme_constant_override("separation", 18)
 	content.add_child(offer_layout)
 	_cards_row = GridContainer.new() if mobile else HBoxContainer.new()
 	if mobile:
-		(_cards_row as GridContainer).columns = 4
+		(_cards_row as GridContainer).columns = 2 if portmaster else 4
 	_cards_row.name = "OfferCards"
 	_cards_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_cards_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if mobile else Control.SIZE_EXPAND_FILL
 	_cards_row.add_theme_constant_override("separation", roundi(8.0 * layout_scale) if mobile else (10 if compact else 16))
 	if mobile:
 		var cards_scroll := ScrollContainer.new()
+		cards_scroll.name = "OfferCardsScroll"
 		cards_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		cards_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cards_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		cards_scroll.add_child(_cards_row)
+		cards_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		cards_scroll.follow_focus = portmaster
+		if portmaster:
+			var offer_stack := VBoxContainer.new()
+			offer_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			cards_scroll.add_child(offer_stack)
+			offer_stack.add_child(_cards_row)
+			_shop_sidebar = _build_shop_sidebar()
+			_shop_sidebar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_shop_sidebar.custom_minimum_size.x = 0.0
+			offer_stack.add_child(_shop_sidebar)
+		else:
+			cards_scroll.add_child(_cards_row)
 		offer_layout.add_child(cards_scroll)
 	else:
 		offer_layout.add_child(_cards_row)
-	_shop_sidebar = _build_shop_sidebar()
-	_shop_sidebar.visible = not portrait or mobile
-	if not portrait or mobile:
-		offer_layout.add_child(_shop_sidebar)
+	if not portmaster:
+		_shop_sidebar = _build_shop_sidebar()
+		_shop_sidebar.visible = not portrait or mobile
+		if not portrait or mobile:
+			offer_layout.add_child(_shop_sidebar)
 
 	content.add_child(_build_inventory_strip(viewport_size, mobile, layout_scale))
 	var footer: Control = VBoxContainer.new() if (portrait and not mobile) else HBoxContainer.new()
@@ -419,6 +434,8 @@ func _build_inventory_strip(viewport_size: Vector2, mobile: bool, layout_scale: 
 	weapon_column.add_theme_constant_override("separation", 4)
 	body.add_child(weapon_column)
 	_inventory_weapons_label = _label("WEAPONS (0/6)  ·  tap for stats / sell", 16, TEXT)
+	if OS.has_feature("portmaster"):
+		_inventory_weapons_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	weapon_column.add_child(_inventory_weapons_label)
 	_inventory_weapons_row = HBoxContainer.new()
 	weapon_column.add_child(_make_inventory_scroll(_inventory_weapons_row))
@@ -622,6 +639,8 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	_weapon_detail_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_weapon_detail_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_weapon_detail_overlay.visible = false
+	if OS.has_feature("portmaster"):
+		_weapon_detail_overlay.z_index = 100
 	parent.add_child(_weapon_detail_overlay)
 	var shade := ColorRect.new()
 	shade.color = Color(0.035, 0.055, 0.052, 0.78)
@@ -641,6 +660,8 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	_weapon_detail_panel.add_child(_margin(body, 14))
 	var heading := HBoxContainer.new()
 	heading.add_theme_constant_override("separation", 14)
+	if OS.has_feature("portmaster"):
+		heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(heading)
 	_weapon_detail_icon = TextureRect.new()
 	_weapon_detail_icon.custom_minimum_size = Vector2(68, 68)
@@ -650,13 +671,21 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	heading.add_child(_center_control(_weapon_detail_icon))
 	var title_stack := VBoxContainer.new()
 	title_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if OS.has_feature("portmaster"):
+		title_stack.custom_minimum_size.x = 240.0
 	title_stack.add_theme_constant_override("separation", 3)
 	heading.add_child(title_stack)
 	_weapon_detail_tier = _label("TIER II  /  SELECTED WEAPON", 14, GOLD)
-	title_stack.add_child(_center_control(_weapon_detail_tier))
 	_weapon_detail_name = _label("Weapon", 28, TEXT)
 	_weapon_detail_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title_stack.add_child(_center_control(_weapon_detail_name))
+	if OS.has_feature("portmaster"):
+		_weapon_detail_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if OS.has_feature("portmaster"):
+		title_stack.add_child(_weapon_detail_tier)
+		title_stack.add_child(_weapon_detail_name)
+	else:
+		title_stack.add_child(_center_control(_weapon_detail_tier))
+		title_stack.add_child(_center_control(_weapon_detail_name))
 	var divider := HSeparator.new()
 	divider.add_theme_stylebox_override("separator", _line_style(GOLD))
 	body.add_child(divider)
@@ -751,8 +780,9 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	var card := PanelContainer.new()
 	var viewport_size := get_viewport().get_visible_rect().size
 	var mobile := _is_mobile_platform()
+	var portmaster := OS.has_feature("portmaster")
 	var layout_scale := _mobile_layout_scale(viewport_size)
-	var card_height := maxf(300.0, viewport_size.y * 0.38) if mobile else 0.0
+	var card_height := maxf(260.0, viewport_size.y * 0.34) if portmaster else (maxf(300.0, viewport_size.y * 0.38) if mobile else 0.0)
 	card.custom_minimum_size = Vector2(0, card_height)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.size_flags_vertical = Control.SIZE_FILL
@@ -979,6 +1009,8 @@ func _label(text: String, size: int, color: Color) -> Label:
 
 
 func _responsive_font_size(size: int) -> int:
+	if OS.has_feature("portmaster"):
+		return roundi(float(size) * 1.15)
 	if _is_mobile_platform():
 		var viewport_size := get_viewport().get_visible_rect().size
 		return maxi(12, roundi(float(size) * clampf(viewport_size.y / 1080.0, 0.75, 1.0)))
@@ -991,6 +1023,8 @@ func _is_mobile_platform() -> bool:
 
 
 func _mobile_density_scale(viewport_size: Vector2) -> float:
+	if OS.has_feature("portmaster"):
+		return 1.0
 	var window_width := float(get_window().size.x) if get_window() != null else viewport_size.x
 	var dpi := float(DisplayServer.screen_get_dpi())
 	if dpi <= 0.0:
@@ -1016,6 +1050,8 @@ func _touch_target_size(viewport_size: Vector2) -> float:
 
 
 func _mobile_shop_font(viewport_size: Vector2, preferred: float) -> float:
+	if OS.has_feature("portmaster"):
+		return minf(maxf(19.0, viewport_size.y * 0.030), preferred)
 	# Use the available landscape height as a stable cap; the OS density scale
 	# otherwise makes text enormous on high-DPI phones running a 1920-wide canvas.
 	return clampf(viewport_size.y * 0.024, 17.0, preferred)

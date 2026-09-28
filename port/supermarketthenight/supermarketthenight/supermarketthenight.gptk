@@ -15,13 +15,21 @@ left_analog_down = s
 left_analog_left = a
 left_analog_right = d
 
-a = enter
-b = esc
+# gptokeyb assigns one output per physical button: A/B are mouse clicks,
+# while the D-pad remains available for keyboard focus navigation.
+a = mouse_left
+b = mouse_right
 x = e
 y = r
-# Start pauses/resumes the game; A remains the confirm/select button.
+# Start pauses/resumes the game; Select cancels UI.
 start = esc
 back = esc
+
+# Right stick moves the pointer; A/B provide left/right clicks.
+right_analog_up = mouse_movement_up
+right_analog_down = mouse_movement_down
+right_analog_left = mouse_movement_left
+right_analog_right = mouse_movement_right
 
 deadzone_mode = scaled_radial
 deadzone = 2000

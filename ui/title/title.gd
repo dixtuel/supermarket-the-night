@@ -150,6 +150,9 @@ func _build() -> void:
 	clerk_shadow.anchor_right = 0.585
 	clerk_shadow.anchor_top = 0.725
 	clerk_shadow.anchor_bottom = 0.755
+	if OS.has_feature("portmaster"):
+		clerk_shadow.anchor_left += 0.13
+		clerk_shadow.anchor_right += 0.13
 	clerk_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var shadow_style := StyleBoxFlat.new()
 	shadow_style.bg_color = Color(0.0, 0.0, 0.0, 0.55)
@@ -163,6 +166,9 @@ func _build() -> void:
 	_clerk.anchor_right = 0.66
 	_clerk.anchor_top = 0.13
 	_clerk.anchor_bottom = 0.88
+	if OS.has_feature("portmaster"):
+		_clerk.anchor_left += 0.13
+		_clerk.anchor_right += 0.13
 	_clerk.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_clerk.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_clerk.modulate = Color(1.0, 0.99, 0.96, 0.98)
@@ -192,8 +198,9 @@ func _build_compact_menu() -> void:
 	var inset := 8.0 * scale_factor if mobile else 24.0
 	var available_width := maxf(200.0 * scale_factor, viewport_size.x - safe.x - safe.z - inset * 2.0)
 	var available_height := maxf(200.0 * scale_factor, viewport_size.y - safe.y - safe.w - inset * 2.0)
-	var menu_width := available_width * (0.29 if mobile_landscape else 0.90) if mobile else (available_width * 0.88 if portrait else minf(390.0 * scale_factor, available_width * 0.48))
-	var menu_height := available_height * (0.72 if mobile_landscape else 0.90) if mobile else (available_height * 0.68 if portrait else minf(462.0 * scale_factor, available_height * 0.88))
+	var portmaster := OS.has_feature("portmaster")
+	var menu_width := available_width * (0.46 if portmaster else (0.29 if mobile_landscape else 0.90)) if mobile else (available_width * 0.88 if portrait else minf(390.0 * scale_factor, available_width * 0.48))
+	var menu_height := available_height * (0.78 if portmaster else (0.72 if mobile_landscape else 0.90)) if mobile else (available_height * 0.68 if portrait else minf(462.0 * scale_factor, available_height * 0.88))
 	var card := PanelContainer.new()
 	card.anchor_left = 0.0
 	card.anchor_right = 0.0
@@ -465,7 +472,8 @@ func _add_menu_button(
 
 	var main_lbl := Label.new()
 	main_lbl.text = text
-	main_lbl.add_theme_font_size_override("font_size", roundi(float(16 if is_primary else 15) * scale_factor * (0.50 if mobile_landscape else 1.0)))
+	var landscape_font_compaction := 0.85 if OS.has_feature("portmaster") else (0.50 if mobile_landscape else 1.0)
+	main_lbl.add_theme_font_size_override("font_size", roundi(float(16 if is_primary else 15) * scale_factor * landscape_font_compaction))
 	main_lbl.add_theme_color_override("font_color", COLOR_BASE_DARK if use_receipt_style else COLOR_RECEIPT_PAPER)
 	main_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if mobile_landscape:
@@ -643,6 +651,10 @@ func _receipt_modal_theme() -> Theme:
 
 
 func _receipt_ui_scale() -> float:
+	if OS.has_feature("portmaster"):
+		# At the 960×720 logical handheld canvas, compensate for its 2/3 output
+		# scale so the receipt menu remains readable on a 640×480 panel.
+		return 1.5
 	if _is_mobile_platform():
 		return _mobile_density_scale(get_viewport().get_visible_rect().size)
 	var window_width := float(get_window().size.x) if get_window() != null else 1920.0
@@ -711,6 +723,10 @@ func _mobile_touch_target(viewport_size: Vector2) -> float:
 
 
 func _mobile_density_scale(viewport_size: Vector2) -> float:
+	if OS.has_feature("portmaster"):
+		# Controller UI does not need a phone-style touch target derived from the
+		# handheld panel's reported DPI.
+		return 1.0
 	var window_width := float(get_window().size.x) if get_window() != null else viewport_size.x
 	var dpi := float(DisplayServer.screen_get_dpi())
 	if dpi <= 0.0:

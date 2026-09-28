@@ -2,6 +2,8 @@
 
 This package runs the Godot 4.7 project through PortMaster's Godot and Westonpack runtimes. It targets 64-bit ARM handhelds such as the R36S and requires the Godot 4.7.1 and Westonpack 0.2 runtimes.
 
+The 640×480 screenshot shows the game running with the PortMaster handheld layout. It was captured in an x86_64/Xvfb simulation; physical handheld compatibility has not yet been confirmed.
+
 Thanks to Asrın Kılıç (dixtuel) for creating the game.
 
 ## Controls
@@ -9,15 +11,17 @@ Thanks to Asrın Kılıç (dixtuel) for creating the game.
 | Button | Action |
 | --- | --- |
 | Left stick | Move the character |
-| D-pad | Navigate menus and choices |
-| A | Confirm, choose, or continue |
+| D-pad | Navigate menus and choices with focus |
+| Right stick | Move the mouse pointer |
+| A | Left-click the pointed control |
+| B | Right-click |
 | Start | Pause or resume the shift |
-| B / Back | Go back; pause or resume during a shift |
+| Select | Go back or cancel |
 | X | Interact with nearby consoles |
 | Y | Restart after a run |
 | Select + Start | PortMaster's exit shortcut |
 
-The game uses keyboard-style controls through PortMaster's `gptokeyb`. The left-stick WASD actions are reserved for gameplay movement; repeating arrow keys from the D-pad drive Godot menu focus without moving the player. A sends Enter (`ui_accept`), activating the currently focused Godot button like a confirm/click; it does not send a literal mouse click. Menus set an initial focus and expose focus navigation. PortMaster's `$GPTOKEYB` helper supplies the firmware-specific Start + Select exit behavior. Desktop, Android, and touch movement keep the existing input path.
+The game uses PortMaster's `gptokeyb` mapping: left-stick WASD moves the character, repeating D-pad arrows move menu focus, and the right stick moves the pointer. A/B send literal left/right mouse clicks. Since each physical button has one mapping, A is reserved for left-click; point at a UI control with the right stick to activate it. X remains E for nearby console interaction, Y remains R to restart after a run, Start pauses, and Select cancels. PortMaster's `$GPTOKEYB` helper supplies the firmware-specific Start + Select exit behavior. Desktop, Android, and touch movement keep the existing input path.
 
 ## Build
 

@@ -213,15 +213,18 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 	_open_overlay(&"level_up", "Choose a shift bonus", "One item comes off the shelf. The clock is paused.")
 	_level_up_choice_count = upgrades.size()
 	var mobile_layout := _is_mobile_platform()
+	var portmaster := OS.has_feature("portmaster")
 	var viewport_size := get_viewport().get_visible_rect().size
-	var choice_layout := HBoxContainer.new()
+	var choice_layout: Control = HBoxContainer.new()
+	if portmaster:
+		choice_layout = VBoxContainer.new()
 	choice_layout.add_theme_constant_override("separation", _mobile_spacing(12) if mobile_layout else 16)
 	choice_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	choice_layout.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_overlay_body.add_child(choice_layout)
 	var cards: Control = GridContainer.new() if mobile_layout else HBoxContainer.new()
 	if mobile_layout:
-		(cards as GridContainer).columns = 4
+		(cards as GridContainer).columns = 2 if portmaster else 4
 	var choice_buttons: Array[Button] = []
 	cards.add_theme_constant_override("h_separation", _mobile_spacing(12) if mobile_layout else 12)
 	cards.add_theme_constant_override("v_separation", _mobile_spacing(10) if mobile_layout else 12)
@@ -230,12 +233,14 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 	if mobile_layout:
 		var safe := _safe_insets(viewport_size)
 		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
-		cards.custom_minimum_size.x = inner_width - 260.0 - _mobile_spacing(12)
+		cards.custom_minimum_size.x = inner_width - (0.0 if portmaster else 260.0) - _mobile_spacing(12)
 	choice_layout.add_child(cards)
 	for index in range(upgrades.size()):
 		var definition := upgrades[index]
 		var card := Button.new()
-		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(36)) / 4.0 if mobile_layout else 0, viewport_size.y * 0.58 if mobile_layout else 300)
+		var columns := 2 if portmaster else 4
+		var choice_height := viewport_size.y * (0.35 if portmaster else 0.58) if mobile_layout else 300.0
+		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(12 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		card.focus_mode = Control.FOCUS_ALL
@@ -285,7 +290,7 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		card.pressed.connect(func() -> void: BakkalAudio.play_sfx(&"ui_confirm"); upgrade_selected.emit(index))
 		cards.add_child(card)
 		choice_buttons.append(card)
-		if index == 0 and not mobile_layout:
+		if index == 0 and (portmaster or not mobile_layout):
 			card.grab_focus.call_deferred()
 	_link_horizontal_focus(choice_buttons)
 	if not _last_player_summary.is_empty():
@@ -294,6 +299,10 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 			ledger.custom_minimum_size.y = viewport_size.y * 0.58
 			ledger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		choice_layout.add_child(ledger)
+	if portmaster:
+		var scroll := _overlay.find_child("OverlayContentScroll", true, false) as ScrollContainer
+		if is_instance_valid(scroll):
+			scroll.set_deferred("scroll_vertical", 0)
 
 
 func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = {}) -> void:
@@ -302,15 +311,18 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	_stat_choice_ids.clear()
 	var portrait := _is_portrait()
 	var mobile_layout := _is_mobile_platform()
+	var portmaster := OS.has_feature("portmaster")
 	var viewport_size := get_viewport().get_visible_rect().size
 	var layout: Control = HBoxContainer.new()
+	if portmaster:
+		layout = VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 16)
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_overlay_body.add_child(layout)
 	var cards: Control = GridContainer.new() if mobile_layout else HBoxContainer.new()
 	if mobile_layout:
-		(cards as GridContainer).columns = 4
+		(cards as GridContainer).columns = 2 if portmaster else 4
 	var choice_buttons: Array[Button] = []
 	cards.add_theme_constant_override("h_separation", _mobile_spacing(8) if mobile_layout else 10)
 	cards.add_theme_constant_override("v_separation", _mobile_spacing(8) if mobile_layout else 10)
@@ -319,7 +331,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	if mobile_layout:
 		var safe := _safe_insets(viewport_size)
 		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
-		cards.custom_minimum_size.x = inner_width - 260.0 - _mobile_spacing(16)
+		cards.custom_minimum_size.x = inner_width - (0.0 if portmaster else 260.0) - _mobile_spacing(16)
 	layout.add_child(cards)
 	var choice_count: int = mini(choices.size(), 4)
 	for index: int in range(choice_count):
@@ -327,7 +339,9 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var choice_id := StringName(String(choice.get("id", "")))
 		_stat_choice_ids.append(choice_id)
 		var card := PanelContainer.new()
-		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(24)) / 4.0 if mobile_layout else 0, viewport_size.y * 0.58 if mobile_layout else 320)
+		var columns := 2 if portmaster else 4
+		var choice_height := viewport_size.y * (0.35 if portmaster else 0.58) if mobile_layout else 320.0
+		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(8 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		card.add_theme_stylebox_override("panel", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
@@ -338,32 +352,37 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var tier_names := ["I", "II", "III", "IV"]
 		var tier_colors := [MUTED, TEAL, Color("70a8d2"), GOLD]
 		content.add_child(_label("PICK %02d  /  KEY %d   ·   TIER %s" % [index + 1, index + 1, tier_names[rarity_tier - 1]], 14, tier_colors[rarity_tier - 1]))
-		var icon_panel := PanelContainer.new()
-		icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(54) if mobile_layout else 72)
-		icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
-		var icon_rect := TextureRect.new()
-		icon_rect.texture = _stat_icon(choice)
-		icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon_rect.custom_minimum_size = Vector2(_mobile_spacing(48), _mobile_spacing(48)) if mobile_layout else Vector2(56, 56)
-		icon_panel.add_child(_center_control(icon_rect))
-		content.add_child(icon_panel)
+		var icon_texture := _stat_icon(choice)
+		if icon_texture != null:
+			var icon_panel := PanelContainer.new()
+			icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(54) if mobile_layout else 72)
+			icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
+			var icon_rect := TextureRect.new()
+			icon_rect.texture = icon_texture
+			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon_rect.custom_minimum_size = Vector2(_mobile_spacing(48), _mobile_spacing(48)) if mobile_layout else Vector2(56, 56)
+			icon_panel.add_child(_center_control(icon_rect))
+			content.add_child(icon_panel)
 		var title := _label(String(choice.get("name", "Stat adjustment")), 22, TEXT)
 		if mobile_layout:
 			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 21.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(title)
-		var details_scroll := ScrollContainer.new()
-		details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		details_scroll.follow_focus = true
-		content.add_child(details_scroll)
 		var details := VBoxContainer.new()
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.add_theme_constant_override("separation", 6)
-		details_scroll.add_child(details)
+		if portmaster:
+			content.add_child(details)
+		else:
+			var details_scroll := ScrollContainer.new()
+			details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			details_scroll.follow_focus = true
+			details_scroll.add_child(details)
+			content.add_child(details_scroll)
 		var effects: Array = choice.get("effects", [])
 		for effect: Variant in effects:
 			if effect is Dictionary:
@@ -372,7 +391,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 					delta_row.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 19.0)))
 				delta_row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				details.add_child(delta_row)
-		if effects.is_empty():
+		if effects.is_empty() and not portmaster:
 			details.add_child(_label("No lasting stat change.", 16, MUTED))
 		var reason := _label(String(choice.get("description", "")), 15, MUTED)
 		if mobile_layout:
@@ -385,16 +404,22 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		)
 		cards.add_child(card)
 		choice_buttons.append(choose_button)
-		if index == 0:
-			if not mobile_layout:
-				choose_button.grab_focus.call_deferred()
+		if index == 0 and (portmaster or not mobile_layout):
+			choose_button.grab_focus.call_deferred()
 
 	var ledger := _build_stat_ledger(player_summary)
 	if mobile_layout:
-		ledger.custom_minimum_size.y = viewport_size.y * 0.58
+		ledger.custom_minimum_size.y = viewport_size.y * (0.38 if portmaster else 0.58)
 		ledger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if portmaster:
+			ledger.custom_minimum_size.x = 0.0
+			ledger.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.add_child(ledger)
 	_link_horizontal_focus(choice_buttons)
+	if portmaster:
+		var scroll := _overlay.find_child("OverlayContentScroll", true, false) as ScrollContainer
+		if is_instance_valid(scroll):
+			scroll.set_deferred("scroll_vertical", 0)
 
 
 func _link_horizontal_focus(buttons: Array[Button]) -> void:
@@ -406,6 +431,19 @@ func _link_horizontal_focus(buttons: Array[Button]) -> void:
 
 
 func _stat_icon(choice: Dictionary) -> Texture2D:
+	match String(choice.get("id", "")):
+		"health":
+			return load("res://assets/generated/pickups/pickup_health_bag.png") as Texture2D
+		"speed":
+			return load("res://assets/generated/shop_icons/comfortable_shoes.png") as Texture2D
+		"lifesteal":
+			return load("res://assets/generated/pickups/pickup_energy_can.png") as Texture2D
+		"dodge":
+			return load("res://assets/generated/shop_icons/longer_shift.png") as Texture2D
+		"protection", "armor":
+			return load("res://assets/generated/shop_icons/fresh_apron.png") as Texture2D
+		"luck":
+			return load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
 	var effects: Array = choice.get("effects", [])
 	for effect: Variant in effects:
 		if not effect is Dictionary or float(effect.get("value", 0.0)) <= 0.0:
@@ -742,6 +780,10 @@ func show_results(report: Dictionary, victory: bool) -> void:
 	else:
 		_add_menu_button("Run it back", func() -> void: restart_requested.emit(), true)
 		_add_menu_button("Main menu", func() -> void: title_requested.emit())
+	if OS.has_feature("portmaster"):
+		var scroll := _overlay.find_child("OverlayContentScroll", true, false) as ScrollContainer
+		if is_instance_valid(scroll):
+			scroll.set_deferred("scroll_vertical", 0)
 
 
 func _result_action_button(text: String, primary: bool, callback: Callable) -> Button:
@@ -910,7 +952,7 @@ func _build_hud() -> void:
 	boss_stack.add_child(_boss_bar)
 
 	_weapons_text = null
-	if mobile or DisplayServer.is_touchscreen_available() or portrait:
+	if (mobile and not OS.has_feature("portmaster")) or DisplayServer.is_touchscreen_available() or (portrait and not OS.has_feature("portmaster")):
 		_touch_pause_button = Button.new()
 		_touch_pause_button.name = "TouchPause"
 		_touch_pause_button.text = ""
@@ -1002,6 +1044,8 @@ func _mobile_layout_scale(viewport_size: Vector2) -> float:
 
 
 func _mobile_density_scale(viewport_size: Vector2) -> float:
+	if OS.has_feature("portmaster"):
+		return 1.0
 	var window_width := float(get_window().size.x) if get_window() != null else viewport_size.x
 	var dpi := float(DisplayServer.screen_get_dpi())
 	if dpi <= 0.0:
@@ -1044,13 +1088,18 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	var panel := PanelContainer.new()
 	var viewport_size := get_viewport().get_visible_rect().size
 	var safe := _safe_insets(viewport_size)
+	var portmaster := OS.has_feature("portmaster")
 	var available_width := viewport_size.x - safe.x - safe.z
 	var available_height := viewport_size.y - safe.y - safe.w
 	center.offset_left = safe.x
 	center.offset_right = -safe.z
 	center.offset_top = safe.y
 	center.offset_bottom = -safe.w
-	if _is_mobile_platform():
+	if portmaster:
+		var width_ratio := 0.96 if is_choice else 0.92
+		var height_ratio := 0.90 if is_choice or mode == &"results" else 0.86
+		panel.custom_minimum_size = Vector2(available_width * width_ratio, available_height * height_ratio)
+	elif _is_mobile_platform():
 		if is_choice:
 			panel.custom_minimum_size = Vector2(available_width * 0.96, available_height * 0.88)
 		elif mode == &"results":
@@ -1066,19 +1115,20 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	var body_margin := _mobile_spacing(8) if _is_mobile_platform() else 24
 	var body_margins := _margin_content(_overlay_body, body_margin)
 	_overlay_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var body_width := available_width * 0.66 if _is_mobile_platform() and mode == &"results" else available_width
+	var body_width := available_width * 0.92 if portmaster and mode == &"results" else (available_width * 0.66 if _is_mobile_platform() and mode == &"results" else available_width)
 	_overlay_body.custom_minimum_size.x = maxf(0.0, body_width - body_margin * 2.0)
 	body_margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_margins.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if _is_mobile_platform():
 		var scroll := ScrollContainer.new()
-		var scroll_height_ratio := 0.84 if is_choice else (0.60 if mode == &"results" else 0.86)
+		var scroll_height_ratio := 0.84 if is_choice or (portmaster and mode == &"results") else (0.60 if mode == &"results" else 0.86)
 		scroll.custom_minimum_size.y = maxf(120.0, available_height * scroll_height_ratio - body_margin * 2.0)
+		scroll.name = "OverlayContentScroll"
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-		scroll.follow_focus = false
+		scroll.follow_focus = portmaster and is_choice
 		scroll.add_child(body_margins)
 		panel.add_child(scroll)
 	else:
@@ -1202,6 +1252,8 @@ func _apply_world_text_contrast(label: Label) -> void:
 
 
 func _responsive_font_size(size: int) -> int:
+	if OS.has_feature("portmaster"):
+		return roundi(float(size) * 1.15)
 	if _is_mobile_platform():
 		var viewport_size := get_viewport().get_visible_rect().size
 		return maxi(12, roundi(float(size) * clampf(viewport_size.y / 1080.0, 0.75, 1.0)))
@@ -1210,10 +1262,14 @@ func _responsive_font_size(size: int) -> int:
 
 
 func _mobile_hud_font(viewport_size: Vector2, preferred: float) -> float:
+	if OS.has_feature("portmaster"):
+		return minf(preferred * 1.25, 23.0)
 	return clampf(viewport_size.y * 0.018, 14.0, preferred)
 
 
 func _mobile_overlay_font(viewport_size: Vector2, preferred: float) -> float:
+	if OS.has_feature("portmaster"):
+		return minf(preferred * 1.30, 25.0)
 	return clampf(viewport_size.y * 0.020, 15.0, preferred)
 
 
