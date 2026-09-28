@@ -8,14 +8,16 @@ Thanks to Asrın Kılıç (dixtuel) for creating the game.
 
 | Button | Action |
 | --- | --- |
-| D-pad / left stick | Move and navigate menus |
-| A / Start | Confirm, choose, or continue |
-| B / Back | Pause or go back |
+| Left stick | Move the character |
+| D-pad | Navigate menus and choices |
+| A | Confirm, choose, or continue |
+| Start | Pause or resume the shift |
+| B / Back | Go back; pause or resume during a shift |
 | X | Interact with nearby consoles |
 | Y | Restart after a run |
 | Select + Start | PortMaster's exit shortcut |
 
-The game uses keyboard-style controls through PortMaster's `gptokeyb`; no game-specific native libraries are bundled.
+The game uses keyboard-style controls through PortMaster's `gptokeyb`. The left-stick WASD actions are reserved for gameplay movement; repeating arrow keys from the D-pad drive Godot menu focus without moving the player. A sends Enter (`ui_accept`), activating the currently focused Godot button like a confirm/click; it does not send a literal mouse click. Menus set an initial focus and expose focus navigation. Start + Select exits through `gptokeyb` kill mode. Desktop, Android, and touch movement keep the existing input path.
 
 ## Build
 

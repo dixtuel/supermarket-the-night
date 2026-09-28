@@ -86,7 +86,19 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 
-	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	# PortMaster maps the R36S left stick to WASD and the D-pad to arrow
+	# keys for Control focus navigation. Keep those two paths independent here:
+	# the normal movement actions also include arrows for desktop keyboards.
+	var direction: Vector2
+	if OS.has_feature("portmaster"):
+		direction = Input.get_vector(
+			"portmaster_move_left",
+			"portmaster_move_right",
+			"portmaster_move_up",
+			"portmaster_move_down"
+		)
+	else:
+		direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if not is_instance_valid(_mobile_controls):
 		_mobile_controls = get_tree().get_first_node_in_group("mobile_controls") as MobileTouchControls
 	if is_instance_valid(_mobile_controls):

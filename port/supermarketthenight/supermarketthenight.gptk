@@ -1,8 +1,13 @@
-# D-pad navigates Godot UI and maps directly to the game's arrow-key actions.
+# D-pad sends arrow keys to Godot's UI focus navigation. PortMaster gameplay
+# movement reads the left-stick WASD actions separately.
 up = up
+up = repeat
 down = down
+down = repeat
 left = left
+left = repeat
 right = right
+right = repeat
 
 # Left stick maps to the movement keys configured in project.godot.
 left_analog_up = w
@@ -14,7 +19,8 @@ a = enter
 b = esc
 x = e
 y = r
-start = enter
+# Start pauses/resumes the game; A remains the confirm/select button.
+start = esc
 back = esc
 
 deadzone_mode = scaled_radial
