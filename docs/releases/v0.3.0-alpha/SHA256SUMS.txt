@@ -1,0 +1,3 @@
+1b8f3c3707f786e480f7d8ad9e583db78f62e61175a383887d6604ff7dd08338  builds/alpha-v0.3.0/SupermarketTheNight-0.3.0-alpha-Windows-x86_64.zip
+15e3ca61aaba7536624ab6e4b9aaa44e6a78fece0da2f5403d1171ef413549f4  builds/alpha-v0.3.0/SupermarketTheNight-0.3.0-alpha-Linux-x86_64.zip
+a39e4fe7eed112110cd15ae615feed70cda9141a5f7836ad9aa04c05dcc45842  builds/alpha-v0.3.0/SupermarketTheNight-0.3.0-alpha.apk

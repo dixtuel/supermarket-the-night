@@ -11,13 +11,13 @@ const ENEMY_SCENE: PackedScene = preload("res://entities/enemy/enemy_actor.tscn"
 const XP_ORB_SCENE: PackedScene = preload("res://progression/xp_orb/xp_orb.tscn")
 const CONSUMABLE_SCENE: PackedScene = preload("res://progression/consumable_pickup/consumable_pickup.tscn")
 const MATERIAL_PICKUP_SCENE: PackedScene = preload("res://progression/material_pickup/material_pickup.tscn")
+const DNZ_MANAGER_BOSS: EnemyDefinition = preload("res://data/enemies/dnz_manager.tres")
 const ROOM_SCENES: Dictionary = {
 	&"market": preload("res://levels/rooms/market_room.tscn"),
 	&"depot": preload("res://levels/rooms/depot_room.tscn"),
 	&"manager_office": preload("res://levels/rooms/manager_office_room.tscn"),
 	&"restroom": preload("res://levels/rooms/restroom_room.tscn"),
 }
-const STARTER_WEAPON_IDS: Array[StringName] = [&"can_launcher"]
 const CAMPAIGN_WAVE_COUNT := 20
 const ENDLESS_MAX_PLANNED_SPAWNS := 72
 const ENDLESS_MAX_ALIVE := 54
@@ -42,6 +42,7 @@ const ENDLESS_SUPPLEMENTAL_ENEMIES: Array[EnemyDefinition] = [
 ]
 const WEAPON_DEFINITIONS: Array[WeaponDefinition] = [
 	preload("res://data/weapons/can_launcher.tres"),
+	preload("res://data/weapons/box_cutter.tres"),
 	preload("res://data/weapons/mop_whirl.tres"),
 	preload("res://data/weapons/receipt_boomerang.tres"),
 	preload("res://data/weapons/sale_tag_beacon.tres"),
@@ -50,6 +51,7 @@ const WEAPON_DEFINITIONS: Array[WeaponDefinition] = [
 	preload("res://data/weapons/basket_orbit.tres"),
 	preload("res://data/weapons/barcode_reel.tres"),
 	preload("res://data/weapons/shelf_rinse_sprayer.tres"),
+	preload("res://data/weapons/milk_hose.tres"),
 	preload("res://data/weapons/aisle_sentinel.tres"),
 	preload("res://data/weapons/spill_tripmine.tres"),
 	preload("res://data/weapons/thermal_price_gun.tres"),
@@ -127,6 +129,7 @@ var _spawn_clearance_shape: CircleShape2D
 var _authored_waves: Array[WaveDefinition] = []
 var _current_wave: WaveDefinition
 var _endless_mode: bool = false
+var _selected_character_id: StringName = &"night_clerk"
 var _spawned_this_wave: int = 0
 var _endless_ambush_rng := RandomNumberGenerator.new()
 var _room_migration_rng := RandomNumberGenerator.new()
@@ -160,6 +163,9 @@ func _ready() -> void:
 	if get_tree().has_meta("supermarket_endless_mode"):
 		_endless_mode = bool(get_tree().get_meta("supermarket_endless_mode"))
 		get_tree().remove_meta("supermarket_endless_mode")
+	_selected_character_id = StringName(String(_player.get("character_id")))
+	if _selected_character_id == &"":
+		_selected_character_id = &"night_clerk"
 	_spawn_clearance_shape = CircleShape2D.new()
 	_spawn_clearance_shape.radius = SPAWN_MARGIN
 	_build_room_scenes()
@@ -294,7 +300,8 @@ func _connect_run_signals() -> void:
 func _configure_starter_weapon() -> void:
 	var weapon := _player.get_node_or_null("AutoWeapon")
 	if weapon != null and weapon.has_method("configure_weapon_catalog"):
-		weapon.call("configure_weapon_catalog", WEAPON_DEFINITIONS, _projectile_layer, STARTER_WEAPON_IDS)
+		var starter_ids: Array[StringName] = [_player.starting_weapon_id]
+		weapon.call("configure_weapon_catalog", WEAPON_DEFINITIONS, _projectile_layer, starter_ids)
 	elif weapon != null and weapon.has_method("configure_projectile_layer"):
 		weapon.call("configure_projectile_layer", _projectile_layer)
 
@@ -573,6 +580,11 @@ func _wave_for_round(round_number: int) -> WaveDefinition:
 		wave.max_alive = mini(ENDLESS_MAX_ALIVE, wave.max_alive + mini(cycle_index, 24))
 		wave.spawn_interval = maxf(0.55, wave.spawn_interval / (1.0 + float(cycle_index) * 0.025))
 		_extend_endless_roster(wave, pattern_index, cycle_index, round_number)
+		if _is_dnz_manager_boss_round(round_number):
+			wave.is_boss_wave = true
+			wave.boss_definition = DNZ_MANAGER_BOSS
+			wave.duration_seconds = 60.0
+			wave.boss_spawn_seconds = 12.0
 		return wave
 	return _authored_waves[round_number - 1]
 
@@ -785,14 +797,28 @@ func _safe_edge_spawn_point() -> Vector2:
 
 
 func _is_boss_round() -> bool:
+	if _is_dnz_manager_boss_round(_round_number):
+		return true
 	if _current_wave != null:
+		if _current_wave.boss_definition != null and _current_wave.boss_definition.id == &"dnz_manager":
+			return false
 		if _endless_mode and _round_number > _authored_waves.size():
 			return _current_wave.is_boss_wave
 		return _current_wave.is_boss_wave or posmod(_round_number, 5) == 0
 	return posmod(_round_number, maxi(1, shift_schedule.phases.size())) == 0
 
 
+func _is_dnz_manager_boss_round(round_number: int) -> bool:
+	if _selected_character_id != &"dnz":
+		return false
+	if round_number == 8 or round_number == 16:
+		return true
+	return _endless_mode and round_number >= CAMPAIGN_WAVE_COUNT + 10 and posmod(round_number, 10) == 0
+
+
 func _boss_definition_for_round() -> EnemyDefinition:
+	if _is_dnz_manager_boss_round(_round_number):
+		return DNZ_MANAGER_BOSS
 	if _current_wave != null and _current_wave.is_boss_wave and _current_wave.boss_definition != null:
 		return _current_wave.boss_definition
 	return shift_schedule.boss_definition
@@ -978,14 +1004,20 @@ func _spawn_enemy(
 	enemy.configure(definition, health_multiplier, _player, _current_damage_multiplier(), _round_number)
 	enemy.set_meta("room_id", _current_room_id)
 	if boss:
-		enemy.health_changed.connect(_on_boss_health_changed)
+		if enemy.is_immortal_boss():
+			enemy.stagger_changed.connect(_on_boss_stagger_changed)
+		else:
+			enemy.health_changed.connect(_on_boss_health_changed)
 	_actor_layer.add_child(enemy)
 	enemy.global_position = spawn_point
 	enemy.defeated.connect(_on_enemy_defeated)
 	if boss:
 		_hud.set_phase_name("BOSS: " + definition.display_name)
 		BakkalAudio.play_sfx(&"boss_arrival")
-		_on_boss_health_changed(enemy.get_health(), maxi(1, roundi(float(definition.max_health) * health_multiplier)))
+		if enemy.is_immortal_boss():
+			_on_boss_stagger_changed(roundi(enemy.get_stagger_value()), roundi(enemy.get_stagger_maximum()), false)
+		else:
+			_on_boss_health_changed(enemy.get_health(), maxi(1, roundi(float(definition.max_health) * health_multiplier)))
 
 
 func _spawn_position() -> Vector2:
@@ -1166,6 +1198,12 @@ func _on_boss_health_changed(current: int, maximum: int) -> void:
 	_hud.set_boss_health(boss_name.to_upper(), current, maximum)
 
 
+func _on_boss_stagger_changed(current: int, maximum: int, stunned: bool) -> void:
+	var boss_definition := _boss_definition_for_round()
+	var boss_name := boss_definition.display_name if boss_definition != null else "MANAGER"
+	_hud.set_boss_stagger(boss_name.to_upper(), current, maximum, stunned)
+
+
 func _on_room_event_message(room_id: StringName, message: String) -> void:
 	var room_names := {
 		&"market": "MAIN MARKET",
@@ -1298,26 +1336,49 @@ func _build_level_choices() -> Array[Dictionary]:
 	var primary: Dictionary = weapon_targets[target_index]
 	var primary_id := String(primary.get("id", ""))
 	var primary_name := String(primary.get("name", "equipped tool"))
-	var primary_is_elemental := int(primary.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)) == WeaponDefinition.DamageType.ELEMENTAL
+	var primary_scaling_stat := int(primary.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED))
+	var primary_elemental_only := bool(primary.get("elemental_damage_only", false))
 	var primary_supports_rate := bool(primary.get("supports_fire_rate", true))
 	var weapon_damage_bonus := mini(4, 1 + floori(float(progress_tier + int(primary.get("tier", 1))) / 2.0))
 	var weapon_rate_bonus := minf(0.12, 0.04 + float(progress_tier) * 0.015)
+	var primary_damage_stat: StringName = &"ranged_damage"
+	var primary_damage_label := "Ranged Damage"
+	var primary_damage_value := weapon_damage_bonus
+	match primary_scaling_stat:
+		WeaponDefinition.DamageScalingStat.MELEE:
+			primary_damage_stat = &"melee_damage"
+			primary_damage_label = "Melee Damage"
+		WeaponDefinition.DamageScalingStat.ELEMENTAL:
+			primary_damage_stat = &"elemental_damage"
+			primary_damage_label = "Elemental Damage"
+			primary_damage_value = elemental_bonus
+		WeaponDefinition.DamageScalingStat.ENGINEERING:
+			primary_damage_stat = &"engineering"
+			primary_damage_label = "Engineering"
+			primary_damage_value = mini(5, 2 + progress_tier)
+	if primary_elemental_only:
+		primary_damage_stat = &"elemental_damage"
+		primary_damage_label = "Elemental Damage"
+		primary_damage_value = elemental_bonus
+	var primary_damage_effect: Dictionary = {
+		"stat": primary_damage_stat, "value": primary_damage_value,
+		"label": primary_damage_label,
+	}
 	choices.append({
 		"id": &"aisle_tool_calibration",
-		"name": "Aisle-tool calibration",
-		"description": "%s lands a firmer hit after the mid-shift tune-up." % primary_name,
-		"effects": [{"stat": &"weapon_damage", "value": weapon_damage_bonus, "label": "%s damage" % primary_name, "weapon_id": primary_id}],
+		"name": "Milk-pressure calibration" if primary_elemental_only else "%s calibration" % primary_damage_label,
+		"description": "Increase the milk hose's Elemental Damage scaling." if primary_elemental_only else "%s attacks gain the matching damage stat." % String(primary.get("category", "Ranged")),
+		"effects": [primary_damage_effect],
 	})
 	var tuneup_name := "Closer's tune-up"
 	var tuneup_description := "Rebalance %s for a faster, slightly stronger cycle." % primary_name
 	var tuneup_effects: Array[Dictionary] = [
-		{"stat": &"weapon_damage", "value": maxi(1, weapon_damage_bonus - 1), "label": "%s damage" % primary_name, "weapon_id": primary_id},
+		primary_damage_effect.duplicate(),
 		{"stat": &"weapon_fire_rate", "value": weapon_rate_bonus, "label": "%s fire rate" % primary_name, "weapon_id": primary_id},
 	]
-	if primary_is_elemental:
-		tuneup_name = "Pressure-regulator tune-up"
-		tuneup_description = "Set %s to a stronger spray and keep its cycle moving." % primary_name
-		tuneup_effects[1] = {"stat": &"elemental_damage", "value": elemental_bonus, "label": "Elemental Damage"}
+	if primary_elemental_only:
+		tuneup_name = "Milk-hose pressure tune-up"
+		tuneup_description = "Increase the milk hose's Elemental Damage and firing rate."
 	elif not primary_supports_rate:
 		tuneup_name = "Steady-hand reinforcement"
 		tuneup_description = "Brace %s for cleaner, harder contact." % primary_name
@@ -1329,12 +1390,10 @@ func _build_level_choices() -> Array[Dictionary]:
 		"effects": tuneup_effects,
 	})
 	var extra_effects: Array[Dictionary] = [
-		{"stat": &"weapon_damage", "value": weapon_damage_bonus, "label": "%s damage" % primary_name, "weapon_id": primary_id},
+		primary_damage_effect.duplicate(),
 		{"stat": &"move_speed", "value": minf(0.04, 0.02 + float(progress_tier) * 0.005)},
 	]
-	if primary_is_elemental:
-		extra_effects.append({"stat": &"elemental_damage", "value": elemental_bonus, "label": "Elemental Damage"})
-	elif primary_supports_rate:
+	if primary_supports_rate:
 		var secondary_name := primary_name
 		var secondary_id := primary_id
 		if weapon_targets.size() > 1:
@@ -1361,8 +1420,8 @@ func _build_level_choices() -> Array[Dictionary]:
 		tradeoff_positive = {"stat": &"weapon_fire_rate", "value": minf(0.14, weapon_rate_bonus + 0.025), "label": "%s fire rate" % primary_name, "weapon_id": primary_id}
 	else:
 		tradeoff_name = "Heavy-handed restock"
-		tradeoff_description = "Hit harder with %s, but give up some general striking force." % primary_name
-		tradeoff_positive = {"stat": &"weapon_damage", "value": weapon_damage_bonus, "label": "%s damage" % primary_name, "weapon_id": primary_id}
+		tradeoff_description = "Increase %s power, but give up some general striking force." % primary_damage_label
+		tradeoff_positive = primary_damage_effect.duplicate()
 	choices.append({
 		"id": &"overclocked_register_tradeoff",
 		"name": tradeoff_name,
@@ -1382,22 +1441,8 @@ func _build_level_choices() -> Array[Dictionary]:
 			"name": "Spare-parts crate",
 			"description": "Improve the equipped %s and your fixture output." % primary_name,
 			"effects": [
-				{"stat": &"weapon_damage", "value": mini(3, weapon_damage_bonus), "label": "%s damage" % primary_name, "weapon_id": primary_id},
-				{"stat": &"engineering", "value": 1 + floori(float(progress_tier) / 2.0), "label": "Engineering"},
-			],
-		})
-	if weapon_targets.size() > 1:
-		var secondary_index := posmod(target_index + 1, weapon_targets.size())
-		var secondary: Dictionary = weapon_targets[secondary_index]
-		var secondary_id := String(secondary.get("id", ""))
-		var secondary_name := String(secondary.get("name", "backup tool"))
-		choices.append({
-			"id": &"cross_tool_rebalance",
-			"name": "Borrowed torque",
-			"description": "Move one point of force from %s into %s." % [secondary_name, primary_name],
-			"effects": [
-				{"stat": &"weapon_damage", "value": mini(3, weapon_damage_bonus), "label": "%s damage" % primary_name, "weapon_id": primary_id},
-				{"stat": &"weapon_damage", "value": -1, "label": "%s damage" % secondary_name, "weapon_id": secondary_id},
+				primary_damage_effect.duplicate(),
+				{"stat": &"move_speed", "value": minf(0.04, 0.02 + float(progress_tier) * 0.005)},
 			],
 		})
 	return choices
@@ -1520,7 +1565,7 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 			var merge_offer := weapon.duplicate(true) as WeaponDefinition
 			merge_offer.tier = current_tier + 1
 			merge_offer.shop_offer_kind = WeaponDefinition.ShopOfferKind.MERGE_COPY
-			merge_offer.description = "Buy a matching copy to merge this tool into Tier %s." % _tier_roman(current_tier + 1)
+			merge_offer.description = _weapon_tier_offer_description(weapon.id, current_tier, current_tier + 1, false)
 			candidates.append(merge_offer)
 			var available_direct_tier := 1
 			if _round_number >= 8:
@@ -1533,7 +1578,7 @@ func _roll_shop_offers(excluded_keys: Dictionary = {}) -> Array:
 				var direct_offer := weapon.duplicate(true) as WeaponDefinition
 				direct_offer.tier = available_direct_tier
 				direct_offer.shop_offer_kind = WeaponDefinition.ShopOfferKind.DIRECT_TIER
-				direct_offer.description = "Skip the merge and upgrade this tool directly to Tier %s." % _tier_roman(available_direct_tier)
+				direct_offer.description = _weapon_tier_offer_description(weapon.id, current_tier, available_direct_tier, true)
 				candidates.append(direct_offer)
 	for upgrade: UpgradeDefinition in UPGRADE_DEFINITIONS:
 		if not _player.can_apply_upgrade(upgrade):
@@ -1636,9 +1681,16 @@ func _build_stat_choices() -> Array[Dictionary]:
 	var protection_bonus := minf(0.07, 0.03 + float(progress_tier) * 0.01)
 	var luck_bonus := 5 + progress_tier * 2
 	var armor_bonus := 1 + floori(float(progress_tier) / 2.0)
+	var elemental_bonus := 1 + floori(float(progress_tier) / 2.0)
+	var class_damage_bonus := 1 + floori(float(progress_tier) / 2.0)
+	var engineering_bonus := 2 + progress_tier
 	return [
 		{"id": &"speed", "name": "QUICKER FEET", "description": "+%d%% movement speed for this run." % roundi(speed_bonus * 100.0), "value": speed_bonus},
 		{"id": &"health", "name": "HEALTHIER SHIFT", "description": "+%d maximum health and restore %d health now." % [health_bonus, health_bonus], "value": float(health_bonus)},
+		{"id": &"melee_damage", "name": "SHARPENED STOCK HOOK", "description": "+%d Melee Damage for close-range tools." % class_damage_bonus, "value": float(class_damage_bonus)},
+		{"id": &"ranged_damage", "name": "TUNED PRICE GUN", "description": "+%d Ranged Damage for thrown and projectile tools." % class_damage_bonus, "value": float(class_damage_bonus)},
+		{"id": &"elemental_damage", "name": "COOLANT CONCENTRATE", "description": "+%d Elemental Damage for elemental weapons, including the Milk Hose." % elemental_bonus, "value": float(elemental_bonus)},
+		{"id": &"engineering", "name": "FIXTURE MAINTENANCE", "description": "+%d Engineering for turrets and mines." % engineering_bonus, "value": float(engineering_bonus)},
 		{"id": &"lifesteal", "name": "RETURNING ENERGY", "description": "Recover %d%% of damage dealt as health." % roundi(lifesteal_bonus * 100.0), "value": lifesteal_bonus},
 		{"id": &"dodge", "name": "QUICK REFLEXES", "description": "+%d%% chance to dodge an incoming hit." % roundi(dodge_bonus * 100.0), "value": dodge_bonus},
 		{"id": &"protection", "name": "PROTECTIVE APRON", "description": "Reduce each hit's damage by %d%% for this run." % roundi(protection_bonus * 100.0), "value": protection_bonus},
@@ -1652,7 +1704,7 @@ func _repeatable_stat_fallback(variant_index: int) -> Dictionary:
 	var repeatable_choices: Array[Dictionary] = []
 	for choice: Dictionary in choices:
 		var choice_id := StringName(choice.get("id", &""))
-		if choice_id in [&"health", &"speed", &"protection", &"armor", &"luck"] and _player.can_apply_level_stat_delta(choice_id, float(choice.get("value", 0.0))):
+		if choice_id in [&"health", &"speed", &"melee_damage", &"ranged_damage", &"elemental_damage", &"engineering", &"protection", &"armor", &"luck"] and _player.can_apply_level_stat_delta(choice_id, float(choice.get("value", 0.0))):
 			repeatable_choices.append(choice)
 	if repeatable_choices.is_empty():
 		return {}
@@ -1680,6 +1732,28 @@ func _shop_candidate_key(offer: Variant) -> String:
 
 func _tier_roman(tier: int) -> String:
 	return ["I", "II", "III", "IV"][clampi(tier, 1, 4) - 1]
+
+
+func _weapon_tier_offer_description(weapon_id: StringName, current_tier: int, target_tier: int, direct: bool) -> String:
+	if weapon_id == &"box_cutter":
+		var steps := maxi(1, target_tier - current_tier)
+		var verb := "Skip %d merges and sharpen" % steps if direct else "Merge a matching cutter and sharpen"
+		var damage_percent := roundi((pow(1.2, float(target_tier - 1)) - 1.0) * 100.0)
+		var reach := 88 + (target_tier - 1) * 7
+		var arc := 105 + (target_tier - 1) * 10
+		var rate := roundi((1.0 - pow(0.93, float(target_tier - 1))) * 100.0)
+		return "%s the Box Cutter to Tier %s: +%d%% base damage, %d px reach, %d° swing and %d%% faster cycle. It scales with Melee Damage." % [verb, _tier_roman(target_tier), damage_percent, reach, arc, rate]
+	if weapon_id != &"milk_hose":
+		if direct:
+			return "Skip the merge and upgrade this tool directly to Tier %s." % _tier_roman(target_tier)
+		return "Buy a matching copy to merge this tool into Tier %s." % _tier_roman(target_tier)
+	var merge_count := maxi(1, target_tier - current_tier)
+	var pellet_count := 5 + target_tier - 1
+	var scaling_percent := 75 + (target_tier - 1) * 10
+	var rate_percent := roundi((1.0 - pow(0.93, float(target_tier - 1))) * 100.0)
+	var spread_degrees := maxi(20, 34 - (target_tier - 1) * 3)
+	var action := "Skip %d merges and raise" % merge_count if direct else "Merge a matching hose copy and raise"
+	return "%s the Milk Hose to Tier %s: %d pellets, %d%% Elemental Damage scaling, %d° fan and %d%% faster cycle. Melee and weapon-damage bonuses do not apply." % [action, _tier_roman(target_tier), pellet_count, scaling_percent, spread_degrees, rate_percent]
 
 
 func _prices_for_offers(offers: Array) -> Array[int]:
@@ -1917,6 +1991,7 @@ func _gather_save_state() -> Dictionary:
 		p_data = _player.call("get_save_data")
 
 	return {
+		"character_id": String(_player.character_id),
 		"round_number": _round_number,
 		"round_elapsed": _round_elapsed,
 		"elapsed": _elapsed,

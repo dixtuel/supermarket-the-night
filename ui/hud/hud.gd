@@ -164,6 +164,17 @@ func set_boss_health(name: String, current: int, maximum: int) -> void:
 	_boss_title.text = name
 	_boss_bar.max_value = maxi(1, maximum)
 	_boss_bar.value = clampi(current, 0, maxi(1, maximum))
+	_boss_bar.modulate = Color.WHITE
+
+
+func set_boss_stagger(name: String, current: int, maximum: int, stunned: bool) -> void:
+	if not is_instance_valid(_boss_panel) or not is_instance_valid(_boss_title) or not is_instance_valid(_boss_bar):
+		return
+	_boss_panel.visible = true
+	_boss_title.text = name + ("  ·  STAGGERED" if stunned else "  ·  POISE")
+	_boss_bar.max_value = maxi(1, maximum)
+	_boss_bar.value = maxi(1, maximum) if stunned else clampi(current, 0, maxi(1, maximum))
+	_boss_bar.modulate = Color(1.0, 0.68, 0.32, 1.0) if stunned else Color(1.0, 0.9, 0.62, 1.0)
 
 
 func show_room_event_message(heading: String, message: String) -> void:

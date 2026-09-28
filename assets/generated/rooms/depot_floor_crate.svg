@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="80" viewBox="0 0 96 80" shape-rendering="crispEdges">
+  <!-- Cardboard stock crate with a floor-contact shadow and a readable 3/4 footprint. -->
+  <ellipse cx="49" cy="69" rx="37" ry="8" fill="#11191a" opacity=".32"/>
+  <path d="m13 34 35-18 36 17-35 19Z" fill="#b17b43" stroke="#3b2b20" stroke-width="3"/>
+  <path d="m13 34 36 18v17L13 51Z" fill="#80542f" stroke="#3b2b20" stroke-width="3"/>
+  <path d="m49 52 35-19v17L49 69Z" fill="#9a6636" stroke="#3b2b20" stroke-width="3"/>
+  <path d="m20 34 28-14 27 13-27 15Z" fill="#d0a05e" stroke="#68482d" stroke-width="2"/>
+  <path d="m23 34 25 12 24-13" fill="none" stroke="#8e5f35" stroke-width="3"/>
+  <path d="m48 20 1 26m-30-9 29-15 29 13" fill="none" stroke="#edc781" stroke-width="2"/>
+  <path d="m18 46 26 13m9-6 27-15" fill="none" stroke="#c28a4d" stroke-width="2"/>
+  <rect x="31" y="37" width="14" height="8" fill="#d8c08a" stroke="#59432d" stroke-width="2"/>
+  <path d="M34 39h8m-8 3h6" stroke="#76583b" stroke-width="1.5"/>
+  <path d="m14 52 34 17m3 0 32-18" fill="none" stroke="#38291f" stroke-width="2"/>
+</svg>

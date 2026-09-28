@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/enemy_definition.gd" id="1_enemy"]
+[ext_resource type="Texture2D" path="res://assets/generated/actors/dnz_manager_walk.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_enemy")
+id = &"dnz_manager"
+display_name = "The Manager"
+combat_read = "Watch the dash lane, dodge the lighter flare, and keep moving when the tether catches you. Wall impacts leave him staggered."
+role = 4
+sprite = ExtResource("2_sprite")
+directional_walk_atlas = true
+sprite_scale = 0.25
+move_speed = 76.0
+max_health = 1200
+health_growth_per_wave = 0.0
+contact_damage = 14
+contact_range = 54.0
+contact_interval = 2.4
+xp_reward = 0
+material_reward = 0
+attack_type = 5
+immortal = true
+attack_range = 360.0
+attack_interval = 2.4
+attack_damage = 12
+charge_speed = 520.0
+telegraph_duration = 0.78
+recovery_duration = 0.8
+projectile_speed = 410.0
+projectile_count = 3
+zone_radius = 136.0
+zone_duration = 0.42
+zone_speed_multiplier = 0.7
+spawn_weight = 0.0

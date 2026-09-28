@@ -10,6 +10,7 @@ const PROJECTILE_SCENE: PackedScene = preload("res://combat/projectile/projectil
 
 @export var follow_distance: float = 42.0
 @export var follow_speed: float = 190.0
+@export var wall_clearance: float = 9.0
 @export var target_range: float = 380.0
 @export var projectile_speed: float = 490.0
 @export var walk_atlas: Texture2D
@@ -27,9 +28,9 @@ var _remaining: float = 0.0
 var _damage: int = 5
 var _fire_interval: float = 0.9
 var _fire_cooldown: float = 0.25
-var _orbit_angle: float = 0.0
 var _active: bool = false
 var _facing: StringName = &"down"
+var _trail_direction: Vector2 = Vector2.DOWN
 
 
 func _ready() -> void:
@@ -49,6 +50,7 @@ func activate(
 	_damage = maxi(1, damage)
 	_fire_interval = maxf(0.18, fire_interval)
 	_fire_cooldown = 0.2
+	_trail_direction = Vector2.DOWN
 	_active = is_instance_valid(_owner_actor) and is_instance_valid(_projectile_layer)
 	queue_redraw()
 
@@ -63,17 +65,41 @@ func _process(delta: float) -> void:
 	if _remaining <= 0.0:
 		_finish()
 		return
-	_orbit_angle = wrapf(_orbit_angle + delta * 1.6, 0.0, TAU)
-	var offset := Vector2.RIGHT.rotated(_orbit_angle) * follow_distance
-	var follow_target := _owner_actor.global_position + offset
+	var owner_velocity := Vector2.ZERO
+	if _owner_actor is CharacterBody2D:
+		owner_velocity = (_owner_actor as CharacterBody2D).velocity
+	if owner_velocity.length_squared() > 36.0:
+		_trail_direction = owner_velocity.normalized()
+	var follow_target := _owner_actor.global_position - _trail_direction * follow_distance
+	follow_target = _resolve_follow_target(follow_target)
 	var previous_position := global_position
-	global_position = global_position.move_toward(follow_target, follow_speed * delta)
+	var blend := 1.0 - exp(-maxf(1.0, follow_speed) * delta / maxf(follow_distance, 1.0))
+	global_position = global_position.lerp(follow_target, blend)
 	_update_walk_animation(global_position - previous_position)
 	_fire_cooldown = maxf(0.0, _fire_cooldown - delta)
 	if _fire_cooldown <= 0.0:
 		var target := _find_target()
 		if is_instance_valid(target) and _fire_at(target):
 			_fire_cooldown = _fire_interval
+
+
+func _resolve_follow_target(desired_position: Vector2) -> Vector2:
+	var world := get_world_2d()
+	if world == null:
+		return desired_position
+	var query := PhysicsRayQueryParameters2D.create(global_position, desired_position, 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var excluded: Array[RID] = []
+	if _owner_actor is CollisionObject2D:
+		excluded.append((_owner_actor as CollisionObject2D).get_rid())
+	query.exclude = excluded
+	var hit: Dictionary = world.direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return desired_position
+	var hit_position := hit.get("position", global_position) as Vector2
+	var travel := global_position.direction_to(desired_position)
+	return hit_position - travel * maxf(wall_clearance, 0.0)
 
 
 func _draw() -> void:
@@ -161,7 +187,7 @@ func _find_target() -> Node2D:
 
 func snap_to_owner() -> void:
 	if is_instance_valid(_owner_actor):
-		global_position = _owner_actor.global_position + Vector2(32.0, -10.0)
+		global_position = _owner_actor.global_position - _trail_direction * follow_distance
 
 
 func _fire_at(target: Node2D) -> bool:

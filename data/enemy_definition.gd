@@ -18,6 +18,7 @@ enum AttackType {
 	RANGED_PROJECTILE,
 	DROP_ZONE,
 	CHARGE_AND_SCATTER,
+	MANAGER_CYCLE,
 }
 
 @export var id: StringName = &""
@@ -49,6 +50,9 @@ enum AttackType {
 
 ## Optional role-specific behavior data for future actor controllers.
 @export var attack_type: AttackType = AttackType.CONTACT
+## Special manager encounter that cannot be killed; its stagger meter is the
+## encounter's progress feedback instead of health depletion.
+@export var immortal: bool = false
 @export_range(0.0, 1000.0, 1.0) var attack_range: float = 0.0
 @export_range(0.05, 60.0, 0.05) var attack_interval: float = 1.0
 @export_range(0, 10000, 1) var attack_damage: int = 0

@@ -6,8 +6,8 @@
 script = ExtResource("1_event")
 id = &"office_drawer"
 room_id = &"manager_office"
-display_name = "The manager left a first-aid pouch in the desk."
-description = "A health pickup appears at a random time while the office is active."
+display_name = "First aid pouch"
+description = "A first-aid pouch appears on the clear floor in front of the manager's desk."
 kind = 0
 min_delay_seconds = 28.0
 max_delay_seconds = 48.0

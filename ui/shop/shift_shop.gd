@@ -599,9 +599,17 @@ func _on_weapon_chip_pressed(weapon: Dictionary) -> void:
 	_weapon_detail_tier.text = "TIER %s  /  SELECTED WEAPON" % _tier_suffix(int(weapon.get("tier", 1)))
 	_weapon_detail_icon.texture = weapon.get("icon") as Texture2D
 	_clear_inventory_row(_weapon_detail_stats)
+	_add_detail_stat("Weapon class", String(weapon.get("category", "Ranged")))
 	_add_detail_stat("Damage", str(weapon.get("damage", "—")))
+	if int(weapon.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)) == WeaponDefinition.DamageType.ELEMENTAL:
+		_add_detail_stat("Elemental scaling", "%d%%" % roundi(float(weapon.get("elemental_scaling_coefficient", 0.0)) * 100.0))
+	if String(weapon.get("category", "")) == "Melee":
+		_add_detail_stat("Swing arc", "%d°" % roundi(float(weapon.get("melee_arc_degrees", 100.0))))
+	elif float(weapon.get("projectile_spread_degrees", 0.0)) > 0.0:
+		_add_detail_stat("Fan width", "%d°" % roundi(float(weapon.get("projectile_spread_degrees", 0.0))))
 	_add_detail_stat("Fire interval", "%.2f s" % float(weapon.get("fire_interval", 0.0)))
-	_add_detail_stat("Projectiles", str(weapon.get("projectile_count", 1)))
+	if String(weapon.get("category", "")) != "Melee":
+		_add_detail_stat("Projectiles", str(weapon.get("projectile_count", 1)))
 	_add_detail_stat("Range", str(weapon.get("range", 0)))
 	_add_detail_stat("Area", str(weapon.get("area", 0)))
 	_add_detail_stat("Pierce", str(weapon.get("pierce", 0)))
@@ -844,6 +852,14 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 			description = String(stat_offer.get("description", "A lasting shift adjustment."))
 			resource_valid = true
 			match stat_id:
+				"melee_damage":
+					texture = load("res://assets/generated/weapons/box_cutter.png") as Texture2D
+				"ranged_damage":
+					texture = load("res://assets/generated/weapons/projectile_tomato_can.png") as Texture2D
+				"elemental_damage":
+					texture = load("res://assets/generated/weapons/milk_hose.svg") as Texture2D
+				"engineering":
+					texture = load("res://assets/generated/content_pack/engineering_caddy.png") as Texture2D
 				"speed":
 					texture = load("res://assets/generated/shop_icons/comfortable_shoes.png") as Texture2D
 				"health":

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/character_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"dnz"
+display_name = "DNZ"
+display_name_tr = "DNZ"
+description = "A lighter, less forgiving start built around elemental damage."
+description_tr = "Element hasarına odaklı, daha kırılgan bir başlangıç."
+max_health = 92
+damage_multiplier = 0.92
+elemental_damage = 2
+starting_weapon_id = &"milk_hose"
+portrait_path = "res://assets/generated/actors/player_dnz.png"
+walk_atlas_path = "res://assets/generated/actors/player_dnz_walk.png"

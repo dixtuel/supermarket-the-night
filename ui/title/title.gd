@@ -4,6 +4,8 @@ class_name BakkalTitleScreen
 const ARENA_PATH := "res://levels/arena/arena.tscn"
 const TEST_ARENA_PATH := "res://levels/arena/test_arena.tscn"
 const RECORD_PATH := "user://bakkal_records.cfg"
+const CHARACTER_PREFERENCE_PATH := "user://character_preferences.cfg"
+const CHARACTER_ROSTER := preload("res://data/character_roster.gd")
 
 # Core Palette Tokens
 const COLOR_BASE_DARK := Color("10191c")     # Coolers after closing
@@ -30,10 +32,17 @@ const PANEL := COLOR_SURFACE_DARK
 
 var _menu: Control
 var _clerk: TextureRect
+var _last_character_label: Label
 var _active_modal: Control
 var _modal_return_focus: Control
 var _buttons: Array[Button] = []
 var _btn_focus_indicators: Dictionary = {}
+var _selected_character_index: int = 0
+var _selected_run_is_endless: bool = false
+var _character_preview: TextureRect
+var _character_name_label: Label
+var _character_description_label: Label
+var _character_stats_label: Label
 
 
 # Custom receipt divider line (dashed or double)
@@ -89,6 +98,15 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if is_instance_valid(_active_modal) and _active_modal.has_meta("is_character_select"):
+		if event.is_action_pressed("ui_left"):
+			_cycle_character(-1)
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action_pressed("ui_right"):
+			_cycle_character(1)
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
 		if is_instance_valid(_active_modal):
 			if _active_modal.has_meta("is_settings"):
@@ -161,7 +179,7 @@ func _build() -> void:
 	add_child(clerk_shadow)
 
 	_clerk = TextureRect.new()
-	_clerk.texture = load("res://assets/generated/actors/player_night_clerk.png")
+	_clerk.texture = _character_portrait(_last_character_id())
 	_clerk.anchor_left = 0.38
 	_clerk.anchor_right = 0.66
 	_clerk.anchor_top = 0.13
@@ -174,6 +192,19 @@ func _build() -> void:
 	_clerk.modulate = Color(1.0, 0.99, 0.96, 0.98)
 	_clerk.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_clerk)
+
+	var last_character_prefix := "LAST PLAYED · " if I18n.current_locale == "en" else "SON OYNANAN · "
+	_last_character_label = _label(last_character_prefix + _character_display_name(_last_character_id()), 12, COLOR_RECEIPT_PAPER)
+	_last_character_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_last_character_label.anchor_left = 0.40
+	_last_character_label.anchor_right = 0.67
+	_last_character_label.anchor_top = 0.10
+	_last_character_label.anchor_bottom = 0.15
+	_last_character_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if OS.has_feature("portmaster"):
+		_last_character_label.anchor_left += 0.13
+		_last_character_label.anchor_right += 0.13
+	add_child(_last_character_label)
 
 	# 4. Compact Operator Terminal Menu (Target: ~320-330px wide, ~420-440px tall at 1280x720)
 	_build_compact_menu()
@@ -322,6 +353,10 @@ func _build_menu() -> void:
 
 func _resume_saved_run() -> void:
 	BakkalAudio.play_sfx(&"ui_confirm")
+	var saved_run := RunSaveManager.get_saved_run_summary()
+	var player_data: Dictionary = saved_run.get("player", {})
+	var saved_character := StringName(String(saved_run.get("character_id", player_data.get("character_id", "night_clerk"))))
+	get_tree().set_meta("supermarket_character_id", String(CHARACTER_ROSTER.get_character(saved_character).id))
 	RunSaveManager.set_meta("should_resume", true)
 	get_tree().change_scene_to_file("res://levels/arena/arena.tscn")
 
@@ -535,13 +570,156 @@ func _mobile_menu_label(code: String, fallback: String) -> String:
 # --- Actions and Callbacks (Preserved 1:1) ---
 
 func _start_run() -> void:
-	get_tree().set_meta("supermarket_endless_mode", false)
-	get_tree().change_scene_to_file(ARENA_PATH)
+	_show_character_select(false)
 
 
 func _start_endless_run() -> void:
-	get_tree().set_meta("supermarket_endless_mode", true)
+	_show_character_select(true)
+
+
+func _show_character_select(is_endless: bool) -> void:
+	_selected_run_is_endless = is_endless
+	_selected_character_index = CHARACTER_ROSTER.get_index(_last_character_id())
+	var title := "CHOOSE YOUR CHARACTER" if I18n.current_locale == "en" else "KARAKTERİNİ SEÇ"
+	var stack := _open_modal(title, Vector2i(560, 510))
+	_active_modal.set_meta("is_character_select", true)
+	var mode_text := "ENDLESS NIGHT" if is_endless else "20-ROUND CAMPAIGN"
+	stack.add_child(_label(mode_text, 11, COLOR_SURFACE))
+
+	var character_row := HBoxContainer.new()
+	character_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	character_row.add_theme_constant_override("separation", 8)
+	stack.add_child(character_row)
+	var previous := _character_select_button("‹", func() -> void: _cycle_character(-1), 54)
+	character_row.add_child(previous)
+	_character_preview = TextureRect.new()
+	_character_preview.custom_minimum_size = Vector2(180, 210)
+	_character_preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_character_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_character_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_character_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	character_row.add_child(_character_preview)
+	var next := _character_select_button("›", func() -> void: _cycle_character(1), 54)
+	character_row.add_child(next)
+
+	_character_name_label = _label("", 20, COLOR_BASE_DARK)
+	_character_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(_character_name_label)
+	_character_description_label = _label("", 11, COLOR_SURFACE)
+	_character_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_character_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(_character_description_label)
+	_character_stats_label = _label("", 11, COLOR_BASE_DARK)
+	_character_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(_character_stats_label)
+
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	stack.add_child(actions)
+	var back := _character_select_button("BACK" if I18n.current_locale == "en" else "GERİ", _close_modal, 48)
+	var begin := _character_select_button("START SHIFT" if I18n.current_locale == "en" else "VARDİYAYI BAŞLAT", _confirm_character_selection, 48)
+	begin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(back)
+	actions.add_child(begin)
+	previous.focus_neighbor_top = previous.get_path()
+	previous.focus_neighbor_bottom = begin.get_path()
+	previous.focus_neighbor_right = next.get_path()
+	next.focus_neighbor_left = previous.get_path()
+	next.focus_neighbor_top = next.get_path()
+	next.focus_neighbor_bottom = begin.get_path()
+	back.focus_neighbor_top = previous.get_path()
+	back.focus_neighbor_right = begin.get_path()
+	begin.focus_neighbor_top = next.get_path()
+	begin.focus_neighbor_left = back.get_path()
+	begin.grab_focus.call_deferred()
+	_refresh_character_selection()
+
+
+func _character_select_button(text: String, callback: Callable, height: float) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_ALL
+	button.custom_minimum_size = Vector2(0, maxf(height, _mobile_touch_target(get_viewport().get_visible_rect().size)))
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_size_override("font_size", roundi(15.0 * _receipt_ui_scale()))
+	button.add_theme_color_override("font_color", COLOR_BASE_DARK)
+	button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
+	button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+	button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
+	button.add_theme_stylebox_override("hover", _receipt_button_style(false, false, &"hover"))
+	button.add_theme_stylebox_override("focus", _receipt_button_style(false, false, &"focus"))
+	button.add_theme_stylebox_override("pressed", _receipt_button_style(false, false, &"pressed"))
+	button.pressed.connect(callback)
+	return button
+
+
+func _cycle_character(direction: int) -> void:
+	var count := CHARACTER_ROSTER.CHARACTERS.size()
+	if count <= 0:
+		return
+	_selected_character_index = posmod(_selected_character_index + direction, count)
+	_refresh_character_selection()
+	BakkalAudio.play_sfx(&"ui_confirm")
+
+
+func _refresh_character_selection() -> void:
+	if not is_instance_valid(_character_preview):
+		return
+	var definition: CharacterDefinition = CHARACTER_ROSTER.CHARACTERS[_selected_character_index]
+	_character_preview.texture = _character_portrait(definition.id)
+	var english := I18n.current_locale == "en"
+	_character_name_label.text = definition.display_name if english else definition.display_name_tr
+	_character_description_label.text = definition.description if english else definition.description_tr
+	var weapon_name := String(definition.starting_weapon_id).replace("_", " ").to_upper()
+	if english:
+		_character_stats_label.text = "HP %d  ·  DAMAGE %d%%  ·  ELEMENT %+d\nSTARTER: %s" % [definition.max_health, roundi((definition.damage_multiplier - 1.0) * 100.0), definition.elemental_damage, weapon_name]
+	else:
+		if definition.starting_weapon_id == &"milk_hose":
+			weapon_name = "SÜT HORTUMU"
+		elif definition.starting_weapon_id == &"can_launcher":
+			weapon_name = "KONSERVE FIRLATICI"
+		_character_stats_label.text = "CAN %d  ·  HASAR %d%%  ·  ELEMENT %+d\nBAŞLANGIÇ: %s" % [definition.max_health, roundi((definition.damage_multiplier - 1.0) * 100.0), definition.elemental_damage, weapon_name]
+
+
+func _confirm_character_selection() -> void:
+	var definition: CharacterDefinition = CHARACTER_ROSTER.CHARACTERS[_selected_character_index]
+	_save_last_character_id(definition.id)
+	get_tree().set_meta("supermarket_endless_mode", _selected_run_is_endless)
+	get_tree().set_meta("supermarket_character_id", String(definition.id))
+	BakkalAudio.play_sfx(&"ui_confirm")
 	get_tree().change_scene_to_file(ARENA_PATH)
+
+
+func _last_character_id() -> StringName:
+	var config := ConfigFile.new()
+	if config.load(CHARACTER_PREFERENCE_PATH) == OK:
+		var saved := StringName(String(config.get_value("character", "last_character_id", "night_clerk")))
+		return CHARACTER_ROSTER.get_character(saved).id
+	return CHARACTER_ROSTER.DEFAULT_CHARACTER_ID
+
+
+func _save_last_character_id(character_id: StringName) -> void:
+	var config := ConfigFile.new()
+	config.load(CHARACTER_PREFERENCE_PATH)
+	config.set_value("character", "last_character_id", String(character_id))
+	var error := config.save(CHARACTER_PREFERENCE_PATH)
+	if error != OK:
+		push_warning("Could not save last selected character preference: %s" % error_string(error))
+
+
+func _character_display_name(character_id: StringName) -> String:
+	var definition: CharacterDefinition = CHARACTER_ROSTER.get_character(character_id)
+	return String(definition.display_name if I18n.current_locale == "en" else definition.display_name_tr).to_upper()
+
+
+func _character_portrait(character_id: StringName) -> Texture2D:
+	var definition: CharacterDefinition = CHARACTER_ROSTER.get_character(character_id)
+	var path := definition.portrait_path
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return load("res://assets/generated/actors/player_night_clerk.png") as Texture2D
 
 
 func _start_test_run() -> void:

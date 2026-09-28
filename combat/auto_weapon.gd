@@ -59,6 +59,11 @@ func begin_wave(room_id: StringName) -> void:
 		var desired_count := clampi(int(state.get("deployable_count", maxi(1, int(state.get("projectile_count", 1))))), 1, MAX_DEPLOYABLE_INSTANCES)
 		for index: int in range(desired_count):
 			if index < instances.size() and is_instance_valid(instances[index]):
+				var active_structure := instances[index] as SurvivorProjectile
+				if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+					active_structure.update_turret_stats(_effective_structure_damage(state), float(state["fire_interval"]))
+				else:
+					active_structure.update_mine_stats(_effective_structure_damage(state), float(state["area_radius"]))
 				continue
 			if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
 				spawn_delays[index] = _deployable_rng.randf_range(0.0, TURRET_INITIAL_SPAWN_DELAY if index == 0 else 4.0)
@@ -121,6 +126,16 @@ func get_weapon_tier(weapon_id: StringName) -> int:
 	return int((_weapon_states[weapon_id] as Dictionary).get("tier", 1))
 
 
+func can_apply_weapon_damage_upgrade(target_weapon_id: StringName = &"") -> bool:
+	for weapon_id: StringName in _weapon_order:
+		if target_weapon_id != &"" and weapon_id != target_weapon_id:
+			continue
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		if not bool(state.get("elemental_damage_only", false)):
+			return true
+	return false
+
+
 func get_deployable_count(weapon_id: StringName) -> int:
 	if not _weapon_states.has(weapon_id):
 		return 0
@@ -141,9 +156,11 @@ func get_level_choice_weapon_targets() -> Array[Dictionary]:
 			"name": String(state.get("display_name", String(weapon_id))),
 			"damage_type": int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
 			"damage_scaling_stat": int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)),
+			"elemental_damage_only": bool(state.get("elemental_damage_only", false)),
+			"category": _weapon_category_name(state),
 			"engineering_coefficient": float(state.get("engineering_coefficient", 0.0)),
 			"is_structure": int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE],
-			"supports_fire_rate": int(state.get("attack_mode", -1)) != WeaponDefinition.AttackMode.ORBITAL_CONTACT,
+			"supports_fire_rate": _state_supports_fire_rate(state),
 			"tier": int(state.get("tier", 1)),
 			"level_damage_add": int(state.get("level_damage_add", 0)),
 			"level_fire_rate_bonus": float(state.get("level_fire_rate_bonus", 0.0)),
@@ -158,6 +175,8 @@ func can_apply_level_weapon_effect(effect: Dictionary) -> bool:
 	var state: Dictionary = _weapon_states[weapon_id]
 	var stat_id := StringName(String(effect.get("stat", "")))
 	var value := float(effect.get("value", 0.0))
+	if bool(state.get("elemental_damage_only", false)) and stat_id == &"weapon_damage":
+		return false
 	match stat_id:
 		&"weapon_damage":
 			var current_damage_add := int(state.get("level_damage_add", 0))
@@ -166,7 +185,54 @@ func can_apply_level_weapon_effect(effect: Dictionary) -> bool:
 			var next_effective_base := maxi(1, int(state.get("damage", 1)) + next_damage_add)
 			return roundi(value) != 0 and next_damage_add >= -20 and next_damage_add <= 20 and current_effective_base != next_effective_base
 		&"weapon_fire_rate":
-			return int(state.get("attack_mode", -1)) != WeaponDefinition.AttackMode.ORBITAL_CONTACT and value > 0.0 and float(state.get("level_fire_rate_bonus", 0.0)) + value <= 0.3
+			return _state_supports_fire_rate(state) and value > 0.0 and float(state.get("level_fire_rate_bonus", 0.0)) + value <= 0.3
+	return false
+
+
+func _weapon_category_name(state: Dictionary) -> String:
+	var mode := int(state.get("attack_mode", -1))
+	if mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+		return "Engineering"
+	match int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)):
+		WeaponDefinition.DamageScalingStat.MELEE:
+			return "Melee"
+		WeaponDefinition.DamageScalingStat.ELEMENTAL:
+			return "Elemental"
+	return "Ranged"
+
+
+func _state_supports_fire_rate(state: Dictionary) -> bool:
+	return int(state.get("attack_mode", -1)) not in [WeaponDefinition.AttackMode.ORBITAL_CONTACT, WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]
+
+
+func can_apply_upgrade(upgrade: UpgradeDefinition) -> bool:
+	if upgrade == null:
+		return false
+	for weapon_id: StringName in _weapon_order:
+		if upgrade.target_weapon_id != &"" and weapon_id != upgrade.target_weapon_id:
+			continue
+		if _state_supports_upgrade(_weapon_states.get(weapon_id, {}), upgrade.effect, upgrade.target_weapon_id != &""):
+			return true
+	return false
+
+
+func _state_supports_upgrade(state: Dictionary, effect: int, weapon_specific: bool = false) -> bool:
+	var mode := int(state.get("attack_mode", -1))
+	if effect in [UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD, UpgradeDefinition.Effect.WEAPON_DAMAGE_MULTIPLIER]:
+		return not bool(state.get("elemental_damage_only", false))
+	match effect:
+		UpgradeDefinition.Effect.FIRE_RATE_MULTIPLIER:
+			return _state_supports_fire_rate(state) or (weapon_specific and mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE])
+		UpgradeDefinition.Effect.PROJECTILE_COUNT_ADD:
+			return mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.ORBITAL_CONTACT, WeaponDefinition.AttackMode.CONE_PROJECTILES]
+		UpgradeDefinition.Effect.PROJECTILE_SPEED_MULTIPLIER:
+			return mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES]
+		UpgradeDefinition.Effect.WEAPON_PIERCE_ADD:
+			return mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES]
+		UpgradeDefinition.Effect.WEAPON_RADIUS_ADD:
+			return mode in [WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE, WeaponDefinition.AttackMode.DEPLOYED_MINE, WeaponDefinition.AttackMode.ORBITAL_CONTACT]
+		UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD, UpgradeDefinition.Effect.WEAPON_DAMAGE_MULTIPLIER:
+			return true
 	return false
 
 
@@ -230,12 +296,26 @@ func _raise_weapon_tier(weapon_id: StringName, target_tier: int) -> bool:
 	while current_tier < bounded_target:
 		current_tier += 1
 		state["tier"] = current_tier
-		state["damage"] = maxi(1, roundi(float(state["damage"]) * 1.2))
-		state["fire_interval"] = maxf(0.05, float(state["fire_interval"]) * 0.93)
-		state["projectile_speed"] = float(state["projectile_speed"]) * 1.05
-		state["area_radius"] = float(state["area_radius"]) + 8.0
-		if current_tier % 2 == 1:
+		if weapon_id == &"milk_hose":
+			# The hose is an elemental weapon: tier upgrades improve its authored
+			# elemental profile, not melee/ranged/general weapon-damage stats.
+			state["damage"] = maxi(1, int(state["damage"]) + 1)
+			state["damage_scaling_coefficient"] = minf(1.25, float(state.get("damage_scaling_coefficient", 0.75)) + 0.10)
 			state["projectile_count"] = clampi(int(state["projectile_count"]) + 1, 1, 32)
+			state["projectile_spread_degrees"] = maxf(20.0, float(state.get("projectile_spread_degrees", 34.0)) - 3.0)
+		elif weapon_id == &"box_cutter":
+			state["damage"] = maxi(1, roundi(float(state["damage"]) * 1.2))
+			state["target_range"] = minf(118.0, float(state["target_range"]) + 7.0)
+			state["melee_arc_degrees"] = minf(145.0, float(state.get("melee_arc_degrees", 105.0)) + 10.0)
+		else:
+			state["damage"] = maxi(1, roundi(float(state["damage"]) * 1.2))
+		state["fire_interval"] = maxf(0.05, float(state["fire_interval"]) * 0.93)
+		if int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES]:
+			state["projectile_speed"] = float(state["projectile_speed"]) * 1.05
+		if weapon_id not in [&"milk_hose", &"box_cutter"]:
+			state["area_radius"] = float(state["area_radius"]) + 8.0
+			if current_tier % 2 == 1:
+				state["projectile_count"] = clampi(int(state["projectile_count"]) + 1, 1, 32)
 	_weapon_states[weapon_id] = state
 	return true
 
@@ -245,11 +325,15 @@ func apply_upgrade(upgrade: UpgradeDefinition) -> bool:
 		return false
 	if upgrade.effect == UpgradeDefinition.Effect.UNLOCK_WEAPON:
 		return unlock_weapon(upgrade.unlocks_weapon)
+	if not can_apply_upgrade(upgrade):
+		return false
 	var affected: bool = false
 	for weapon_id: StringName in _weapon_order:
 		if upgrade.target_weapon_id != &"" and weapon_id != upgrade.target_weapon_id:
 			continue
 		var state: Dictionary = _weapon_states[weapon_id]
+		if not _state_supports_upgrade(state, upgrade.effect, upgrade.target_weapon_id != &""):
+			continue
 		match upgrade.effect:
 			UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD:
 				state["damage"] = maxi(1, int(state["damage"]) + roundi(upgrade.value))
@@ -311,8 +395,15 @@ func get_shop_inventory_summary() -> Dictionary:
 			"name": name,
 			"tier": tier,
 			"damage": _effective_weapon_damage(state),
+			"category": _weapon_category_name(state),
+			"damage_scaling_stat": int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)),
+			"damage_type": int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
+			"elemental_damage_only": bool(state.get("elemental_damage_only", false)),
+			"elemental_scaling_coefficient": float(state.get("damage_scaling_coefficient", 0.0)),
 			"fire_interval": float(state.get("fire_interval", 0.0)),
 			"projectile_count": int(state.get("projectile_count", 1)),
+			"projectile_spread_degrees": float(state.get("projectile_spread_degrees", 0.0)),
+			"melee_arc_degrees": float(state.get("melee_arc_degrees", 100.0)),
 			"range": roundi(float(state.get("target_range", 0.0))),
 			"area": roundi(float(state.get("area_radius", 0.0))),
 			"pierce": int(state.get("pierce_count", 0)),
@@ -385,11 +476,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool:
-	if projectile_scene == null:
-		return false
 	var mode: int = int(state["attack_mode"])
 	var count: int = maxi(1, int(state["projectile_count"]))
 	if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+		if projectile_scene == null:
+			return false
 		var turret := _create_projectile(global_position) as SurvivorProjectile
 		if turret == null:
 			return false
@@ -399,9 +490,11 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 			float(state["effect_duration"]), _owner_actor, _current_room_id,
 			StringName(state.get("id", &"")), String(state.get("display_name", "Turret")), int(state.get("tier", 1))
 		)
-		turret.set_weapon_visual(state.get("sprite") as Texture2D)
+		turret.set_weapon_visual(state.get("sprite") as Texture2D, 44.0)
 		return true
 	if mode == WeaponDefinition.AttackMode.DEPLOYED_MINE:
+		if projectile_scene == null:
+			return false
 		var mine := _create_projectile(global_position) as SurvivorProjectile
 		if mine == null:
 			return false
@@ -411,9 +504,11 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 			_owner_actor, _current_room_id,
 			StringName(state.get("id", &"")), String(state.get("display_name", "Mine")), int(state.get("tier", 1))
 		)
-		mine.set_weapon_visual(state.get("sprite") as Texture2D)
+		mine.set_weapon_visual(state.get("sprite") as Texture2D, 38.0)
 		return true
 	if mode == WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE:
+		if projectile_scene == null:
+			return false
 		var beacon := _create_projectile(target.global_position) as SurvivorProjectile
 		if beacon == null:
 			return false
@@ -426,9 +521,18 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 		)
 		beacon.set_weapon_visual(state.get("sprite") as Texture2D, 32.0, true)
 		return true
+	if mode == WeaponDefinition.AttackMode.MELEE_SWEEP:
+		return _fire_melee_sweep(state, direction)
+	if projectile_scene == null:
+		return false
 	var fired: bool = false
 	for index: int in range(count):
-		var angle_offset: float = (float(index) - float(count - 1) * 0.5) * 0.12
+		var angle_offset: float = 0.0
+		if mode == WeaponDefinition.AttackMode.CONE_PROJECTILES:
+			var spread_radians := deg_to_rad(float(state.get("projectile_spread_degrees", 30.0)))
+			angle_offset = (float(index) / float(maxi(1, count - 1)) - 0.5) * spread_radians if count > 1 else 0.0
+		else:
+			angle_offset = (float(index) - float(count - 1) * 0.5) * 0.12
 		var shot_direction := direction.rotated(angle_offset)
 		var projectile := _create_projectile(global_position + shot_direction * float(state["muzzle_offset"])) as SurvivorProjectile
 		if projectile == null:
@@ -452,10 +556,56 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 				float(state["projectile_lifetime"]),
 				int(state["pierce_count"])
 			)
-		var sprite_size := 29.0 if StringName(state.get("id", &"")) == &"can_launcher" else 28.0
+		var weapon_id := StringName(state.get("id", &""))
+		var sprite_size := 29.0 if weapon_id == &"can_launcher" else (12.0 if weapon_id == &"milk_hose" else 28.0)
 		projectile.set_weapon_visual(state.get("sprite") as Texture2D, sprite_size)
 		fired = true
 	return fired
+
+
+func _fire_melee_sweep(state: Dictionary, direction: Vector2) -> bool:
+	if not is_instance_valid(_owner_actor) or not is_instance_valid(_projectile_layer):
+		return false
+	var half_arc := deg_to_rad(float(state.get("melee_arc_degrees", 100.0)) * 0.5)
+	var minimum_dot := cos(half_arc)
+	var attack_range := float(state.get("target_range", 88.0))
+	var hit_count := 0
+	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+		var enemy := candidate as Node2D
+		if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
+			continue
+		if enemy.has_meta("room_id") and StringName(enemy.get_meta("room_id")) != _current_room_id:
+			continue
+		var offset := enemy.global_position - global_position
+		if offset.length_squared() > attack_range * attack_range or offset.is_zero_approx():
+			continue
+		if direction.dot(offset.normalized()) < minimum_dot or not _has_clear_shot_to(enemy):
+			continue
+		SurvivorProjectile.apply_direct_hit(enemy, _effective_weapon_damage(state), _owner_actor, true)
+		hit_count += 1
+	_spawn_melee_swing_visual(state, direction)
+	return hit_count > 0
+
+
+func _spawn_melee_swing_visual(state: Dictionary, direction: Vector2) -> void:
+	var texture := state.get("sprite") as Texture2D
+	if texture == null:
+		return
+	var blade := Sprite2D.new()
+	blade.texture = texture
+	blade.z_index = 8
+	var longest_side := maxf(texture.get_width(), texture.get_height())
+	blade.scale = Vector2.ONE * (34.0 / maxf(1.0, longest_side))
+	_projectile_layer.add_child(blade)
+	blade.global_position = global_position + direction * 30.0
+	blade.global_rotation = direction.angle() + deg_to_rad(35.0)
+	var tween := blade.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(blade, "global_position", global_position + direction * 72.0, 0.13)
+	tween.tween_property(blade, "global_rotation", direction.angle() - deg_to_rad(35.0), 0.13)
+	tween.tween_property(blade, "modulate:a", 0.0, 0.13)
+	tween.set_parallel(false)
+	tween.tween_callback(blade.queue_free)
 
 
 func _ensure_orbitals(weapon_id: StringName, state: Dictionary) -> void:
@@ -509,8 +659,15 @@ func _effective_damage(
 
 
 func _effective_weapon_damage(state: Dictionary) -> int:
-	var tuned_damage := int(state.get("damage", 1)) + int(state.get("level_damage_add", 0))
+	var elemental_only := bool(state.get("elemental_damage_only", false))
+	var tuned_damage := int(state.get("damage", 1))
+	if not elemental_only:
+		tuned_damage += int(state.get("level_damage_add", 0))
 	var coefficient := clampf(float(state.get("damage_scaling_coefficient", 0.5)), 0.0, 2.0)
+	if elemental_only:
+		if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_elemental_damage"):
+			tuned_damage += roundi(float(_owner_actor.call("get_elemental_damage")) * coefficient)
+		return maxi(1, tuned_damage)
 	if is_instance_valid(_owner_actor):
 		match int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)):
 			WeaponDefinition.DamageScalingStat.MELEE:
@@ -521,6 +678,9 @@ func _effective_weapon_damage(state: Dictionary) -> int:
 					tuned_damage += roundi(float(_owner_actor.call("get_ranged_damage")) * coefficient)
 			WeaponDefinition.DamageScalingStat.ELEMENTAL:
 				pass
+			WeaponDefinition.DamageScalingStat.ENGINEERING:
+				if _owner_actor.has_method("get_engineering"):
+					tuned_damage += roundi(float(_owner_actor.call("get_engineering")) * coefficient)
 	return _effective_damage(
 		tuned_damage,
 		int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
@@ -687,7 +847,7 @@ func _spawn_deployable(weapon_id: StringName, state: Dictionary, slot_index: int
 			String(state.get("display_name", "Mine")), int(state.get("tier", 1))
 		)
 		deployed.mine_detonated.connect(_on_mine_detonated.bind(weapon_id, slot_index))
-	deployed.set_weapon_visual(state.get("sprite") as Texture2D)
+	deployed.set_weapon_visual(state.get("sprite") as Texture2D, 44.0 if is_turret else 38.0)
 	deployed.set_deployable_room_active(placement_room == _current_room_id)
 	instances[slot_index] = deployed
 	last_positions[slot_index] = spawn_position
@@ -784,6 +944,7 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"damage_type": definition.damage_type,
 		"damage_scaling_stat": definition.damage_scaling_stat,
 		"damage_scaling_coefficient": definition.damage_scaling_coefficient,
+		"elemental_damage_only": definition.elemental_damage_only,
 		"engineering_coefficient": definition.engineering_coefficient,
 		"fire_interval": definition.fire_interval,
 		"target_range": definition.target_range,
@@ -791,6 +952,8 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"projectile_speed": definition.projectile_speed,
 		"projectile_lifetime": definition.projectile_lifetime,
 		"projectile_count": definition.projectile_count,
+		"projectile_spread_degrees": definition.projectile_spread_degrees,
+		"melee_arc_degrees": definition.melee_arc_degrees,
 		"pierce_count": definition.pierce_count,
 		"area_radius": definition.area_radius,
 		"effect_duration": definition.effect_duration,

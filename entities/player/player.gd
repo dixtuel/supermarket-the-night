@@ -18,7 +18,10 @@ const WALK_COLUMNS := 4
 const WALK_ROWS := 4
 const WALK_FRAMES_PER_DIRECTION := 4
 const WALK_ANIMATION_SPEED := 8.0
+const CHARACTER_ROSTER := preload("res://data/character_roster.gd")
 
+var character_id: StringName = &"night_clerk"
+var starting_weapon_id: StringName = &"can_launcher"
 var current_health: int
 var current_xp: int = 0
 var current_level: int = 1
@@ -56,6 +59,8 @@ var _mobile_controls: MobileTouchControls
 
 func _ready() -> void:
 	add_to_group("player")
+	var selected_id := StringName(String(get_tree().get_meta("supermarket_character_id", "night_clerk")))
+	apply_character_definition(selected_id)
 	_build_walk_animations()
 	_weapon_controller = get_node_or_null("AutoWeapon") as SurvivorAutoWeapon
 	current_health = maxi(1, max_health)
@@ -65,6 +70,28 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_update_mobile_camera_fit)
 	health_changed.emit(current_health, max_health)
 	progress_changed.emit(current_xp, _xp_required, current_level)
+
+
+## Apply a roster profile before a new run is initialized. Arena systems can
+## read `starting_weapon_id` after the Player node enters the tree.
+func apply_character_definition(selected_id: StringName) -> void:
+	var definition: CharacterDefinition = CHARACTER_ROSTER.get_character(selected_id)
+	character_id = definition.id
+	starting_weapon_id = definition.starting_weapon_id
+	max_health = maxi(1, definition.max_health)
+	_damage_multiplier = clampf(definition.damage_multiplier, 0.25, 2.5)
+	_elemental_damage = clampi(definition.elemental_damage, 0, 99)
+	var atlas_path := definition.walk_atlas_path
+	if not atlas_path.is_empty() and ResourceLoader.exists(atlas_path):
+		walk_atlas = load(atlas_path) as Texture2D
+	if is_node_ready():
+		current_health = max_health
+		_build_walk_animations()
+		health_changed.emit(current_health, max_health)
+
+
+func get_character_definition() -> CharacterDefinition:
+	return CHARACTER_ROSTER.get_character(character_id)
 
 
 func _update_mobile_camera_fit() -> void:
@@ -248,12 +275,12 @@ func can_apply_upgrade(upgrade: UpgradeDefinition) -> bool:
 		UpgradeDefinition.Effect.PLAYER_MOVE_SPEED_MULTIPLIER:
 			var next_speed := _move_speed_multiplier * maxf(0.05, 1.0 + upgrade.value)
 			return next_speed > _move_speed_multiplier and next_speed <= 1.8
+		UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD, UpgradeDefinition.Effect.WEAPON_DAMAGE_MULTIPLIER:
+			return is_instance_valid(_weapon_controller) and _weapon_controller.has_method("can_apply_upgrade") and bool(_weapon_controller.call("can_apply_upgrade", upgrade))
 		_:
 			if not is_instance_valid(_weapon_controller):
 				return false
-			if upgrade.target_weapon_id != &"":
-				return _weapon_controller.has_weapon(upgrade.target_weapon_id)
-			return _weapon_controller.get_weapon_slot_count() > 0
+			return _weapon_controller.has_method("can_apply_upgrade") and bool(_weapon_controller.call("can_apply_upgrade", upgrade))
 
 
 func get_upgrade_rank(upgrade_id: StringName) -> int:
@@ -264,6 +291,14 @@ func apply_level_stat(choice_id: StringName, value: float) -> bool:
 	if not can_apply_level_stat_delta(choice_id, value):
 		return false
 	match choice_id:
+		&"elemental_damage":
+			_elemental_damage = mini(99, _elemental_damage + maxi(1, roundi(value)))
+		&"melee_damage":
+			_melee_damage = mini(99, _melee_damage + maxi(1, roundi(value)))
+		&"ranged_damage":
+			_ranged_damage = mini(99, _ranged_damage + maxi(1, roundi(value)))
+		&"engineering":
+			_engineering = mini(60, _engineering + maxi(1, roundi(value)))
 		&"speed":
 			_move_speed_multiplier = clampf(_move_speed_multiplier * (1.0 + maxf(0.0, value)), 0.45, 1.8)
 		&"health":
@@ -531,6 +566,14 @@ func can_apply_level_stat_delta(choice_id: StringName, value: float) -> bool:
 	if _is_dead:
 		return false
 	match choice_id:
+		&"elemental_damage":
+			return roundi(value) > 0 and _elemental_damage + roundi(value) <= 99
+		&"melee_damage":
+			return roundi(value) > 0 and _melee_damage + roundi(value) <= 99
+		&"ranged_damage":
+			return roundi(value) > 0 and _ranged_damage + roundi(value) <= 99
+		&"engineering":
+			return roundi(value) > 0 and _engineering + roundi(value) <= 60
 		&"health":
 			return roundi(value) > 0
 		&"speed":
@@ -656,6 +699,7 @@ func _update_timed_modifiers(effects: Dictionary, delta: float) -> void:
 
 func get_save_data() -> Dictionary:
 	return {
+		"character_id": String(character_id),
 		"current_health": current_health,
 		"max_health": max_health,
 		"current_level": current_level,
@@ -683,6 +727,8 @@ func get_save_data() -> Dictionary:
 
 
 func restore_save_data(data: Dictionary) -> void:
+	character_id = StringName(String(data.get("character_id", character_id)))
+	starting_weapon_id = get_character_definition().starting_weapon_id
 	max_health = maxi(1, int(data.get("max_health", max_health)))
 	current_health = clampi(int(data.get("current_health", max_health)), 1, max_health)
 	current_level = maxi(1, int(data.get("current_level", 1)))

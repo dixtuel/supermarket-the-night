@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/milk_hose.svg" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"milk_hose"
+display_name = "Milk Hose"
+description = "Sprays a short fan of cold milk droplets. Damage scales with Elemental Damage."
+sprite = ExtResource("2_sprite")
+attack_mode = 6
+damage = 3
+damage_type = 1
+damage_scaling_stat = 2
+damage_scaling_coefficient = 0.75
+elemental_damage_only = true
+fire_interval = 0.9
+target_range = 285.0
+muzzle_offset = 15.0
+projectile_speed = 390.0
+projectile_lifetime = 0.72
+projectile_count = 5
+projectile_spread_degrees = 34.0
+pierce_count = 0

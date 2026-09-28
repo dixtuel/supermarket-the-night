@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
 [ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
@@ -6,13 +6,14 @@
 [ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="4_enemy_runaway_cart"]
 [ext_resource type="Resource" path="res://data/enemies/leaking_freezer.tres" id="5_enemy_leaking_freezer"]
 [ext_resource type="Resource" path="res://data/enemies/receipt_moth.tres" id="6_receipt_moth"]
+[ext_resource type="Resource" path="res://data/enemies/dnz_manager.tres" id="7_manager"]
 
 [resource]
 script = ExtResource("1_wave")
 id = &"wave_08"
 display_name = "Aisle Crossing"
 purpose = "Remix chargers and freezer blockers; hold health pressure while raising count."
-duration_seconds = 65.0
+duration_seconds = 60.0
 planned_spawn_count = 46
 spawn_interval = 1.65
 max_alive = 20
@@ -22,3 +23,5 @@ spawn_weights = Array[float]([0.42, 0.22, 0.26, 0.10])
 event_tag = &"crossing_lanes"
 event_description = "Telegraphed charges and freezer slicks compete with a quick new pursuer."
 is_boss_wave = false
+boss_definition = ExtResource("7_manager")
+boss_spawn_seconds = 12.0

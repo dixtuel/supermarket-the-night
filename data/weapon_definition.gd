@@ -10,11 +10,13 @@ enum AttackMode {
 	DEPLOYED_SLOW_ZONE,
 	DEPLOYED_TURRET,
 	DEPLOYED_MINE,
+	CONE_PROJECTILES,
+	MELEE_SWEEP,
 }
 
 enum ShopOfferKind { NEW_WEAPON, MERGE_COPY, DIRECT_TIER, DEPLOYABLE_COPY }
 enum DamageType { PHYSICAL, ELEMENTAL }
-enum DamageScalingStat { MELEE, RANGED, ELEMENTAL }
+enum DamageScalingStat { MELEE, RANGED, ELEMENTAL, ENGINEERING }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -28,6 +30,8 @@ enum DamageScalingStat { MELEE, RANGED, ELEMENTAL }
 ## Brotato-style flat stat scaling; structures use Engineering separately.
 @export var damage_scaling_stat: DamageScalingStat = DamageScalingStat.RANGED
 @export_range(0.0, 2.0, 0.05) var damage_scaling_coefficient: float = 0.5
+## Some elemental weapons scale only from Elemental Damage and ignore weapon-damage upgrades.
+@export var elemental_damage_only: bool = false
 ## A bounded fraction of the player's Engineering added to this device's hit.
 @export_range(0.0, 2.0, 0.05) var engineering_coefficient: float = 0.0
 ## Matches SurvivorAutoWeapon's current authored field names.
@@ -39,6 +43,8 @@ enum DamageScalingStat { MELEE, RANGED, ELEMENTAL }
 @export_range(0.0, 2000.0, 1.0) var projectile_speed: float = 560.0
 @export_range(0.05, 30.0, 0.05) var projectile_lifetime: float = 1.5
 @export_range(1, 32, 1) var projectile_count: int = 1
+@export_range(0.0, 120.0, 1.0) var projectile_spread_degrees: float = 0.0
+@export_range(10.0, 180.0, 1.0) var melee_arc_degrees: float = 100.0
 @export_range(0, 32, 1) var pierce_count: int = 0
 @export_range(0.0, 512.0, 1.0) var area_radius: float = 0.0
 @export_range(0.0, 30.0, 0.05) var effect_duration: float = 0.0

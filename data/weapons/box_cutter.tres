@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/weapons/box_cutter.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"box_cutter"
+display_name = "Box Cutter"
+description = "A close-range utility knife sweeps a short arc through nearby enemies. Its damage scales with Melee Damage."
+sprite = ExtResource("2_sprite")
+attack_mode = 7
+damage = 8
+damage_type = 0
+damage_scaling_stat = 0
+damage_scaling_coefficient = 0.75
+fire_interval = 1.05
+target_range = 88.0
+muzzle_offset = 0.0
+projectile_speed = 0.0
+projectile_lifetime = 0.18
+projectile_count = 1
+melee_arc_degrees = 105.0
+pierce_count = 0
+area_radius = 0.0

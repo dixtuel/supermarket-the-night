@@ -72,15 +72,7 @@ func start_wave(wave_number: int, run_seed: int = 0) -> void:
 
 func enter_room(room_id: StringName, event_anchor: Vector2) -> void:
 	_active_room_id = room_id
-	_active_event_anchor = event_anchor
-	for value: Variant in _event_states.values():
-		var state: Dictionary = value
-		var definition := state["definition"] as RoomEventDefinition
-		if definition.room_id == _active_room_id and definition.kind == RoomEventDefinition.Kind.TIMED_POWERUP:
-			if not bool(state["announced"]) and not bool(state["spawned"]) and not bool(state["resolved"]):
-				event_message.emit(room_id, definition.display_name)
-				state["announced"] = true
-		_event_states[definition.id] = state
+	_active_event_anchor = _event_position(room_id, event_anchor)
 
 
 func leave_room() -> void:
@@ -212,5 +204,16 @@ func _spawn_powerup(definition: RoomEventDefinition, world_position: Vector2) ->
 	pickup.set_meta("room_id", definition.room_id)
 	_pickup_layer.add_child(pickup)
 	pickup.global_position = world_position
+	var state: Dictionary = _event_states.get(definition.id, {})
+	state["announced"] = true
+	_event_states[definition.id] = state
 	event_message.emit(definition.room_id, definition.display_name + " appeared")
 	return true
+
+
+func _event_position(room_id: StringName, requested_position: Vector2) -> Vector2:
+	# The desk collider occupies the back half of the office. Put the pickup on
+	# the clear floor in front of it, where it is visible and reachable.
+	if room_id == &"manager_office":
+		return Vector2(-12.0, -36.0)
+	return requested_position

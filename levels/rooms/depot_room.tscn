@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://1vild6htxipj" path="res://assets/generated/rooms/depot_clean_shift_start.png" id="2_art"]
 [ext_resource type="Script" uid="uid://cu0c6wa2efx6j" path="res://levels/rooms/room_portal.gd" id="3_portal"]
 [ext_resource type="PackedScene" path="res://levels/room_events/supply_request_console.tscn" id="4_console"]
+[ext_resource type="Texture2D" path="res://assets/generated/rooms/depot_floor_crate.svg" id="5_crate"]
 
 [sub_resource type="RectangleShape2D" id="sub_1_leftwall"]
 size = Vector2(32.2, 551.2)
@@ -149,6 +150,14 @@ art_prefix = "depot"
 z_index = -10
 scale = Vector2(0.7655, 0.7655)
 texture = ExtResource("2_art")
+
+[node name="DepotDeskCrateArt" type="Sprite2D" parent="." unique_id=1928063471]
+position = Vector2(493, -13.8)
+z_index = -9
+texture_filter = 1
+texture = ExtResource("5_crate")
+offset = Vector2(0, -32)
+scale = Vector2(0.7, 0.7)
 
 [node name="Walls" type="StaticBody2D" parent="." unique_id=285039006]
 collision_mask = 0

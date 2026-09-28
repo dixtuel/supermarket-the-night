@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" shape-rendering="crispEdges"><rect x="7" y="8" width="18" height="17" rx="2" fill="#3c5660" stroke="#17222a" stroke-width="2"/><rect x="12" y="4" width="8" height="6" fill="#f2c14e" stroke="#17222a" stroke-width="2"/><rect x="13" y="14" width="6" height="5" fill="#b6f0d1"/><path d="M16 1v4M4 16h3M25 16h3" stroke="#e9e3d0" stroke-width="2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- Ground shadow and flattened scanner turret; its lower edge is the contact footprint. -->
+  <ellipse cx="33" cy="49" rx="25" ry="9" fill="#111a1b" opacity=".42"/>
+  <path d="M9 39 31 28 55 38 33 50Z" fill="#263b3d" stroke="#121c20" stroke-width="3"/>
+  <path d="m9 39 24 11v6L9 45Z" fill="#1a292e" stroke="#121c20" stroke-width="2"/>
+  <path d="m33 50 22-12v6L33 56Z" fill="#344b4d" stroke="#121c20" stroke-width="2"/>
+  <path d="m14 40 18-9 18 8-18 10Z" fill="#54706b" stroke="#172329" stroke-width="2"/>
+  <path d="m18 39 14-7 12 6-13 7Z" fill="#25393b"/>
+  <path d="m20 32 3-12 8-5 10 4 4 13-11 7Z" fill="#42636a" stroke="#172329" stroke-width="3"/>
+  <path d="m23 22 8-5 9 4 2 8-10 6-11-5Z" fill="#68858a" stroke="#1d2a30" stroke-width="2"/>
+  <path d="m31 17 1-7 5-3 5 3-1 7" fill="#d5b85e" stroke="#172329" stroke-width="2"/>
+  <rect x="29" y="24" width="8" height="6" rx="1" fill="#bce8c9" stroke="#233b3d" stroke-width="2"/>
+  <path d="M33 25v4M20 41l5 2m19-3-5 2" stroke="#f2c46b" stroke-width="2"/>
+  <path d="m11 45 5 2m34-2 4-2" stroke="#91aaa0" stroke-width="2"/>
+</svg>

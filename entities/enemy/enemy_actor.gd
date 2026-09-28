@@ -5,11 +5,12 @@ extends CharacterBody2D
 
 signal defeated(definition: EnemyDefinition, world_position: Vector2)
 signal health_changed(current: int, maximum: int)
+signal stagger_changed(current: int, maximum: int, stunned: bool)
 ## Compatibility signal for arena code that consumes an XP amount directly.
 signal died(xp_reward: int, world_position: Vector2)
 
 enum Phase { APPROACH, TELEGRAPH, CHARGING, ATTACKING, RECOVERING, DEFEATED }
-enum PendingAttack { NONE, CHARGE, CONTACT, PROJECTILE, ZONE, SCATTER }
+enum PendingAttack { NONE, CHARGE, CONTACT, PROJECTILE, ZONE, SCATTER, FLAME, TETHER }
 
 const ENEMY_PROJECTILE_SCENE: PackedScene = preload("res://combat/enemy_projectile/enemy_projectile.tscn")
 const SLOW_PATCH_SCENE: PackedScene = preload("res://entities/enemy/slow_patch.tscn")
@@ -56,6 +57,13 @@ var _stuck_check_timer: float = 0.0
 var _stuck_time: float = 0.0
 var _stuck_check_position: Vector2 = Vector2.ZERO
 var _contact_hit_applied: bool = false
+var _manager_poise: float = 0.0
+var _manager_stagger_timer: float = 0.0
+var _manager_slow_timer: float = 0.0
+var _manager_stagger_cooldown: float = 0.0
+var _manager_attack_index: int = 0
+var _manager_dash_active: bool = false
+var _active_attack_radius: float = 0.0
 
 
 func configure(
@@ -84,8 +92,30 @@ func get_health() -> int:
 	return _health
 
 
+func is_immortal_boss() -> bool:
+	return _is_manager_boss()
+
+
+func get_stagger_value() -> float:
+	return _manager_poise
+
+
+func get_stagger_maximum() -> float:
+	return _manager_stagger_threshold()
+
+
 func take_damage(amount: int) -> void:
 	if _phase == Phase.DEFEATED or amount <= 0:
+		return
+	if _is_manager_boss():
+		if _manager_stagger_timer <= 0.0 and _manager_stagger_cooldown <= 0.0:
+			_manager_poise += float(amount)
+			var threshold := _manager_stagger_threshold()
+			if _manager_poise >= threshold:
+				_manager_poise = 0.0
+				_begin_manager_stagger(false)
+			stagger_changed.emit(roundi(_manager_poise), roundi(threshold), _manager_stagger_timer > 0.0)
+		_flash_hit()
 		return
 	_health = maxi(0, _health - amount)
 	if _definition != null:
@@ -137,6 +167,19 @@ func _physics_process(delta: float) -> void:
 	if _definition == null or _phase == Phase.DEFEATED:
 		return
 	_tick_slow_effects(delta)
+	_manager_stagger_cooldown = maxf(0.0, _manager_stagger_cooldown - delta)
+	if _manager_stagger_timer > 0.0:
+		_manager_stagger_timer = maxf(0.0, _manager_stagger_timer - delta)
+		velocity = Vector2.ZERO
+		move_and_slide()
+		if _manager_stagger_timer <= 0.0:
+			_manager_slow_timer = 2.0
+			_manager_stagger_cooldown = 4.0
+			_restore_actor_color()
+			stagger_changed.emit(roundi(_manager_poise), roundi(_manager_stagger_threshold()), false)
+		return
+	if _manager_slow_timer > 0.0:
+		_manager_slow_timer = maxf(0.0, _manager_slow_timer - delta)
 	_attack_cooldown = maxf(0.0, _attack_cooldown - delta)
 	_target_refresh_timer -= delta
 	if _target_refresh_timer <= 0.0 or not is_instance_valid(_target):
@@ -158,12 +201,18 @@ func _physics_process(delta: float) -> void:
 		EnemyDefinition.Role.AREA_DENIAL:
 			_tick_area_denial(delta)
 		EnemyDefinition.Role.BOSS:
-			_tick_boss(delta)
+			if _is_manager_boss():
+				_tick_manager_boss(delta)
+			else:
+				_tick_boss(delta)
 			
 	if _phase != Phase.DEFEATED:
 		if _phase == Phase.APPROACH:
 			velocity = _steer_around_obstacles(velocity, delta)
 		move_and_slide()
+		if _manager_dash_active and get_slide_collision_count() > 0:
+			_manager_dash_active = false
+			_begin_manager_stagger(true)
 		_update_walk_animation(velocity)
 		_update_attack_area()
 		_apply_contact_damage()
@@ -370,6 +419,69 @@ func _tick_boss(delta: float) -> void:
 			velocity = Vector2.ZERO
 
 
+func _tick_manager_boss(delta: float) -> void:
+	match _phase:
+		Phase.APPROACH:
+			_hide_telegraphs()
+			var direction := _direction_to_target()
+			var distance := _distance_to_target()
+			var target_range := _definition.attack_range * 0.66
+			velocity = direction * _manager_move_speed() if distance > target_range else Vector2.ZERO
+			if distance <= _definition.attack_range and _attack_cooldown <= 0.0:
+				var attack := _manager_next_attack(distance)
+				_pending_attack = attack
+				_charge_direction = direction
+				match attack:
+					PendingAttack.CHARGE:
+						_charge_distance = minf(maxf(72.0, distance), _definition.attack_range)
+						_begin_telegraph(_charge_distance, true)
+					PendingAttack.FLAME:
+						_begin_telegraph(_definition.zone_radius, false)
+					PendingAttack.TETHER:
+						_charge_direction = direction
+						_begin_telegraph(maxf(80.0, distance), true)
+					PendingAttack.SCATTER:
+						_begin_telegraph(maxf(88.0, distance), true)
+					_:
+						_begin_telegraph(_definition.contact_range, false)
+		Phase.TELEGRAPH:
+			velocity = Vector2.ZERO
+			_tick_telegraph(delta)
+		Phase.CHARGING:
+			_manager_dash_active = true
+			velocity = _charge_direction * _charge_speed()
+			_phase_timer -= delta
+			if _phase_timer <= 0.0:
+				_manager_dash_active = false
+				_begin_recovery()
+		Phase.ATTACKING:
+			velocity = Vector2.ZERO
+			_phase_timer -= delta
+			if _phase_timer <= 0.0:
+				_begin_recovery()
+		Phase.RECOVERING:
+			velocity = Vector2.ZERO
+			_tick_recovery(delta)
+		_:
+			velocity = Vector2.ZERO
+
+
+func _manager_next_attack(distance: float) -> PendingAttack:
+	# Rotate through a readable cycle. The flame burst is close-range; if the
+	# player keeps their distance, the boss dashes instead of firing it early.
+	var cycle := _manager_attack_index % 4
+	_manager_attack_index += 1
+	match cycle:
+		0:
+			return PendingAttack.CHARGE
+		1:
+			return PendingAttack.FLAME if distance <= _definition.zone_radius * 1.18 else PendingAttack.CHARGE
+		2:
+			return PendingAttack.TETHER
+		_:
+			return PendingAttack.SCATTER
+
+
 func _next_boss_attack() -> PendingAttack:
 	match _definition.attack_type:
 		EnemyDefinition.AttackType.CHARGE:
@@ -425,6 +537,7 @@ func _tick_telegraph(delta: float) -> void:
 			_phase = Phase.CHARGING
 			_phase_timer = clampf(_charge_distance / _charge_speed(), 0.22, 0.9)
 			_contact_hit_applied = false
+			_manager_dash_active = _is_manager_boss()
 		PendingAttack.CONTACT:
 			_phase = Phase.ATTACKING
 			_phase_timer = 0.1
@@ -442,9 +555,24 @@ func _tick_telegraph(delta: float) -> void:
 				_boss_next_charge = false
 			_begin_recovery()
 		PendingAttack.SCATTER:
-			_spawn_scatter()
+			if _is_manager_boss():
+				_spawn_manager_scatter()
+			else:
+				_spawn_scatter()
 			if _definition.role == EnemyDefinition.Role.BOSS:
 				_boss_next_charge = true
+			_begin_recovery()
+		PendingAttack.FLAME:
+			_phase = Phase.ATTACKING
+			_phase_timer = 0.42
+			_contact_hit_applied = false
+			_active_attack_radius = _definition.zone_radius
+			_set_attack_radius(_active_attack_radius)
+			_ring_telegraph.default_color = Color(1.0, 0.42, 0.08, 0.92)
+			_ring_telegraph.visible = true
+			stagger_changed.emit(roundi(_manager_poise), roundi(_manager_stagger_threshold()), false)
+		PendingAttack.TETHER:
+			_spawn_manager_tether()
 			_begin_recovery()
 		_:
 			_phase = Phase.APPROACH
@@ -455,6 +583,11 @@ func _begin_recovery() -> void:
 	_phase_timer = maxf(0.15, _definition.recovery_duration)
 	_attack_cooldown = maxf(0.2, _contact_attack_interval())
 	_pending_attack = PendingAttack.NONE
+	_manager_dash_active = false
+	if _is_manager_boss():
+		_active_attack_radius = 0.0
+		_set_attack_radius(_definition.contact_range)
+		_hide_telegraphs()
 
 
 func _tick_recovery(delta: float) -> void:
@@ -479,6 +612,27 @@ func _spawn_projectile(direction: Vector2) -> void:
 
 func _spawn_scatter() -> void:
 	_spawn_scatter_deferred.call_deferred(global_position, _direction_to_target())
+
+
+func _spawn_manager_scatter() -> void:
+	var aim := _direction_to_target()
+	var angle := aim.angle() if aim.length_squared() > 0.001 else 0.0
+	var half_spread := deg_to_rad(24.0)
+	for index: int in range(3):
+		var t := float(index) / 2.0
+		var direction := Vector2.RIGHT.rotated(angle + lerpf(-half_spread, half_spread, t))
+		_spawn_projectile_deferred(global_position, direction, _definition.projectile_speed, _scaled_damage(_definition.attack_damage, 3))
+
+
+func _spawn_manager_tether() -> void:
+	var projectile := ENEMY_PROJECTILE_SCENE.instantiate() as EnemyProjectile
+	if projectile == null:
+		return
+	projectile.configure(_charge_direction, _definition.projectile_speed, _scaled_damage(_definition.attack_damage), 0.70, 1.2)
+	projectile.position = global_position
+	var parent: Node = get_tree().current_scene
+	if is_instance_valid(parent):
+		parent.call_deferred("add_child", projectile)
 
 
 func _spawn_scatter_deferred(origin: Vector2, aim_direction: Vector2) -> void:
@@ -520,7 +674,8 @@ func _spawn_slow_patch_deferred(origin: Vector2, radius: float) -> void:
 func _apply_contact_damage() -> void:
 	if not _attack_area.monitoring or _contact_hit_applied or not is_instance_valid(_target):
 		return
-	if global_position.distance_squared_to(_target.global_position) > pow(_definition.contact_range, 2.0):
+	var hit_radius := _active_attack_radius if _active_attack_radius > 0.0 else _definition.contact_range
+	if global_position.distance_squared_to(_target.global_position) > pow(hit_radius, 2.0):
 		return
 	if not _attack_area.get_overlapping_bodies().has(_target):
 		return
@@ -601,8 +756,10 @@ func _apply_definition() -> void:
 	_set_collision_radius(_body_radius())
 	_set_attack_radius(_definition.contact_range)
 	_attack_cooldown = minf(_attack_cooldown, _contact_attack_interval())
-	if _definition.directional_walk_atlas:
+	if _definition.directional_walk_atlas and _definition.sprite != null:
 		_sprite.play("idle_down")
+	if _is_manager_boss():
+		stagger_changed.emit(0, roundi(_manager_stagger_threshold()), false)
 
 
 func _build_walk_animations(atlas: Texture2D) -> void:
@@ -739,7 +896,53 @@ func _movement_speed() -> float:
 	var multiplier := 1.0
 	for effect: Dictionary in _slow_effects.values():
 		multiplier = minf(multiplier, float(effect.get("multiplier", 1.0)))
+	if _is_manager_boss() and _manager_slow_timer > 0.0:
+		multiplier = minf(multiplier, 0.55)
 	return _definition.move_speed * multiplier
+
+
+func _manager_move_speed() -> float:
+	return _movement_speed()
+
+
+func _is_manager_boss() -> bool:
+	return _definition != null and _definition.role == EnemyDefinition.Role.BOSS \
+		and _definition.attack_type == EnemyDefinition.AttackType.MANAGER_CYCLE and _definition.immortal
+
+
+func _manager_stagger_threshold() -> float:
+	var threshold := 120.0
+	if not is_instance_valid(_target):
+		return threshold
+	if _target is SurvivorPlayer:
+		var player := _target as SurvivorPlayer
+		threshold += float(player.current_level) * 6.0
+		threshold += float(player.get_melee_damage() + player.get_ranged_damage()) * 3.0
+		threshold += float(player.get_elemental_damage()) * 8.0
+		threshold += maxf(0.0, player.get_attack_damage_multiplier() - 1.0) * 55.0
+		for weapon_state: Dictionary in player.get_level_choice_weapon_targets():
+			threshold += float(maxi(0, int(weapon_state.get("tier", 1)) - 1)) * 12.0
+			threshold += float(maxi(0, int(weapon_state.get("level_damage_add", 0)))) * 2.0
+	return clampf(threshold, 120.0, 360.0)
+
+
+func _begin_manager_stagger(from_wall: bool) -> void:
+	if not _is_manager_boss():
+		return
+	_manager_dash_active = false
+	_phase = Phase.RECOVERING
+	_phase_timer = 1.35 if from_wall else 1.1
+	_manager_stagger_timer = _phase_timer
+	_manager_slow_timer = 0.0
+	_attack_cooldown = maxf(_attack_cooldown, 1.1)
+	_pending_attack = PendingAttack.NONE
+	velocity = Vector2.ZERO
+	_hide_telegraphs()
+	if _sprite.visible:
+		_sprite.modulate = Color(1.0, 0.78, 0.48, 1.0)
+	else:
+		_fallback_shape.color = Color(1.0, 0.78, 0.48, 1.0)
+	stagger_changed.emit(roundi(_manager_poise), roundi(_manager_stagger_threshold()), true)
 
 
 func _find_player() -> Node2D:

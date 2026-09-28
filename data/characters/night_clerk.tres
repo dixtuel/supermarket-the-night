@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://data/character_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"night_clerk"
+display_name = "Night Clerk"
+display_name_tr = "Gece Kasiyeri"
+description = "A steady all-rounder who can adapt to any shift."
+description_tr = "Her vardiyaya uyum sağlayan dengeli bir başlangıç."
+max_health = 100
+damage_multiplier = 1.0
+elemental_damage = 0
+starting_weapon_id = &"can_launcher"
+portrait_path = "res://assets/generated/actors/player_night_clerk.png"
+walk_atlas_path = "res://assets/generated/actors/player_night_clerk_walk.png"

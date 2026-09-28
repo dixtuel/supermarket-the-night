@@ -13,6 +13,7 @@ damage = 4
 damage_type = 1
 damage_scaling_stat = 2
 damage_scaling_coefficient = 0.75
+elemental_damage_only = false
 fire_interval = 1.0
 target_range = 350.0
 muzzle_offset = 14.0

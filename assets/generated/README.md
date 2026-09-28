@@ -23,6 +23,9 @@ The compact source backgrounds remain in place as historical artwork; they are n
 - `actors/player_night_clerk.png` — front-facing character presentation/portrait candidate.
 - `actors/player_night_clerk_topdown.png` — earlier strict-overhead direction study; retained as a source-art candidate, not used for the current 3/4 gameplay camera.
 - `actors/player_night_clerk_walk.png` — clerk four-direction, four-frame walk atlas used by the player scene.
+- `actors/player_dnz.png` — generated DNZ full-body character portrait for title and selection screens.
+- `actors/player_dnz_walk.png` — DNZ 4×4 four-direction walk atlas; black clothes, curly hair, and prominent nose distinguish the new elemental character.
+- `actors/dnz_manager_walk.png` — human manager boss four-direction walk atlas used by the immortal Manager encounter.
 - `actors/enemy_spoiled_customer.png` — spoiled-grocery customer enemy candidate.
 - `actors/enemy_possessed_cart.png` — possessed shopping-cart enemy candidate.
 
@@ -39,6 +42,11 @@ Character PNGs retain transparency and full generated resolution. Before release
 - `actors/enemy_overloaded_cart_walk.png` — four-direction rolling atlas for the Overloaded Stock Cart.
 - `actors/temporary_shift_helper_walk.png` — four-direction rolling atlas for the temporary depot helper.
 
+The temporary helper uses the existing four-direction atlas with its wheel
+contact aligned to the actor's Y-sort origin. Its follow point stays behind the
+player's recent movement and checks the active room's fixture/wall collision
+layer before moving.
+
 ## Boss and weapons
 
 - `boss/boss_return_cart.png` — oversized Return Cart boss.
@@ -46,6 +54,13 @@ Character PNGs retain transparency and full generated resolution. Before release
 - `weapons/projectile_tomato_can.png` — Can Launcher projectile.
 - `weapons/mop_whirl.png` — Mop Whirl sweep effect.
 - `weapons/receipt_boomerang.png` — blank receipt projectile.
+- `weapons/milk_hose.svg` — original project SVG icon for DNZ's elemental milk-hose starter weapon and its droplets.
+
+DNZ and the Manager art were generated with OpenAI ImageGen on 2026-09-29
+using the existing Night Clerk atlas as a style and cell-layout reference. The
+walk atlases use up, left, right, down rows and are dedicated under CC0 1.0;
+see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md). The SVG was drawn in-project
+and has the same asset license.
 
 ## Pickups and area weapon
 
@@ -112,6 +127,12 @@ used for Aisle Sentinel, Spill Tripmine, Thermal Price Gun, Tote-Stack Lobber,
 and Deposit-Ring Reel. These generated assets are project-local artwork and are
 dedicated under CC0 1.0; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md).
 
+The Aisle Sentinel and Spill Tripmine SVGs were redrawn in-project on
+2026-09-29 with low 3/4 silhouettes, contact shadows, and floor-facing detail.
+`rooms/depot_floor_crate.svg` was authored on the same date as a separate
+3/4-facing cardboard stock crate overlay for the depot workbench. These SVGs
+are original project artwork covered by CC0 1.0; see [`ASSET_LICENSE.md`](../../ASSET_LICENSE.md).
+
 ## Directional enemy art update
 
 Four-direction, four-frame walk atlases for the five Wiki-inspired enemies were
@@ -122,6 +143,19 @@ are stored in `actors/enemy_scanline_runner_walk.png`,
 `actors/enemy_night_shift_supervisor_walk.png`. Rows are up, left, right, down.
 Scanline Runner uses the same compact atlas scale as the other roster sprites.
 
+The temporary shift helper's `actors/temporary_shift_helper_walk.png` atlas
+was also generated on 2026-09-29 with four facing rows (up, left, right, down)
+so its in-game art matches the smoothed follow movement.
+
 ## Separate asset license
 
 Original images and SVGs in this directory are dedicated under CC0 1.0, separate from the MIT code license. Third-party assets are excluded; see [`ATTRIBUTION.md`](../../ATTRIBUTION.md) and each asset pack provenance file.
+
+## DNZ and Milk Hose
+
+`actors/player_dnz.png` is DNZ's portrait holding the Milk Hose, and
+`actors/player_dnz_walk.png` is the four-direction gameplay atlas with the
+weapon visible in hand. `actors/dnz_manager_walk.png` is the human boss atlas.
+`weapons/milk_hose.svg` is the original shop/inventory icon. The atlas rows are
+up, left, right, down. These assets were generated for this project with
+OpenAI ImageGen on 2026-09-29 and are covered by the separate CC0 asset license.

@@ -176,6 +176,21 @@ func set_deployable_room_active(active: bool) -> void:
 	set_deferred("monitorable", should_monitor)
 
 
+func update_turret_stats(damage: int, interval: float) -> void:
+	if _flight_mode != FlightMode.TURRET:
+		return
+	_damage = maxi(1, damage)
+	_structure_interval = clampf(interval, 0.15, 5.0)
+
+
+func update_mine_stats(damage: int, radius: float) -> void:
+	if _flight_mode != FlightMode.MINE:
+		return
+	_damage = maxi(1, damage)
+	_mine_radius = clampf(radius, 28.0, 260.0)
+	_resize_zone(_mine_radius)
+
+
 func set_weapon_visual(texture: Texture2D, target_size: float = 28.0, keep_area_fill: bool = false) -> void:
 	if _weapon_sprite == null:
 		return
@@ -277,17 +292,23 @@ func _on_body_entered(body: Node2D) -> void:
 
 
 func _deal_damage(body: Node2D) -> void:
-	if _damage > 0 and body.has_method("take_damage"):
-		var health_before: int = int(body.call("get_health")) if body.has_method("get_health") else _damage
-		var hit_damage := _damage
-		if _flight_mode not in [FlightMode.TURRET, FlightMode.MINE] and is_instance_valid(_life_steal_source) and _life_steal_source.has_method("get_critical_chance"):
-			if randf() < clampf(float(_life_steal_source.call("get_critical_chance")), 0.0, 0.75):
-				hit_damage = roundi(float(hit_damage) * 1.5)
-		body.call("take_damage", hit_damage)
-		var health_after: int = int(body.call("get_health")) if body.has_method("get_health") else maxi(0, health_before - hit_damage)
-		var dealt_damage := maxi(0, health_before - health_after)
-		if dealt_damage > 0 and is_instance_valid(_life_steal_source) and _life_steal_source.has_method("recover_from_damage_dealt"):
-			_life_steal_source.call("recover_from_damage_dealt", dealt_damage)
+	apply_direct_hit(body, _damage, _life_steal_source, _flight_mode not in [FlightMode.TURRET, FlightMode.MINE])
+
+
+static func apply_direct_hit(body: Node2D, damage: int, source: Node2D, can_crit: bool = true) -> int:
+	if damage <= 0 or not is_instance_valid(body) or not body.has_method("take_damage"):
+		return 0
+	var health_before: int = int(body.call("get_health")) if body.has_method("get_health") else damage
+	var hit_damage := damage
+	if can_crit and is_instance_valid(source) and source.has_method("get_critical_chance"):
+		if randf() < clampf(float(source.call("get_critical_chance")), 0.0, 0.75):
+			hit_damage = roundi(float(hit_damage) * 1.5)
+	body.call("take_damage", hit_damage)
+	var health_after: int = int(body.call("get_health")) if body.has_method("get_health") else maxi(0, health_before - hit_damage)
+	var dealt_damage := maxi(0, health_before - health_after)
+	if dealt_damage > 0 and is_instance_valid(source) and source.has_method("recover_from_damage_dealt"):
+		source.call("recover_from_damage_dealt", dealt_damage)
+	return dealt_damage
 
 
 func _detonate_mine() -> void:

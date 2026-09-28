@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WaveDefinition" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://data/wave_definition.gd" id="1_wave"]
 [ext_resource type="Script" path="res://data/enemy_definition.gd" id="2_enemy_type"]
@@ -6,13 +6,14 @@
 [ext_resource type="Resource" path="res://data/enemies/expiry_sprinter.tres" id="4_enemy_expiry_sprinter"]
 [ext_resource type="Resource" path="res://data/enemies/after_hours_shopper.tres" id="5_enemy_after_hours_shopper"]
 [ext_resource type="Resource" path="res://data/enemies/runaway_cart.tres" id="6_enemy_runaway_cart"]
+[ext_resource type="Resource" path="res://data/enemies/dnz_manager.tres" id="7_manager"]
 
 [resource]
 script = ExtResource("1_wave")
 id = &"wave_16"
 display_name = "Doorway Surge"
 purpose = "Start final act with a substantial ranged/sprinter mix and a short cadence."
-duration_seconds = 75.0
+duration_seconds = 60.0
 planned_spawn_count = 56
 spawn_interval = 1.45
 max_alive = 26
@@ -22,3 +23,5 @@ spawn_weights = Array[float]([0.30, 0.25, 0.30, 0.15])
 event_tag = &"doorway_surge"
 event_description = "Fast flankers and ranged throws test a build after the previous count relief."
 is_boss_wave = false
+boss_definition = ExtResource("7_manager")
+boss_spawn_seconds = 12.0
