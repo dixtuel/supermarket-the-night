@@ -9,6 +9,8 @@ The PortMaster build is an additional Godot `Linux/X11` PCK export named `PortMa
 - Compatibility renderer, ETC2 texture export, keyboard-emulated controller input through `gptokeyb`.
 - Internet access the first time the two shared runtimes are installed.
 
+The PortMaster New runtime manifest currently includes `godot_4.7.1.squashfs` and `weston_pkg_0.2.squashfs` in the `aarch64` runtime bundle. The Godot runtime contains `godot471.aarch64`; the Westonpack runtime contains `westonwrap.sh` and its `crusty_x11egl` renderer. The launcher uses those published filenames.
+
 The game targets Godot 4.7 and the runtime registry currently exposes Godot 4.7.1. The R36S hardware and each firmware build still need a device-level launch, input, audio, suspend/resume, and performance check before claiming release compatibility.
 
 ## Build a package
