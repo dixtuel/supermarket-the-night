@@ -24,7 +24,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _player_nearby or not event.is_action_pressed("interact"):
+	if not _player_nearby or not _is_interaction_pressed(event):
 		return
 	if not is_instance_valid(_event_director):
 		return
@@ -32,6 +32,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		_prompt.text = "HELP IS ON THE WAY"
 		_prompt.visible = true
 		get_viewport().set_input_as_handled()
+
+
+func _is_interaction_pressed(event: InputEvent) -> bool:
+	if event.is_action_pressed("interact"):
+		return true
+	# PortMaster maps A to Enter so it activates focused UI controls. Treat the
+	# same confirm input as interaction only while the player is beside a console.
+	# Desktop and mobile keep using the existing E / touch paths.
+	return OS.has_feature("portmaster") and event.is_action_pressed("ui_accept")
 
 
 func _draw() -> void:
@@ -70,7 +79,8 @@ func _refresh_prompt() -> void:
 	var supply_name := String(status.get("supply_id", "stock" )).replace("_", " ")
 	var current := int(status.get("collected", 0))
 	var required := int(status.get("required", 0))
-	_prompt.text = "E  REQUEST HELP  %s %d/%d" % [supply_name, current, required]
+	var interact_label := "A" if OS.has_feature("portmaster") else "E"
+	_prompt.text = "%s  REQUEST HELP  %s %d/%d" % [interact_label, supply_name, current, required]
 	_prompt.visible = true
 
 
