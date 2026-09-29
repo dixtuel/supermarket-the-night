@@ -785,12 +785,12 @@ func _refresh_difficulty_selection() -> void:
 	var enemies_line := "ENEMIES UNLOCKED: %d/5" % int(profile.new_enemy_tier) if english else "EK DÜŞMAN TÜRÜ: %d/5" % int(profile.new_enemy_tier)
 	var pressure_line := "PRESSURE WAVES: none" if english else "BASKI DALGASI: yok"
 	if pressure == 1:
-		pressure_line = "CHALLENGE: one random wave at 11 or 12 · 40% horde / 60% elite" if english else "BASKI: 11 veya 12. dalgada rastgele · %40 sürü / %60 elit"
+		pressure_line = "CHALLENGE: one random wave at 11 or 12 · 40% horde / 60% elite\nHORDE: more enemies · material drop chance −35%" if english else "BASKI: 11 veya 12. dalgada rastgele · %40 sürü / %60 elit\nSÜRÜ: daha fazla düşman · malzeme düşme olasılığı −%35"
 	elif pressure == 3:
-		pressure_line = "CHALLENGE: one at 11–12, 14–15, 17–18 · final is elite" if english else "BASKI: 11–12, 14–15, 17–18 aralığında birer dalga · sonuncusu elit"
+		pressure_line = "CHALLENGE: one at 11–12, 14–15, 17–18 · first two: 40% horde / 60% elite · final: elite\nHORDE: more enemies · material drop chance −35%" if english else "BASKI: 11–12, 14–15, 17–18 aralığında birer dalga · ilk ikisi: %40 sürü / %60 elit · sonuncusu elit\nSÜRÜ: daha fazla düşman · malzeme düşme olasılığı −%35"
 	var scaling_line := "ENEMY HP +%d%%  ·  ENEMY DAMAGE +%d%%" % [health_pct, damage_pct] if english else "DÜŞMAN CANI +%%%d  ·  DÜŞMAN HASARI +%%%d" % [health_pct, damage_pct]
 	if bool(profile.double_boss):
-		scaling_line += "\n" + ("FINAL WAVE: 2 BOSSES · 25% LESS HP EACH" if english else "FİNAL: 2 BOSS · HER BİRİ %25 DAHA AZ CAN")
+		scaling_line += "\n" + ("FINAL WAVE: TWO BOSSES · 25% LESS HEALTH EACH" if english else "SON DALGA: İKİ BOSS · HER BİRİNİN CANI %25 AZ")
 	var economy_line := "SHOP PRICES / PLAYER UPGRADES: unchanged" if english else "MAĞAZA FİYATI / OYUNCU GELİŞİMİ: değişmez"
 	if bool(profile.get("environmental_hazards", false)):
 		pressure_line += "\n" + ("NIGHTMARE: hazards + fog · enemy speed +10%" if english else "KÂBUS: çevresel atışlar + sis · düşman hızı +%10")

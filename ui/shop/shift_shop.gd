@@ -156,7 +156,7 @@ func _update_shop_texts() -> void:
 		var all_offers_locked := not _current_offers.is_empty() and _locked_indices.size() >= _current_offers.size()
 		_reroll_button.disabled = _current_currency < _current_reroll_cost or all_offers_locked
 	if is_instance_valid(_note_label):
-		_note_label.text = I18n.t("SHOP_NOTE", "Offers restock after each wave.")
+		_note_label.text = String(_player_summary.get("difficulty_event_notice", I18n.t("SHOP_NOTE", "Offers restock after each wave.")))
 	if is_instance_valid(_continue_button):
 		_continue_button.text = I18n.t("SHOP_RETURN", "Return to aisles")
 

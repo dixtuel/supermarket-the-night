@@ -44,6 +44,11 @@ const ENDLESS_SUPPLEMENTAL_ENEMIES: Array[EnemyDefinition] = [
 	preload("res://data/enemies/pallet_jack_pusher.tres"),
 	preload("res://data/enemies/night_shift_supervisor.tres"),
 ]
+const DIFFICULTY_ELITE_DEFINITIONS: Array[EnemyDefinition] = [
+	preload("res://data/enemies/elite_05_cart_rusher.tres"),
+	preload("res://data/enemies/elite_10_audit_shopper.tres"),
+	preload("res://data/enemies/elite_15_freezer_keeper.tres"),
+]
 const WEAPON_DEFINITIONS: Array[WeaponDefinition] = [
 	preload("res://data/weapons/can_launcher.tres"),
 	preload("res://data/weapons/box_cutter.tres"),
@@ -138,9 +143,11 @@ var _difficulty_level: int = 0
 var _difficulty_profile: Dictionary = DIFFICULTY_CATALOG.get_profile(0)
 var _max_difficulty_unlocked: int = 0
 var _environment_projectile_cooldown: float = 12.0
+var _pending_elite_crates: int = 0
 var _elite_challenge_rounds: Array[int] = []
 var _pressure_challenge_rounds: Array[int] = []
 var _horde_challenge_rounds: Array[int] = []
+var _difficulty_elite_ids_by_round: Dictionary = {}
 var _spawned_this_wave: int = 0
 var _endless_ambush_rng := RandomNumberGenerator.new()
 var _room_migration_rng := RandomNumberGenerator.new()
@@ -273,17 +280,29 @@ func _process(delta: float) -> void:
 	var boss_spawn_time := _current_wave.boss_spawn_seconds if _current_wave != null and _current_wave.boss_spawn_seconds > 0.0 else maxf(8.0, _round_duration - 12.0)
 	if _is_boss_round() and not _boss_spawned and _round_elapsed >= boss_spawn_time:
 		_boss_spawned = true
-		var boss_definition := _boss_definition_for_round()
+		var boss_definition := _regular_boss_definition_for_round()
 		if boss_definition != null:
-			var boss_health := _boss_health_multiplier() * (0.75 if bool(_difficulty_profile.get("double_boss", false)) and _round_number == CAMPAIGN_WAVE_COUNT else 1.0)
+			var boss_health := _boss_health_multiplier()
+			if _round_number == CAMPAIGN_WAVE_COUNT and bool(_difficulty_profile.get("double_boss", false)):
+				boss_health *= 0.75
 			_spawn_enemy(boss_definition, boss_health, true)
-			if bool(_difficulty_profile.get("double_boss", false)) and _round_number == CAMPAIGN_WAVE_COUNT and boss_definition.id != &"dnz_manager":
+			if _should_double_boss(_round_number):
 				var second_spawn := Vector2(-360.0, 165.0)
 				if not _spawn_point_is_clear(second_spawn):
 					second_spawn = Vector2(360.0, 165.0)
-				_spawn_enemy(PALLET_STACKER_BOSS, _boss_health_multiplier() * 0.75, true, second_spawn)
-		else:
+				var second_health_multiplier := _boss_health_multiplier()
+				if _round_number == CAMPAIGN_WAVE_COUNT and bool(_difficulty_profile.get("double_boss", false)):
+					second_health_multiplier *= 0.75
+				_spawn_enemy(PALLET_STACKER_BOSS, second_health_multiplier, true, second_spawn)
+		elif not _is_elite_challenge_round(_round_number):
 			_boss_defeated = true
+		var elite_count := _difficulty_elite_count_for_round(_round_number)
+		for elite_index: int in range(elite_count):
+			var elite_definition := _difficulty_elite_definition(_round_number)
+			if elite_definition == null:
+				continue
+			var elite_spawn := _challenge_spawn_position(elite_index, elite_count)
+			_spawn_enemy(elite_definition, _difficulty_elite_health_multiplier(), true, elite_spawn)
 	if _round_elapsed >= _round_duration:
 		_complete_round()
 
@@ -336,6 +355,8 @@ func _configure_starter_weapon() -> void:
 
 
 func _select_phase(initial: bool) -> void:
+	if _endless_mode:
+		_ensure_endless_difficulty_challenges(_round_number)
 	_current_wave = _wave_for_round(_round_number)
 	_current_phase = _phase_for_round(_round_number)
 	if _current_wave == null and _current_phase == null:
@@ -605,7 +626,7 @@ func _wave_for_round(round_number: int) -> WaveDefinition:
 		var wave := ENDLESS_WAVE_PATTERNS[pattern_index].duplicate(true) as WaveDefinition
 		wave.id = StringName("endless_%03d" % round_number)
 		wave.planned_spawn_count = clampi(wave.planned_spawn_count + wave.endless_cycle_spawn_delta * cycle_index, 16, ENDLESS_MAX_PLANNED_SPAWNS)
-		wave.enemy_health_multiplier += float(cycle_index) * 0.14
+		wave.enemy_health_multiplier *= 1.0 + _endless_factor(round_number) * 2.25
 		wave.max_alive = mini(ENDLESS_MAX_ALIVE, wave.max_alive + mini(cycle_index, 24))
 		wave.spawn_interval = maxf(0.55, wave.spawn_interval / (1.0 + float(cycle_index) * 0.025))
 		_extend_endless_roster(wave, pattern_index, cycle_index, round_number)
@@ -631,9 +652,12 @@ func _apply_difficulty_to_wave(wave: WaveDefinition, round_number: int) -> WaveD
 		var enemy_definition := _enemy_definition_by_id(enemy_id)
 		_add_enemy_to_wave(wave, enemy_definition, 0.035)
 	if _horde_challenge_rounds.has(round_number):
-		wave.planned_spawn_count = roundi(float(wave.planned_spawn_count) * 1.24)
-		wave.max_alive = mini(ENDLESS_MAX_ALIVE, roundi(float(wave.max_alive) * 1.25))
-		wave.spawn_interval = maxf(0.48, wave.spawn_interval * 0.88)
+		# The source applies Horde's 0.65 multiplier to each enemy's material-drop
+		# chance. Increase this game's fixed-duration spawn budget and cadence so
+		# the added horde really appears during the current 60-second round.
+		wave.planned_spawn_count = roundi(float(wave.planned_spawn_count) * 1.6)
+		wave.max_alive = mini(ENDLESS_MAX_ALIVE, roundi(float(wave.max_alive) * 1.5))
+		wave.spawn_interval = maxf(0.35, wave.spawn_interval / 1.6)
 	return wave
 
 
@@ -641,6 +665,7 @@ func _roll_difficulty_challenges() -> void:
 	_elite_challenge_rounds.clear()
 	_pressure_challenge_rounds.clear()
 	_horde_challenge_rounds.clear()
+	_difficulty_elite_ids_by_round.clear()
 	if _difficulty_level < 2:
 		return
 	var challenge_rng := RandomNumberGenerator.new()
@@ -658,8 +683,26 @@ func _roll_difficulty_challenges() -> void:
 		var is_elite := is_final_guaranteed_elite or challenge_rng.randf() >= 0.40
 		if is_elite:
 			_elite_challenge_rounds.append(candidate_rounds[index])
+			_difficulty_elite_ids_by_round[str(candidate_rounds[index])] = _choose_difficulty_elite_id()
 		else:
 			_horde_challenge_rounds.append(candidate_rounds[index])
+
+
+func _ensure_endless_difficulty_challenges(round_number: int) -> void:
+	if not _endless_mode or round_number <= CAMPAIGN_WAVE_COUNT or _difficulty_level < 2:
+		return
+	var segment_start := CAMPAIGN_WAVE_COUNT + 1 + floori(float(round_number - CAMPAIGN_WAVE_COUNT - 1) / 10.0) * 10
+	if _pressure_challenge_rounds.any(func(candidate: int) -> bool: return candidate >= segment_start and candidate < segment_start + 10):
+		return
+	var challenge_rng := RandomNumberGenerator.new()
+	challenge_rng.randomize()
+	var windows: Array[Vector2i] = [Vector2i(0, 1)] if _difficulty_level < 4 else [Vector2i(0, 1), Vector2i(3, 4), Vector2i(6, 7)]
+	for window: Vector2i in windows:
+		var selected_round := segment_start + challenge_rng.randi_range(window.x, window.y)
+		_pressure_challenge_rounds.append(selected_round)
+		# Horde waves end after campaign Wave 20; Endless challenge events are elites.
+		_elite_challenge_rounds.append(selected_round)
+		_difficulty_elite_ids_by_round[str(selected_round)] = _choose_difficulty_elite_id(true)
 
 
 func _is_pressure_wave(round_number: int) -> bool:
@@ -668,6 +711,61 @@ func _is_pressure_wave(round_number: int) -> bool:
 
 func _is_elite_challenge_round(round_number: int) -> bool:
 	return _elite_challenge_rounds.has(round_number)
+
+
+func _difficulty_elite_count_for_round(round_number: int) -> int:
+	if _endless_mode and round_number > CAMPAIGN_WAVE_COUNT:
+		var is_endless_elite_wave := _is_elite_challenge_round(round_number)
+		var is_endless_boss_wave := posmod(round_number, 10) == 0
+		if not is_endless_elite_wave and not is_endless_boss_wave:
+			return 0
+	# Endless adds one elite to each elite/boss event for every completed 10-wave block.
+		return 1 + maxi(0, floori(float(round_number - CAMPAIGN_WAVE_COUNT - 1) / 10.0))
+	return 1 if _is_elite_challenge_round(round_number) else 0
+
+
+func _choose_difficulty_elite_id(allow_repeat: bool = false) -> StringName:
+	if DIFFICULTY_ELITE_DEFINITIONS.is_empty():
+		return &""
+	var candidates: Array[EnemyDefinition] = []
+	for definition: EnemyDefinition in DIFFICULTY_ELITE_DEFINITIONS:
+		var already_used := false
+		if not allow_repeat:
+			for selected_id: Variant in _difficulty_elite_ids_by_round.values():
+				if StringName(selected_id) == definition.id:
+					already_used = true
+					break
+		if not already_used:
+			candidates.append(definition)
+	if candidates.is_empty():
+		candidates = DIFFICULTY_ELITE_DEFINITIONS.duplicate()
+	return candidates[randi_range(0, candidates.size() - 1)].id
+
+
+func _difficulty_elite_definition(round_number: int) -> EnemyDefinition:
+	if DIFFICULTY_ELITE_DEFINITIONS.is_empty():
+		return null
+	var source_id := StringName(_difficulty_elite_ids_by_round.get(str(round_number), ""))
+	if source_id == &"":
+		source_id = _choose_difficulty_elite_id(_endless_mode and round_number > CAMPAIGN_WAVE_COUNT)
+		_difficulty_elite_ids_by_round[str(round_number)] = source_id
+	for source: EnemyDefinition in DIFFICULTY_ELITE_DEFINITIONS:
+		if source.id != source_id:
+			continue
+		var elite := source.duplicate(true) as EnemyDefinition
+		elite.id = StringName("difficulty_elite_%02d_%s" % [round_number, String(source.id)])
+		return elite
+	return null
+
+
+func _challenge_spawn_position(index: int, total: int) -> Vector2:
+	var angle := TAU * float(index) / float(maxi(1, total))
+	var point := _player.global_position + Vector2.RIGHT.rotated(angle) * 430.0
+	if not _spawn_point_is_clear(point):
+		point = Vector2.RIGHT.rotated(angle + PI) * 430.0
+	if not _spawn_point_is_clear(point):
+		return _spawn_position()
+	return point
 
 
 func _add_nightmare_fog() -> void:
@@ -692,9 +790,16 @@ func _spawn_environmental_projectile() -> void:
 	var projectile := ENEMY_PROJECTILE_SCENE.instantiate() as EnemyProjectile
 	if projectile == null:
 		return
-	projectile.configure(direction_to_player, 245.0, maxi(1, roundi(7.0 * float(_difficulty_profile.get("enemy_damage", 1.0)))))
+	var endless_damage_scale := 1.0 + _endless_factor(_round_number) if _endless_mode else 1.0
+	projectile.configure(direction_to_player, 245.0, maxi(1, roundi(7.0 * float(_difficulty_profile.get("enemy_damage", 1.0)) * endless_damage_scale)))
 	_projectile_layer.add_child(projectile)
-	projectile.global_position = _player.global_position + direction_to_player * 500.0
+	projectile.global_position = _player.global_position - direction_to_player * 500.0
+
+
+func _should_double_boss(round_number: int) -> bool:
+	if round_number == CAMPAIGN_WAVE_COUNT and bool(_difficulty_profile.get("double_boss", false)):
+		return true
+	return _endless_mode and round_number > CAMPAIGN_WAVE_COUNT and posmod(round_number, 10) == 0
 
 
 func _enemy_definition_by_id(enemy_id: StringName) -> EnemyDefinition:
@@ -955,25 +1060,28 @@ func _is_dnz_manager_boss_round(round_number: int) -> bool:
 	return _endless_mode and round_number >= CAMPAIGN_WAVE_COUNT + 10 and posmod(round_number, 10) == 0
 
 
-func _boss_definition_for_round() -> EnemyDefinition:
-	if _is_elite_challenge_round(_round_number):
-		var elite := _enemy_definition_by_id(&"night_shift_supervisor")
-		if elite != null:
-			var promoted := elite.duplicate(true) as EnemyDefinition
-			promoted.id = StringName("shift_elite_%02d" % _round_number)
-			promoted.role = EnemyDefinition.Role.BOSS
-			promoted.max_health = roundi(float(promoted.max_health) * 2.2)
-			return promoted
+func _regular_boss_definition_for_round() -> EnemyDefinition:
 	if _is_dnz_manager_boss_round(_round_number):
 		return DNZ_MANAGER_BOSS
-	if _current_wave != null and _current_wave.is_boss_wave and _current_wave.boss_definition != null:
-		return _current_wave.boss_definition
-	return shift_schedule.boss_definition
+	if _current_wave != null:
+		if _current_wave.is_boss_wave and _current_wave.boss_definition != null:
+			return _current_wave.boss_definition
+		if _endless_mode and _round_number > _authored_waves.size():
+			return null
+		return shift_schedule.boss_definition if posmod(_round_number, 5) == 0 else null
+	return shift_schedule.boss_definition if posmod(_round_number, maxi(1, shift_schedule.phases.size())) == 0 else null
+
+
+func _is_difficulty_elite(definition: EnemyDefinition) -> bool:
+	return definition != null and String(definition.id).begins_with("difficulty_elite_")
+
+
+func _difficulty_elite_health_multiplier() -> float:
+	var early_elite_health := 0.75 if _round_number <= 12 else 1.0
+	return _current_health_multiplier() * early_elite_health
 
 
 func _boss_health_multiplier() -> float:
-	if _is_elite_challenge_round(_round_number):
-		return _current_health_multiplier() * 1.35
 	var encounter_scale := 1.0
 	if _current_wave != null and not _current_wave.is_boss_wave:
 		match _round_number:
@@ -987,7 +1095,23 @@ func _boss_health_multiplier() -> float:
 
 
 func _current_damage_multiplier() -> float:
-	return _wave_director.damage_multiplier(_build_wave_context()) * float(_difficulty_profile.get("enemy_damage", 1.0))
+	var endless_damage_multiplier := 1.0 + _endless_factor(_round_number) if _endless_mode and _round_number > CAMPAIGN_WAVE_COUNT else 1.0
+	return _wave_director.damage_multiplier(_build_wave_context()) * float(_difficulty_profile.get("enemy_damage", 1.0)) * endless_damage_multiplier
+
+
+func _endless_factor(round_number: int) -> float:
+	if not _endless_mode or round_number <= CAMPAIGN_WAVE_COUNT:
+		return 0.0
+	var endless_wave := float(maxi(0, round_number - CAMPAIGN_WAVE_COUNT))
+	var endless_multiplier := 2.0 + maxf(0.0, float(round_number - 35) * 0.2)
+	return ((endless_wave * (endless_wave + 1.0) * 0.5) / 100.0) * endless_multiplier
+
+
+func _current_enemy_speed_multiplier() -> float:
+	var speed_multiplier := float(_difficulty_profile.get("enemy_speed", 1.0))
+	if _endless_mode and _round_number > CAMPAIGN_WAVE_COUNT:
+		speed_multiplier *= 1.0 + minf(1.75, _endless_factor(_round_number) / 13.33)
+	return speed_multiplier
 
 
 func _build_wave_context() -> Dictionary:
@@ -1150,23 +1274,23 @@ func _spawn_enemy(
 	if enemy == null:
 		push_error("Enemy scene must have an EnemyActor root.")
 		return
-	enemy.configure(definition, health_multiplier, _player, _current_damage_multiplier(), _round_number, float(_difficulty_profile.get("enemy_speed", 1.0)))
+	enemy.configure(definition, health_multiplier, _player, _current_damage_multiplier(), _round_number, _current_enemy_speed_multiplier())
 	enemy.set_meta("room_id", _current_room_id)
 	if boss:
 		if enemy.is_immortal_boss():
-			enemy.stagger_changed.connect(_on_boss_stagger_changed)
+			enemy.stagger_changed.connect(_on_boss_stagger_changed.bind(definition.display_name))
 		else:
-			enemy.health_changed.connect(_on_boss_health_changed)
+			enemy.health_changed.connect(_on_boss_health_changed.bind(definition.display_name))
 	_actor_layer.add_child(enemy)
 	enemy.global_position = spawn_point
 	enemy.defeated.connect(_on_enemy_defeated)
 	if boss:
-		_hud.set_phase_name("BOSS: " + definition.display_name)
+		_hud.set_phase_name(("ELITE: " if _is_difficulty_elite(definition) else "BOSS: ") + definition.display_name)
 		BakkalAudio.play_sfx(&"boss_arrival")
 		if enemy.is_immortal_boss():
-			_on_boss_stagger_changed(roundi(enemy.get_stagger_value()), roundi(enemy.get_stagger_maximum()), false)
+			_on_boss_stagger_changed(roundi(enemy.get_stagger_value()), roundi(enemy.get_stagger_maximum()), false, definition.display_name)
 		else:
-			_on_boss_health_changed(enemy.get_health(), maxi(1, roundi(float(definition.max_health) * health_multiplier)))
+			_on_boss_health_changed(enemy.get_health(), maxi(1, roundi(float(definition.max_health) * health_multiplier)), definition.display_name)
 
 
 func _spawn_position() -> Vector2:
@@ -1211,11 +1335,20 @@ func _on_enemy_defeated(definition: EnemyDefinition, death_position: Vector2) ->
 	_hud.set_kill_count(_kills)
 	_spawn_xp_orb(definition.xp_reward, death_position)
 	var material_reward := _scaled_material_reward(definition.material_reward)
-	if material_reward > 0:
+	if material_reward > 0 and randf() < _enemy_material_drop_chance():
 		_spawn_material_pickup(material_reward, death_position + Vector2(10.0, -5.0))
 	if _current_room_id == &"depot" and is_instance_valid(_room_event_director):
 		_room_event_director.roll_requested_supply_drop(death_position)
-	if definition.role == EnemyDefinition.Role.BOSS:
+	if _is_difficulty_elite(definition):
+		_hud.set_phase_name("ELITE DEFEATED")
+		_hud.hide_boss_health()
+		# Campaign elites guarantee a Legendary crate in Brotato. This project
+		# maps it to a free Tier IV pick plus a 100 HP pickup. Endless changes elite
+		# drops to ordinary, non-guaranteed crates, so grant no guaranteed choice.
+		if _round_number <= CAMPAIGN_WAVE_COUNT:
+			_pending_elite_crates += 1
+			_spawn_consumable(death_position + Vector2(30, 0), ConsumablePickup.Reward.HEALTH, mini(100, _player.max_health))
+	elif definition.role == EnemyDefinition.Role.BOSS:
 		_boss_defeated = true
 		_hud.set_phase_name("%s CLEARED" % definition.display_name.to_upper())
 		_hud.hide_boss_health()
@@ -1225,6 +1358,15 @@ func _on_enemy_defeated(definition: EnemyDefinition, death_position: Vector2) ->
 		_spawn_consumable(death_position + Vector2(-30, 0), ConsumablePickup.Reward.ENERGY)
 	elif randf() < minf(0.20, 0.035 * (1.0 + float(_player.get_luck()) / 100.0)):
 		_spawn_consumable(death_position, ConsumablePickup.Reward.HEALTH)
+
+
+func _enemy_material_drop_chance() -> float:
+	var chance := 1.0
+	if _round_number >= 5:
+		chance = maxf(0.5, 1.0 - float(_round_number) * 0.015)
+	if _horde_challenge_rounds.has(_round_number):
+		chance *= 0.65
+	return chance
 
 
 func _scaled_material_reward(base_reward: int) -> int:
@@ -1285,17 +1427,17 @@ func _on_material_pickup_collected(amount: int) -> void:
 	_currency = maxi(0, _currency + amount)
 
 
-func _spawn_consumable(position: Vector2, reward: int) -> void:
-	call_deferred("_spawn_consumable_now", position, reward)
+func _spawn_consumable(position: Vector2, reward: int, amount_override: int = -1) -> void:
+	call_deferred("_spawn_consumable_now", position, reward, amount_override)
 
 
-func _spawn_consumable_now(position: Vector2, reward: int) -> void:
+func _spawn_consumable_now(position: Vector2, reward: int, amount_override: int = -1) -> void:
 	var pickup := CONSUMABLE_SCENE.instantiate() as ConsumablePickup
 	if pickup == null:
 		return
 	pickup.reward = reward
 	if reward == ConsumablePickup.Reward.HEALTH:
-		pickup.amount = 18
+		pickup.amount = 18 if amount_override < 0 else amount_override
 	else:
 		pickup.speed_multiplier = 1.28
 		pickup.duration = 6.0
@@ -1341,15 +1483,11 @@ func _on_player_health_changed(current: int, maximum: int) -> void:
 	_hud.update_health(current, maximum)
 
 
-func _on_boss_health_changed(current: int, maximum: int) -> void:
-	var boss_definition := _boss_definition_for_round()
-	var boss_name := boss_definition.display_name if boss_definition != null else "ELITE"
+func _on_boss_health_changed(current: int, maximum: int, boss_name: String = "BOSS") -> void:
 	_hud.set_boss_health(boss_name.to_upper(), current, maximum)
 
 
-func _on_boss_stagger_changed(current: int, maximum: int, stunned: bool) -> void:
-	var boss_definition := _boss_definition_for_round()
-	var boss_name := boss_definition.display_name if boss_definition != null else "MANAGER"
+func _on_boss_stagger_changed(current: int, maximum: int, stunned: bool, boss_name: String = "MANAGER") -> void:
 	_hud.set_boss_stagger(boss_name.to_upper(), current, maximum, stunned)
 
 
@@ -1418,21 +1556,26 @@ func _complete_round() -> void:
 func _open_intermission() -> void:
 	if _state != RunState.ROUND_CLEAR:
 		return
-	if _pending_level_ups > 0:
+	if _pending_elite_crates > 0 or _pending_level_ups > 0:
 		_show_next_stat_choice()
 	else:
 		_open_shop()
 
 
 func _show_next_stat_choice() -> void:
-	if _pending_level_ups <= 0 or _state == RunState.RESULTS:
+	if (_pending_level_ups <= 0 and _pending_elite_crates <= 0) or _state == RunState.RESULTS:
 		_open_shop()
 		return
-	_pending_level_ups -= 1
+	var is_elite_crate := _pending_elite_crates > 0
+	if is_elite_crate:
+		_pending_elite_crates -= 1
+	else:
+		_pending_level_ups -= 1
 	_active_stat_choices.clear()
 	for choice: Dictionary in _build_level_choices():
-		var adjusted_choice := _apply_level_choice_rarity(choice)
+		var adjusted_choice := _apply_level_choice_rarity(choice, 4 if is_elite_crate else 0)
 		if _player.can_apply_level_choice(adjusted_choice):
+			adjusted_choice["elite_crate_reward"] = is_elite_crate
 			_active_stat_choices.append(adjusted_choice)
 	_active_stat_choices.shuffle()
 	if _active_stat_choices.size() > 4:
@@ -1597,9 +1740,9 @@ func _build_level_choices() -> Array[Dictionary]:
 	return choices
 
 
-func _apply_level_choice_rarity(source: Dictionary) -> Dictionary:
+func _apply_level_choice_rarity(source: Dictionary, forced_tier: int = 0) -> Dictionary:
 	var choice := source.duplicate(true)
-	var tier := _roll_progression_tier(_player.current_level, true)
+	var tier := clampi(forced_tier, 1, 4) if forced_tier > 0 else _roll_progression_tier(_player.current_level, true)
 	choice["rarity_tier"] = tier
 	var amount_scale: float = [1.0, 1.20, 1.42, 1.68][tier - 1]
 	var effects: Array = choice.get("effects", [])
@@ -1655,7 +1798,7 @@ func _on_stat_choice_selected(choice_id: StringName) -> void:
 		return
 	_active_stat_choices.clear()
 	_hud.hide_overlay()
-	if _pending_level_ups > 0:
+	if _pending_elite_crates > 0 or _pending_level_ups > 0:
 		_show_next_stat_choice()
 	else:
 		_open_shop()
@@ -1682,6 +1825,25 @@ func _shop_player_summary() -> Dictionary:
 	var summary := _player.get_shop_summary()
 	summary["shop_wave"] = _round_number
 	summary["shop_endless"] = _endless_mode
+	var upcoming_round := _round_number + 1
+	if _endless_mode:
+		_ensure_endless_difficulty_challenges(upcoming_round)
+	var event_notices: PackedStringArray = []
+	if _is_elite_challenge_round(upcoming_round):
+		if _endless_mode:
+			var elite_count := _difficulty_elite_count_for_round(upcoming_round)
+			event_notices.append("ELITE EVENT · %d ELITES" % elite_count if I18n.current_locale == "en" else "ELİT OLAYI · %d ELİT" % elite_count)
+		else:
+			event_notices.append("ELITE · defeat it for a reward" if I18n.current_locale == "en" else "ELİT · ödül kazanmak için yen")
+	elif _horde_challenge_rounds.has(upcoming_round):
+		event_notices.append("HORDE · more enemies, fewer materials" if I18n.current_locale == "en" else "SÜRÜ · daha fazla düşman, daha az malzeme")
+	if _should_double_boss(upcoming_round):
+		if _endless_mode:
+			event_notices.append("TWO BOSSES + ELITES" if I18n.current_locale == "en" else "İKİ BOSS + ELİTLER")
+		else:
+			event_notices.append("TWO BOSSES" if I18n.current_locale == "en" else "İKİ BOSS")
+	if not event_notices.is_empty():
+		summary["difficulty_event_notice"] = "NEXT WAVE %d · %s" % [upcoming_round, " · ".join(event_notices)] if I18n.current_locale == "en" else "GELECEK DALGA %d · %s" % [upcoming_round, " · ".join(event_notices)]
 	return summary
 
 
@@ -1925,16 +2087,24 @@ func _prices_for_offers(offers: Array) -> Array[int]:
 
 
 func _inflated_shop_price(base_price: int) -> int:
+	if _endless_mode:
+		var endless_wave := float(_shop_economy_wave())
+		var endless_base_price := float(base_price) + endless_wave + float(base_price) * endless_wave * 0.1
+		return maxi(1, floori(endless_base_price * _endless_price_factor()))
 	# Brotato's reference depends on base price, wave and price modifiers.
 	# This project's lower token scale uses a softer, still wave-linked curve.
 	var wave := _shop_economy_wave()
 	var inflation := floori(float(wave) * (0.70 + float(base_price) * 0.05))
 	var endless_factor := _endless_price_factor()
-	return clampi(floori(float(base_price + inflation) * endless_factor), 1, 999)
+	return clampi(floori(float(base_price + inflation) * endless_factor), 1, 99999)
 
 
 func _reroll_price() -> int:
 	var wave := _shop_economy_wave()
+	if _endless_mode:
+		var endless_increase := maxi(1, floori(0.5 * float(wave) * sqrt(1.0 + _endless_factor(_round_number))))
+		var endless_first_price := floori(float(wave) * 0.75) + endless_increase
+		return maxi(1, endless_first_price + _shop_reroll_count * endless_increase)
 	var increase := maxi(1, floori(float(wave) * 0.40))
 	var first_price := floori(float(wave) * 0.75) + increase
 	var raw_price := first_price + _shop_reroll_count * increase
@@ -1942,13 +2112,13 @@ func _reroll_price() -> int:
 
 
 func _shop_economy_wave() -> int:
-	return clampi(_round_number, 1, 60) if _endless_mode else maxi(1, _round_number)
+	return maxi(1, _round_number)
 
 
 func _endless_price_factor() -> float:
 	if not _endless_mode:
 		return 1.0
-	return 1.0 + minf(0.60, float(maxi(0, _round_number - CAMPAIGN_WAVE_COUNT)) * 0.01)
+	return 1.0 + _endless_factor(_round_number) / 5.0
 
 
 func _on_shop_offer_purchased(index: int) -> void:
@@ -2161,6 +2331,8 @@ func _gather_save_state() -> Dictionary:
 		"difficulty_pressure_rounds": _pressure_challenge_rounds,
 		"difficulty_elite_rounds": _elite_challenge_rounds,
 		"difficulty_horde_rounds": _horde_challenge_rounds,
+		"difficulty_elite_ids_by_round": _difficulty_elite_ids_by_round,
+		"pending_elite_crates": _pending_elite_crates,
 		"current_room_id": String(_current_room_id),
 		"player": p_data,
 		"weapons": weapons_data,
@@ -2176,12 +2348,14 @@ func _restore_run_state(saved_data: Dictionary) -> void:
 	_endless_mode = bool(saved_data.get("endless_mode", false))
 	_difficulty_level = clampi(int(saved_data.get("difficulty_level", 0)), 0, DIFFICULTY_CATALOG.MAX_LEVEL)
 	_difficulty_profile = DIFFICULTY_CATALOG.get_profile(_difficulty_level)
+	_pending_elite_crates = maxi(0, int(saved_data.get("pending_elite_crates", 0)))
 	_pressure_challenge_rounds.clear()
 	for round_value: Variant in saved_data.get("difficulty_pressure_rounds", []):
 		_pressure_challenge_rounds.append(int(round_value))
 	_elite_challenge_rounds.clear()
 	for round_value: Variant in saved_data.get("difficulty_elite_rounds", []):
 		_elite_challenge_rounds.append(int(round_value))
+	_difficulty_elite_ids_by_round = saved_data.get("difficulty_elite_ids_by_round", {}).duplicate(true)
 	_horde_challenge_rounds.clear()
 	for round_value: Variant in saved_data.get("difficulty_horde_rounds", []):
 		_horde_challenge_rounds.append(int(round_value))

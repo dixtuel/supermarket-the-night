@@ -330,7 +330,10 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 
 
 func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = {}) -> void:
-	_open_overlay(&"stat_choice", "Choose a shift adjustment", "Select one lasting bonus. Some upgrades include a trade-off.")
+	var elite_crate_reward := not choices.is_empty() and bool(choices[0].get("elite_crate_reward", false))
+	var overlay_title := ("Elite Reward" if I18n.current_locale == "en" else "Elit Ödülü") if elite_crate_reward else "Choose a shift adjustment"
+	var subtitle := ("Choose a powerful upgrade. The reward includes a large heal." if I18n.current_locale == "en" else "Güçlü bir geliştirme seç. Ödül büyük iyileşme sağlar.") if elite_crate_reward else "Select one lasting bonus. Some upgrades include a trade-off."
+	_open_overlay(&"stat_choice", overlay_title, subtitle)
 	_last_player_summary = player_summary.duplicate(true)
 	_stat_choice_ids.clear()
 	var portrait := _is_portrait()

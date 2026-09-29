@@ -43,8 +43,8 @@ const PROFILES: Array[Dictionary] = [
 	},
 	{
 		"level": 5, "name": "CLOSING TIME", "name_tr": "KAPANIŞ SAATİ",
-		"description": "Enemies have +40% health and damage. Three pressure waves and two final bosses; each boss has 25% less health.",
-		"description_tr": "Düşmanların canı ve hasarı +%40. Üç baskı dalgası ve finalde canı %25 azaltılmış iki boss.",
+		"description": "Enemies have +40% health and damage. Three pressure waves and two bosses in the final round.",
+		"description_tr": "Düşmanların canı ve hasarı +%40. Üç baskı dalgası ve son dalgada iki boss.",
 		"enemy_health": 1.40, "enemy_damage": 1.40, "enemy_speed": 1.0,
 		"pressure_waves": 3, "new_enemy_tier": 5, "double_boss": true,
 	},
