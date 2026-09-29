@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/case_breaker.svg" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"case_breaker"
+display_name = "Case Breaker"
+description = "Lobs a compact stock crate that bursts on impact. The blast hits nearby shoppers for reduced edge damage and scales with Ranged Damage."
+sprite = ExtResource("2_sprite")
+shop_unlock_wave = 5
+weapon_class = 3
+attack_mode = 8
+damage = 8
+damage_type = 0
+damage_scaling_stat = 1
+damage_scaling_coefficient = 0.7
+fire_interval = 2.05
+target_range = 390.0
+muzzle_offset = 12.0
+projectile_speed = 370.0
+projectile_lifetime = 1.45
+projectile_count = 1
+pierce_count = 0
+area_radius = 58.0
+effect_duration = 0.16

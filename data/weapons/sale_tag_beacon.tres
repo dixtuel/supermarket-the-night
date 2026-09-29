@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"sale_tag_beacon"
 display_name = "Sale-Tag Beacon"
+shop_unlock_wave = 1
 description = "Drops a bright tag that damages and slows enemies in an area."
 sprite = ExtResource("2_sprite")
+weapon_class = 5
 attack_mode = 3
 damage = 16
 damage_type = 0

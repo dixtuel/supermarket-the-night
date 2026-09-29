@@ -6,7 +6,9 @@
 [resource]
 script = ExtResource("1_weapon")
 id = &"tote_stack_lobber"
+weapon_class = 3
 display_name = "Tote-Stack Lobber"
+shop_unlock_wave = 4
 description = "Lobs a short fan of light stock totes toward the nearest threat."
 sprite = ExtResource("2_sprite")
 attack_mode = 0

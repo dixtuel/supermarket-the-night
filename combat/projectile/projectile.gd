@@ -3,7 +3,7 @@ class_name SurvivorProjectile
 
 signal mine_detonated
 
-enum FlightMode { STRAIGHT, RETURNING, ORBITING, ZONE, TURRET, MINE }
+enum FlightMode { STRAIGHT, RETURNING, ORBITING, ZONE, TURRET, MINE, EXPLOSIVE }
 
 @export var speed: float = 560.0
 @export var lifetime: float = 1.5
@@ -38,6 +38,8 @@ var _structure_owner: Node2D
 var _structure_room_id: StringName = &"market"
 var _mine_detonated: bool = false
 var _mine_scan_cooldown: float = 0.0
+var _explosion_radius: float = 0.0
+var _explosion_detonated: bool = false
 
 
 func _ready() -> void:
@@ -66,6 +68,21 @@ func launch_with_stats(direction: Vector2, damage: int, projectile_speed: float,
 	_remaining_lifetime = lifetime
 	launch(direction, damage)
 	_remaining_pierce = maxi(0, pierce_count)
+
+
+func launch_explosive(
+	direction: Vector2,
+	damage: int,
+	projectile_speed: float,
+	projectile_lifetime: float,
+	radius: float,
+	source: Node2D
+) -> void:
+	launch_with_stats(direction, damage, projectile_speed, projectile_lifetime, 0)
+	_flight_mode = FlightMode.EXPLOSIVE
+	_explosion_radius = clampf(radius, 24.0, 220.0)
+	_life_steal_source = source
+	_visual.color = Color("f3a64a")
 
 
 func set_life_steal_source(source: Node2D) -> void:
@@ -261,6 +278,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node2D) -> void:
+	if _flight_mode == FlightMode.EXPLOSIVE:
+		if body.is_in_group("enemies") or (body.collision_layer & 1) != 0:
+			_detonate_explosive()
+		return
 	if _flight_mode == FlightMode.TURRET:
 		return
 	if _flight_mode == FlightMode.MINE:
@@ -293,6 +314,42 @@ func _on_body_entered(body: Node2D) -> void:
 
 func _deal_damage(body: Node2D) -> void:
 	apply_direct_hit(body, _damage, _life_steal_source, _flight_mode not in [FlightMode.TURRET, FlightMode.MINE])
+
+
+func _detonate_explosive() -> void:
+	if _explosion_detonated:
+		return
+	_explosion_detonated = true
+	_has_hit = true
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
+	var room_id := StringName(get_meta("room_id", &"market"))
+	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+		var enemy := candidate as Node2D
+		if (
+			not is_instance_valid(enemy)
+			or enemy.is_queued_for_deletion()
+			or not _is_same_room(enemy, room_id)
+		):
+			continue
+		var distance := global_position.distance_to(enemy.global_position)
+		if distance > _explosion_radius:
+			continue
+		var distance_ratio := clampf(distance / maxf(1.0, _explosion_radius), 0.0, 1.0)
+		var splash_scale := lerpf(1.0, 0.45, distance_ratio)
+		apply_direct_hit(enemy, maxi(1, roundi(float(_damage) * splash_scale)), _life_steal_source, true)
+	if is_instance_valid(_weapon_sprite):
+		_weapon_sprite.visible = false
+	var points := PackedVector2Array()
+	for index: int in range(25):
+		var angle := TAU * float(index) / 24.0
+		points.append(Vector2(cos(angle), sin(angle)) * _explosion_radius)
+	_visual.polygon = points
+	_visual.color = Color(1.0, 0.62, 0.20, 0.52)
+	_visual.visible = true
+	var fade := create_tween()
+	fade.tween_property(_visual, "color:a", 0.0, 0.16)
+	fade.tween_callback(queue_free)
 
 
 static func apply_direct_hit(body: Node2D, damage: int, source: Node2D, can_crit: bool = true) -> int:

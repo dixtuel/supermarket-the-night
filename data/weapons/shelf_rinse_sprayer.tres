@@ -6,7 +6,9 @@
 [resource]
 script = ExtResource("1_weapon")
 id = &"shelf_rinse_sprayer"
+weapon_class = 2
 display_name = "Shelf-Rinse Sprayer"
+shop_unlock_wave = 4
 description = "Fires a fan of cleaning mist at the nearest nuisance. Damage scales with Elemental Damage."
 sprite = ExtResource("2_sprite")
 damage = 4

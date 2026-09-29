@@ -17,6 +17,7 @@ enum Effect {
 	PLAYER_LIFESTEAL_ADD,
 	PLAYER_DODGE_ADD,
 	PLAYER_ENGINEERING_ADD,
+	WEAPON_REACH_ADD,
 }
 
 @export var id: StringName = &""

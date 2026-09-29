@@ -14,15 +14,15 @@ signal settings_requested
 
 const TURKISH_FALLBACK_FONT: FontFile = preload("res://assets/fonts/DejaVuSans.ttf")
 
-const INK := Color("111a1c")
-const PANEL := Color("efebd8", 0.97)
-const PANEL_EDGE := Color("a59c80")
-const TEXT := Color("18231e")
-const MUTED := Color("56645a")
-const TEAL := Color("4d7658")
-const GOLD := Color("a98936")
-const RED := Color("b75d54")
-const RECEIPT_LIGHT := Color("f8f5e9")
+const INK := Color("172421")
+const PANEL := Color("e7dec9", 0.97)
+const PANEL_EDGE := Color("886a50")
+const TEXT := Color("172421")
+const MUTED := Color("53645b")
+const TEAL := Color("6da4aa")
+const GOLD := Color("b8c7a3")
+const RED := Color("d96c4b")
+const RECEIPT_LIGHT := Color("f8f1df")
 
 var _root: Control
 var _health_bar: ProgressBar
@@ -234,13 +234,15 @@ func hide_boss_health() -> void:
 
 
 func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
-	_open_overlay(&"level_up", "Choose a shift bonus", "One item comes off the shelf. The clock is paused.")
+	_open_overlay(&"level_up", I18n.t("LEVELUP_TITLE", "Vardiya Bonusu Seç"), I18n.t("LEVELUP_SUBTITLE", "Bir malzeme seç. Zaman durduruldu."))
 	_level_up_choice_count = upgrades.size()
 	var mobile_layout := _is_mobile_platform()
+	var portrait := _is_portrait()
 	var portmaster := OS.has_feature("portmaster")
 	var viewport_size := get_viewport().get_visible_rect().size
 	var choice_layout: Control = HBoxContainer.new()
-	if portmaster:
+	var stacked_mobile := mobile_layout and portrait
+	if portmaster or stacked_mobile:
 		choice_layout = VBoxContainer.new()
 	choice_layout.add_theme_constant_override("separation", _mobile_spacing(12) if mobile_layout else 16)
 	choice_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -248,7 +250,7 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 	_overlay_body.add_child(choice_layout)
 	var cards: Control = GridContainer.new() if mobile_layout else HBoxContainer.new()
 	if mobile_layout:
-		(cards as GridContainer).columns = 2 if portmaster else 4
+		(cards as GridContainer).columns = 1 if portrait else 2
 	var choice_buttons: Array[Button] = []
 	cards.add_theme_constant_override("h_separation", _mobile_spacing(12) if mobile_layout else 12)
 	cards.add_theme_constant_override("v_separation", _mobile_spacing(10) if mobile_layout else 12)
@@ -257,13 +259,13 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 	if mobile_layout:
 		var safe := _safe_insets(viewport_size)
 		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
-		cards.custom_minimum_size.x = inner_width - (0.0 if portmaster else 260.0) - _mobile_spacing(12)
+		cards.custom_minimum_size.x = inner_width - (260.0 if mobile_layout and not (portmaster or stacked_mobile) else 0.0) - _mobile_spacing(12)
 	choice_layout.add_child(cards)
 	for index in range(upgrades.size()):
 		var definition := upgrades[index]
 		var card := Button.new()
-		var columns := 2 if portmaster else 4
-		var choice_height := viewport_size.y * (0.35 if portmaster else 0.58) if mobile_layout else 300.0
+		var columns := 1 if portrait else 2
+		var choice_height := clampf(viewport_size.y * (0.40 if portmaster else 0.46), 208.0, 380.0) if mobile_layout else 370.0
 		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(12 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -271,7 +273,7 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		card.add_theme_font_size_override("font_size", _responsive_font_size(18))
 		card.add_theme_color_override("font_color", TEXT)
 		card.add_theme_color_override("font_hover_color", TEXT)
-		card.add_theme_stylebox_override("normal", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+		card.add_theme_stylebox_override("normal", _rarity_style(1))
 		card.add_theme_stylebox_override("hover", _style(Color("fffdf4"), GOLD, 0, 2))
 		card.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 		card.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
@@ -287,17 +289,22 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		var icon := TextureRect.new()
 		icon.texture = definition.icon
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon.custom_minimum_size = Vector2(64, 64)
+		icon.custom_minimum_size = Vector2(78, 78)
 		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		if icon.texture != null:
 			var icon_center := _center_control(icon)
-			icon_center.custom_minimum_size.y = _mobile_spacing(42) if mobile_layout else 64
+			icon_center.custom_minimum_size.y = _mobile_spacing(58) if mobile_layout else 82
 			content.add_child(icon_center)
 		var title := _label(definition.display_name, 23, TEXT)
 		if mobile_layout:
 			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 21.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var value_text := _upgrade_choice_summary(definition)
+		var value_label := _label(value_text, 21, TEAL if definition.value >= 0.0 else RED)
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var description := _label(definition.description, 17, MUTED)
 		if mobile_layout:
 			description.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 17.0)))
@@ -305,6 +312,7 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		description.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		content.add_child(number)
 		content.add_child(title)
+		content.add_child(value_label)
 		content.add_child(description)
 		var choose_hint := _label("CHOOSE   /   %d" % (index + 1), 15, TEAL)
 		choose_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -329,10 +337,47 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 			scroll.set_deferred("scroll_vertical", 0)
 
 
+func _upgrade_choice_summary(upgrade: UpgradeDefinition) -> String:
+	var value := upgrade.value
+	var english := I18n.current_locale == "en"
+	match upgrade.effect:
+		UpgradeDefinition.Effect.UNLOCK_WEAPON:
+			return ("NEW WEAPON · %s" if english else "YENİ SİLAH · %s") % (upgrade.unlocks_weapon.display_name if upgrade.unlocks_weapon != null else "—")
+		UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD:
+			return "%+d %s" % [roundi(value), "weapon damage" if english else "silah hasarı"]
+		UpgradeDefinition.Effect.FIRE_RATE_MULTIPLIER:
+			return "%+d%% %s" % [roundi(value * 100.0), "attack rate" if english else "saldırı hızı"]
+		UpgradeDefinition.Effect.PROJECTILE_COUNT_ADD:
+			return "%+d %s" % [roundi(value), "projectiles" if english else "mermi"]
+		UpgradeDefinition.Effect.PROJECTILE_SPEED_MULTIPLIER:
+			return "%+d%% %s" % [roundi(value * 100.0), "projectile speed" if english else "mermi hızı"]
+		UpgradeDefinition.Effect.WEAPON_DAMAGE_MULTIPLIER:
+			return "%+d%% %s" % [roundi(value * 100.0), "weapon damage" if english else "silah hasarı"]
+		UpgradeDefinition.Effect.WEAPON_PIERCE_ADD:
+			return "%+d %s" % [roundi(value), "pierce" if english else "delme"]
+		UpgradeDefinition.Effect.WEAPON_RADIUS_ADD:
+			return "%+d px %s" % [roundi(value), "area" if english else "alan"]
+		UpgradeDefinition.Effect.PLAYER_MOVE_SPEED_MULTIPLIER:
+			return "%+d%% %s" % [roundi(value * 100.0), "move speed" if english else "hareket hızı"]
+		UpgradeDefinition.Effect.PLAYER_MAX_HEALTH_ADD:
+			return "%+d MAX HP   ·   +%d HP NOW" % [roundi(value), roundi(upgrade.immediate_heal)] if english else "%+d MAKS CAN   ·   +%d CAN ŞİMDİ" % [roundi(value), roundi(upgrade.immediate_heal)]
+		UpgradeDefinition.Effect.PLAYER_LIFESTEAL_ADD:
+			return "%+d%% %s" % [roundi(value * 100.0), "lifesteal" if english else "can çalma"]
+		UpgradeDefinition.Effect.PLAYER_DODGE_ADD:
+			return "%+d%% %s" % [roundi(value * 100.0), "dodge" if english else "kaçınma"]
+		UpgradeDefinition.Effect.PLAYER_ENGINEERING_ADD:
+			return "%+d %s" % [roundi(value), "engineering" if english else "mühendislik"]
+		UpgradeDefinition.Effect.WEAPON_REACH_ADD:
+			return "%+d px %s" % [roundi(value), "reach" if english else "erişim"]
+	return upgrade.description
+
+
 func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = {}) -> void:
 	var elite_crate_reward := not choices.is_empty() and bool(choices[0].get("elite_crate_reward", false))
 	var overlay_title := ("Elite Reward" if I18n.current_locale == "en" else "Elit Ödülü") if elite_crate_reward else "Choose a shift adjustment"
-	var subtitle := ("Choose a powerful upgrade. The reward includes a large heal." if I18n.current_locale == "en" else "Güçlü bir geliştirme seç. Ödül büyük iyileşme sağlar.") if elite_crate_reward else "Select one lasting bonus. Some upgrades include a trade-off."
+	if not elite_crate_reward:
+		overlay_title = I18n.t("STAT_TITLE", "Vardiyanı Özelleştir")
+	var subtitle := ("Choose a powerful upgrade. The reward includes a large heal." if I18n.current_locale == "en" else "Güçlü bir geliştirme seç. Ödül büyük iyileşme sağlar.") if elite_crate_reward else I18n.t("STAT_SUBTITLE", "Kalıcı bir özellik seç. Zaman durduruldu.")
 	_open_overlay(&"stat_choice", overlay_title, subtitle)
 	_last_player_summary = player_summary.duplicate(true)
 	_stat_choice_ids.clear()
@@ -341,7 +386,8 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	var portmaster := OS.has_feature("portmaster")
 	var viewport_size := get_viewport().get_visible_rect().size
 	var layout: Control = HBoxContainer.new()
-	if portmaster:
+	var stacked_mobile := mobile_layout and portrait
+	if portmaster or stacked_mobile:
 		layout = VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 16)
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -349,7 +395,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	_overlay_body.add_child(layout)
 	var cards: Control = GridContainer.new() if mobile_layout else HBoxContainer.new()
 	if mobile_layout:
-		(cards as GridContainer).columns = 2 if portmaster else 4
+		(cards as GridContainer).columns = 1 if portrait else 2
 	var choice_buttons: Array[Button] = []
 	cards.add_theme_constant_override("h_separation", _mobile_spacing(8) if mobile_layout else 10)
 	cards.add_theme_constant_override("v_separation", _mobile_spacing(8) if mobile_layout else 10)
@@ -358,7 +404,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	if mobile_layout:
 		var safe := _safe_insets(viewport_size)
 		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
-		cards.custom_minimum_size.x = inner_width - (0.0 if portmaster else 260.0) - _mobile_spacing(16)
+		cards.custom_minimum_size.x = inner_width - (260.0 if mobile_layout and not (portmaster or stacked_mobile) else 0.0) - _mobile_spacing(16)
 	layout.add_child(cards)
 	var choice_count: int = mini(choices.size(), 4)
 	for index: int in range(choice_count):
@@ -366,18 +412,18 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var choice_id := StringName(String(choice.get("id", "")))
 		_stat_choice_ids.append(choice_id)
 		var card := PanelContainer.new()
-		var columns := 2 if portmaster else 4
-		var choice_height := viewport_size.y * (0.35 if portmaster else 0.58) if mobile_layout else 320.0
+		var rarity_tier := clampi(int(choice.get("rarity_tier", 1)), 1, 4)
+		var columns := 1 if portrait else 2
+		var choice_height := clampf(viewport_size.y * (0.40 if portmaster else 0.47), 240.0, 380.0) if mobile_layout else 380.0
 		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(8 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		card.add_theme_stylebox_override("panel", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+		card.add_theme_stylebox_override("panel", _rarity_style(rarity_tier))
 		var content := VBoxContainer.new()
 		content.add_theme_constant_override("separation", _mobile_spacing(6) if mobile_layout else 10)
 		card.add_child(_margin_content(content, _mobile_spacing(8) if mobile_layout else 12))
-		var rarity_tier := clampi(int(choice.get("rarity_tier", 1)), 1, 4)
 		var tier_names := ["I", "II", "III", "IV"]
-		var tier_colors := [MUTED, TEAL, Color("70a8d2"), GOLD]
+		var tier_colors := [MUTED, TEAL, Color("aa8db8"), GOLD]
 		content.add_child(_label("PICK %02d  /  KEY %d   ·   TIER %s" % [index + 1, index + 1, tier_names[rarity_tier - 1]], 14, tier_colors[rarity_tier - 1]))
 		var icon_texture := _stat_icon(choice)
 		if icon_texture != null:
@@ -400,16 +446,15 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var details := VBoxContainer.new()
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.add_theme_constant_override("separation", 6)
-		if portmaster:
-			content.add_child(details)
-		else:
-			var details_scroll := ScrollContainer.new()
-			details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-			details_scroll.follow_focus = true
-			details_scroll.add_child(details)
-			content.add_child(details_scroll)
+		var details_scroll := ScrollContainer.new()
+		details_scroll.custom_minimum_size.y = _mobile_spacing(84) if mobile_layout else 112
+		details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		details_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		details_scroll.follow_focus = true
+		details_scroll.add_child(details)
+		content.add_child(details_scroll)
 		var effects: Array = choice.get("effects", [])
 		for effect: Variant in effects:
 			if effect is Dictionary:
@@ -418,7 +463,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 					delta_row.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 19.0)))
 				delta_row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				details.add_child(delta_row)
-		if effects.is_empty() and not portmaster:
+		if effects.is_empty():
 			details.add_child(_label("No lasting stat change.", 16, MUTED))
 		var reason := _label(String(choice.get("description", "")), 15, MUTED)
 		if mobile_layout:
@@ -436,17 +481,115 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 
 	var ledger := _build_stat_ledger(player_summary)
 	if mobile_layout:
-		ledger.custom_minimum_size.y = viewport_size.y * (0.38 if portmaster else 0.58)
+		ledger.custom_minimum_size.y = viewport_size.y * (0.30 if (portmaster or stacked_mobile) else 0.58)
 		ledger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		if portmaster:
+		if portmaster or stacked_mobile:
 			ledger.custom_minimum_size.x = 0.0
 			ledger.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.add_child(ledger)
+	_overlay_body.add_child(_build_choice_inventory_strip(player_summary))
 	_link_horizontal_focus(choice_buttons)
 	if portmaster:
 		var scroll := _overlay.find_child("OverlayContentScroll", true, false) as ScrollContainer
 		if is_instance_valid(scroll):
 			scroll.set_deferred("scroll_vertical", 0)
+
+
+func _build_choice_inventory_strip(player_summary: Dictionary) -> PanelContainer:
+	var inventory: Dictionary = player_summary.get("inventory", {}) if player_summary.get("inventory", {}) is Dictionary else {}
+	var weapons: Array = inventory.get("weapons", [])
+	var upgrades: Array = inventory.get("upgrades", [])
+	var deployables: Array = inventory.get("deployables", [])
+	var mobile := _is_mobile_platform()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var panel := PanelContainer.new()
+	panel.name = "ChoiceInventoryStrip"
+	panel.custom_minimum_size.y = _mobile_spacing(76) if mobile else 82.0
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(_margin_content(scroll, _mobile_spacing(5) if mobile else 8))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", _mobile_spacing(6) if mobile else 8)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(row)
+	var weapon_count := mini(weapons.size(), 6)
+	var weapon_heading := _label("WEAPONS  %d/6" % weapon_count, 14, INK)
+	weapon_heading.custom_minimum_size.x = 105.0 if not mobile else _mobile_spacing(100)
+	weapon_heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(weapon_heading)
+	for slot_index in range(6):
+		if slot_index < weapon_count and weapons[slot_index] is Dictionary:
+			var weapon: Dictionary = weapons[slot_index]
+			var tier := clampi(int(weapon.get("tier", 1)), 1, 4)
+			var icon := weapon.get("icon") as Texture2D
+			if icon == null:
+				var weapon_path := "res://data/weapons/%s.tres" % String(weapon.get("id", ""))
+				if ResourceLoader.exists(weapon_path):
+					var definition := load(weapon_path) as WeaponDefinition
+					icon = definition.sprite if definition != null else null
+			row.add_child(_choice_inventory_icon(icon, _rarity_style(tier), _tier_number(tier)))
+		else:
+			row.add_child(_choice_inventory_icon(null, _style(Color("eee7d3"), Color("b5a88e"), 0, 1), "+"))
+	var other_items: Array = upgrades + deployables
+	if not other_items.is_empty():
+		var inventory_heading := _label("ENVANTER" if I18n.current_locale == "tr" else "INVENTORY", 14, INK)
+		inventory_heading.custom_minimum_size.x = 88.0 if not mobile else _mobile_spacing(82)
+		inventory_heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(inventory_heading)
+		for index in range(mini(other_items.size(), 5)):
+			var record: Dictionary = other_items[index] if other_items[index] is Dictionary else {}
+			var icon := record.get("icon") as Texture2D
+			if icon == null:
+				var upgrade_path := "res://data/upgrades/%s.tres" % String(record.get("id", ""))
+				if ResourceLoader.exists(upgrade_path):
+					var upgrade := load(upgrade_path) as UpgradeDefinition
+					icon = upgrade.icon if upgrade != null else null
+			if icon == null:
+				var deployable_path := "res://data/weapons/%s.tres" % String(record.get("id", ""))
+				if ResourceLoader.exists(deployable_path):
+					var definition := load(deployable_path) as WeaponDefinition
+					icon = definition.sprite if definition != null else null
+			var tier := clampi(int(record.get("tier", record.get("rank", 1))), 1, 4)
+			row.add_child(_choice_inventory_icon(icon, _rarity_style(tier), _tier_number(tier)))
+		if other_items.size() > 5:
+			row.add_child(_label("+%d" % (other_items.size() - 5), 15, MUTED))
+	return panel
+
+
+func _choice_inventory_icon(texture: Texture2D, style: StyleBoxFlat, tier_label: String) -> Control:
+	var slot := PanelContainer.new()
+	slot.custom_minimum_size = Vector2(58, 54) if not _is_mobile_platform() else Vector2(_mobile_spacing(54), _mobile_spacing(50))
+	slot.add_theme_stylebox_override("panel", style)
+	if texture != null:
+		var icon := TextureRect.new()
+		icon.texture = texture
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		icon.offset_left = 5
+		icon.offset_top = 3
+		icon.offset_right = -5
+		icon.offset_bottom = -3
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(icon)
+	var badge := _label(tier_label, 11, TEXT)
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_theme_stylebox_override("normal", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
+	badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	badge.position = Vector2(-23, -16)
+	badge.size = Vector2(22, 15)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.add_child(badge)
+	return slot
+
+
+func _tier_number(tier: int) -> String:
+	return "I" if tier == 1 else ("II" if tier == 2 else ("III" if tier == 3 else "IV"))
 
 
 func _link_horizontal_focus(buttons: Array[Button]) -> void:
@@ -524,11 +667,11 @@ func _add_card_button(parent: Control, button_text: String, callback: Callable) 
 	button.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 48
 	button.focus_mode = Control.FOCUS_ALL
 	button.add_theme_font_size_override("font_size", _responsive_font_size(17))
-	button.add_theme_color_override("font_color", INK)
-	button.add_theme_color_override("font_hover_color", INK)
-	button.add_theme_color_override("font_focus_color", INK)
-	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24), GOLD, 0, 1))
-	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32), TEXT, 0, 1))
+	button.add_theme_color_override("font_color", PANEL)
+	button.add_theme_color_override("font_hover_color", PANEL)
+	button.add_theme_color_override("font_focus_color", PANEL)
+	button.add_theme_stylebox_override("normal", _style(RED, RED.darkened(0.2), 0, 1))
+	button.add_theme_stylebox_override("hover", _style(RED.lightened(0.1), GOLD, 0, 1))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
 	button.pressed.connect(func() -> void: callback.call())
@@ -550,19 +693,45 @@ func _format_stat_delta(effect: Dictionary) -> String:
 func _stat_display_name(stat_key: String) -> String:
 	match stat_key:
 		"engineering":
-			return "Engineering"
+			return "Mühendislik" if I18n.current_locale == "tr" else "Engineering"
 		"elemental_damage":
-			return "Elemental Damage"
+			return "Element Hasarı" if I18n.current_locale == "tr" else "Elemental Damage"
 		"max_health":
-			return "Max Health"
+			return "Maksimum CAN" if I18n.current_locale == "tr" else "Max Health"
+		"health":
+			return "CAN" if I18n.current_locale == "tr" else "Health"
+		"damage":
+			return "Hasar" if I18n.current_locale == "tr" else "Damage"
 		"move_speed":
-			return "Move Speed"
+			return "Hareket Hızı" if I18n.current_locale == "tr" else "Move Speed"
 		"lifesteal":
-			return "Life Steal"
+			return "Can Çalma" if I18n.current_locale == "tr" else "Life Steal"
 		"weapon_damage":
-			return "Weapon Damage"
+			return "Silah Hasarı" if I18n.current_locale == "tr" else "Weapon Damage"
 		"weapon_fire_rate":
-			return "Weapon Fire Rate"
+			return "Silah Atış Hızı" if I18n.current_locale == "tr" else "Weapon Fire Rate"
+		"melee_damage":
+			return "Yakın Dövüş Hasarı" if I18n.current_locale == "tr" else "Melee Damage"
+		"ranged_damage":
+			return "Menzilli Hasar" if I18n.current_locale == "tr" else "Ranged Damage"
+		"speed":
+			return "Hız" if I18n.current_locale == "tr" else "Speed"
+		"dodge":
+			return "Kaçınma" if I18n.current_locale == "tr" else "Dodge"
+		"protection":
+			return "Koruma" if I18n.current_locale == "tr" else "Protection"
+		"luck":
+			return "Şans" if I18n.current_locale == "tr" else "Luck"
+		"attack_speed":
+			return "Saldırı Hızı" if I18n.current_locale == "tr" else "Attack Speed"
+		"crit_chance":
+			return "Kritik Şansı" if I18n.current_locale == "tr" else "Crit Chance"
+		"armor":
+			return "Zırh" if I18n.current_locale == "tr" else "Armor"
+		"harvesting":
+			return "Hasat" if I18n.current_locale == "tr" else "Harvesting"
+		"xp_gain":
+			return "TP Kazancı" if I18n.current_locale == "tr" else "XP Gain"
 		_:
 			return stat_key.replace("_", " ").capitalize()
 
@@ -576,8 +745,8 @@ func _build_stat_ledger(stats: Dictionary) -> PanelContainer:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 8)
 	panel.add_child(_margin_content(content, 14))
-	var heading := _label("Current shift", 23, TEXT)
-	var level_line := _label("Level  %s" % str(stats.get("level", "1")), 17, MUTED)
+	var heading := _label("Mevcut Vardiya" if I18n.current_locale == "tr" else "Current Shift", 23, TEXT)
+	var level_line := _label(("Seviye  %s" if I18n.current_locale == "tr" else "Level  %s") % str(stats.get("level", "1")), 17, MUTED)
 	if mobile:
 		heading.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 23.0)))
 		level_line.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 17.0)))
@@ -586,7 +755,7 @@ func _build_stat_ledger(stats: Dictionary) -> PanelContainer:
 	for key: String in ["health", "damage", "melee_damage", "ranged_damage", "attack_speed", "crit_chance", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection", "armor", "harvesting", "luck", "xp_gain"]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
-		var stat_label := "Elemental Damage" if key == "elemental_damage" else ("Engineering" if key == "engineering" else key.replace("_", " ").capitalize())
+		var stat_label := _stat_display_name(key)
 		var name_label := _label(stat_label, 17, MUTED)
 		var value_label := _label(str(stats.get(key, "0")), 17, GOLD)
 		if mobile:
@@ -719,7 +888,7 @@ func _show_in_game_settings() -> void:
 			m_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
 			mode_row.add_child(m_btn)
 
-	if not _is_native_mobile_platform():
+	if not OS.has_feature("portmaster") and not _is_native_mobile_platform():
 		_add_touch_controls_setting(_overlay_body)
 
 	var div2 := HSeparator.new()
@@ -908,24 +1077,31 @@ func _build_hud() -> void:
 	_xp_bar.custom_minimum_size = Vector2(0, 9 if mobile else (10 if compact_desktop else 14))
 	vitals_stack.add_child(_xp_bar)
 
-	_clock_text = _label("00:50" if mobile else "TIME   00:50", 12 if mobile else 12, RECEIPT_LIGHT, true)
+	_clock_text = _label("00:50" if mobile else "TIME   00:50", 17 if mobile else 19, RECEIPT_LIGHT, true)
 	_apply_world_text_contrast(_clock_text)
 	_clock_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_clock_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_clock_text.clip_text = true
-	_clock_text.anchor_left = 1.0
-	_clock_text.anchor_right = 1.0
-	_clock_text.anchor_top = 1.0
-	_clock_text.anchor_bottom = 1.0
-	_clock_text.offset_left = -(120.0 if mobile else 236.0) - safe.z
-	_clock_text.offset_right = -16.0 - safe.z
-	_clock_text.offset_top = -(34.0 if mobile else 52.0) - safe.w
-	_clock_text.offset_bottom = -12.0 - safe.w
-	_root.add_child(_clock_text)
+	_clock_text.add_theme_font_size_override("font_size", roundi(_mobile_hud_font(viewport_size, 17.0)) if mobile else (17 if compact_desktop else 19))
+	var clock_panel := PanelContainer.new()
+	var clock_width := 150.0 if mobile else 220.0
+	var clock_height := 42.0 if mobile else 56.0
+	clock_panel.anchor_left = 1.0
+	clock_panel.anchor_right = 1.0
+	clock_panel.anchor_top = 1.0
+	clock_panel.anchor_bottom = 1.0
+	clock_panel.offset_left = -clock_width - safe.z - 16.0
+	clock_panel.offset_right = -safe.z - 16.0
+	clock_panel.offset_top = -clock_height - safe.w - 12.0
+	clock_panel.offset_bottom = -safe.w - 12.0
+	clock_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	clock_panel.add_child(_clock_text)
+	_root.add_child(clock_panel)
 
 	var report_width := minf(380.0, usable_width * 0.40) if compact_desktop else 380.0
 	var report_height := 90.0 if compact_desktop else 104.0
 	var report_panel := _panel(Vector2(-report_width - 20.0 - safe.z, safe.y + 20.0), Vector2(report_width, report_height))
+	report_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	if mobile:
 		report_panel.anchor_left = 0.0
 		report_panel.anchor_right = 0.0
@@ -944,12 +1120,14 @@ func _build_hud() -> void:
 	report_stack.add_theme_constant_override("separation", 4 if not compact_desktop else 2)
 	report_panel.add_child(_margin_content(report_stack, 6 if compact_desktop else 10))
 	_kills_text = _label("Cleared  000", 16 if compact_desktop else 20, GOLD)
-	_kills_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_kills_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_apply_world_text_contrast(_kills_text)
 	if mobile:
 		_kills_text.add_theme_font_size_override("font_size", roundi(_mobile_hud_font(viewport_size, 18.0)))
 	report_stack.add_child(_kills_text)
 	_phase_text = _label("Opening shift", 17, MUTED)
-	_phase_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_phase_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_apply_world_text_contrast(_phase_text)
 	_phase_text.clip_text = true
 	_phase_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	if mobile:
@@ -1136,7 +1314,14 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 			panel.custom_minimum_size = Vector2(available_width * 0.90, available_height * 0.90)
 	else:
 		panel.custom_minimum_size = Vector2(available_width * 0.92 if is_choice else minf(760 if mode == &"in_game_settings" else (660 if mode == &"results" else 500), available_width * 0.92), available_height * 0.84 if is_choice else 0.0)
-	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new() if is_choice else _style(PANEL, PANEL_EDGE, 0, 1))
+	if is_choice:
+		panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	else:
+		var receipt_style := _style(PANEL, PANEL_EDGE, 0, 2)
+		receipt_style.shadow_color = Color(0.0, 0.0, 0.0, 0.72)
+		receipt_style.shadow_size = 16.0 * _mobile_layout_scale(viewport_size)
+		receipt_style.shadow_offset = Vector2(3.0, 7.0) * _mobile_layout_scale(viewport_size)
+		panel.add_theme_stylebox_override("panel", receipt_style)
 	center.add_child(panel)
 	_overlay_body = VBoxContainer.new()
 	_overlay_body.add_theme_constant_override("separation", _mobile_spacing(8) if _is_mobile_platform() else 16)
@@ -1201,12 +1386,12 @@ func _add_menu_button(text: String, callback: Callable, primary: bool = false) -
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.focus_mode = Control.FOCUS_ALL
 	button.add_theme_font_size_override("font_size", _responsive_font_size(20))
-	button.add_theme_color_override("font_color", INK)
-	button.add_theme_color_override("font_hover_color", INK)
-	button.add_theme_color_override("font_focus_color", INK)
-	button.add_theme_color_override("font_pressed_color", INK)
-	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24) if primary else RECEIPT_LIGHT, GOLD if primary else PANEL_EDGE, 0, 1))
-	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32) if primary else Color("fffdf4"), GOLD, 0, 2))
+	button.add_theme_color_override("font_color", RECEIPT_LIGHT if primary else INK)
+	button.add_theme_color_override("font_hover_color", RECEIPT_LIGHT if primary else INK)
+	button.add_theme_color_override("font_focus_color", RECEIPT_LIGHT if primary else INK)
+	button.add_theme_color_override("font_pressed_color", RECEIPT_LIGHT)
+	button.add_theme_stylebox_override("normal", _style(RED if primary else RECEIPT_LIGHT, RED.darkened(0.2) if primary else PANEL_EDGE, 0, 1))
+	button.add_theme_stylebox_override("hover", _style(RED.lightened(0.1) if primary else Color("fffdf4"), GOLD, 0, 2))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
 	button.pressed.connect(func() -> void: BakkalAudio.play_sfx(&"ui_confirm"); callback.call())
@@ -1326,6 +1511,12 @@ func _style(fill: Color, border: Color, radius: int, border_width: int) -> Style
 	box.content_margin_bottom = 8
 	_styles[key] = box
 	return box
+
+
+func _rarity_style(tier: int) -> StyleBoxFlat:
+	var fills := [RECEIPT_LIGHT, Color("d9e7e2"), Color("e4d8e8"), Color("efe0bd")]
+	var edges := [PANEL_EDGE, TEAL.darkened(0.25), Color("80668d"), Color("a96828")]
+	return _style(fills[clampi(tier, 1, 4) - 1], edges[clampi(tier, 1, 4) - 1], 0, 2)
 
 
 func _format_clock(seconds: float) -> String:

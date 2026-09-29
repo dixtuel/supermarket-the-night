@@ -31,7 +31,7 @@ enum WindowMode {
 }
 
 var current_resolution_index: int = 0 # Default 1920x1080
-var current_window_mode: int = WindowMode.WINDOWED
+var current_window_mode: int = WindowMode.FULLSCREEN
 var touch_controls_enabled: bool = false
 
 
@@ -120,6 +120,15 @@ func apply_display() -> void:
 		return
 
 	var target_size := get_target_size()
+	var screen_size := DisplayServer.screen_get_size()
+	var target_uses_native_resolution := screen_size.x > 0 and screen_size.y > 0 \
+		and target_size.x >= screen_size.x and target_size.y >= screen_size.y
+	if target_uses_native_resolution:
+		# A window as large as the display cannot fit inside the desktop work area
+		# (taskbar/panels and compositor decorations make it smaller). Letting the
+		# OS shrink or center that window creates black gutters around a 1920×1080
+		# game. Use exclusive fullscreen when the selected mode fills the screen.
+		current_window_mode = WindowMode.FULLSCREEN
 
 	match current_window_mode:
 		WindowMode.FULLSCREEN:
@@ -170,4 +179,4 @@ func load_settings() -> void:
 			current_resolution_index = 2 # 1366x768
 		else:
 			current_resolution_index = 3 # 1280x720
-		current_window_mode = WindowMode.WINDOWED
+		current_window_mode = WindowMode.FULLSCREEN

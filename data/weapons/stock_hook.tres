@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://data/weapon_definition.gd" id="1_weapon"]
+[ext_resource type="Texture2D" path="res://assets/generated/content_pack/stock_hook.svg" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"stock_hook"
+weapon_class = 0
+display_name = "Stock Hook"
+description = "A long-handled stock hook sweeps a broad forward arc. It scales with Melee Damage and gains reach with each tier."
+sprite = ExtResource("2_sprite")
+shop_unlock_wave = 3
+attack_mode = 7
+damage = 12
+damage_type = 0
+damage_scaling_stat = 0
+damage_scaling_coefficient = 0.6
+fire_interval = 1.4
+target_range = 136.0
+muzzle_offset = 0.0
+projectile_speed = 0.0
+projectile_lifetime = 0.18
+projectile_count = 1
+melee_arc_degrees = 116.0
+pierce_count = 0
+area_radius = 0.0

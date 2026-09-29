@@ -6,7 +6,9 @@
 [resource]
 script = ExtResource("1_weapon")
 id = &"spill_tripmine"
+weapon_class = 4
 display_name = "Spill Tripmine"
+shop_unlock_wave = 6
 description = "A floor marker arms briefly, then bursts when a shopper crosses its spill radius."
 sprite = ExtResource("2_sprite")
 attack_mode = 5

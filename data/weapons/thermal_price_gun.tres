@@ -6,7 +6,9 @@
 [resource]
 script = ExtResource("1_weapon")
 id = &"thermal_price_gun"
+weapon_class = 2
 display_name = "Thermal Price Gun"
+shop_unlock_wave = 4
 description = "A heated label shot adds a little elemental damage to its base hit."
 sprite = ExtResource("2_sprite")
 attack_mode = 0

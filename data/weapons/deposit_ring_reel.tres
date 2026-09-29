@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"deposit_ring_reel"
 display_name = "Deposit-Ring Reel"
+shop_unlock_wave = 5
 description = "Throws a dense return ring that loops back through the aisle."
 sprite = ExtResource("2_sprite")
+weapon_class = 5
 attack_mode = 2
 damage = 10
 damage_type = 0

@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"aisle_sentinel"
 display_name = "Aisle Sentinel"
+shop_unlock_wave = 6
 description = "A compact checkout scanner turret watches its aisle and fires at nearby threats."
 sprite = ExtResource("2_sprite")
+weapon_class = 4
 attack_mode = 4
 damage = 9
 damage_type = 0

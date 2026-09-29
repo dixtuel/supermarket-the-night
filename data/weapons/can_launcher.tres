@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"can_launcher"
 display_name = "Can Launcher"
+shop_unlock_wave = 1
 description = "Fires a can at the nearest enemy."
 sprite = ExtResource("2_sprite")
+weapon_class = 1
 attack_mode = 0
 damage = 12
 damage_type = 0

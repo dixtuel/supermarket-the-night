@@ -12,21 +12,27 @@ enum AttackMode {
 	DEPLOYED_MINE,
 	CONE_PROJECTILES,
 	MELEE_SWEEP,
+	EXPLOSIVE_PROJECTILE,
 }
 
 enum ShopOfferKind { NEW_WEAPON, MERGE_COPY, DIRECT_TIER, DEPLOYABLE_COPY }
 enum DamageType { PHYSICAL, ELEMENTAL }
 enum DamageScalingStat { MELEE, RANGED, ELEMENTAL, ENGINEERING }
+enum WeaponClass { BLADE, GUN, ELEMENTAL, HEAVY, TOOL, SUPPORT }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
 @export_multiline var description: String = ""
 @export var sprite: Texture2D
+## First shop wave where an unowned weapon may appear.
+@export_range(1, 20, 1) var shop_unlock_wave: int = 1
 @export_range(1, 4, 1) var tier: int = 1
 @export var shop_offer_kind: ShopOfferKind = ShopOfferKind.NEW_WEAPON
 @export var attack_mode: AttackMode = AttackMode.TARGETED_PROJECTILE
 @export_range(1, 10000, 1) var damage: int = 10
 @export var damage_type: DamageType = DamageType.PHYSICAL
+## Set-bonus family. This is separate from the damage stat used by this weapon.
+@export var weapon_class: WeaponClass = WeaponClass.GUN
 ## Brotato-style flat stat scaling; structures use Engineering separately.
 @export var damage_scaling_stat: DamageScalingStat = DamageScalingStat.RANGED
 @export_range(0.0, 2.0, 0.05) var damage_scaling_coefficient: float = 0.5

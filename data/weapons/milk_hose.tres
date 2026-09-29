@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"milk_hose"
 display_name = "Milk Hose"
+shop_unlock_wave = 1
 description = "Sprays a short fan of cold milk droplets. Damage scales with Elemental Damage."
 sprite = ExtResource("2_sprite")
+weapon_class = 2
 attack_mode = 6
 damage = 3
 damage_type = 1

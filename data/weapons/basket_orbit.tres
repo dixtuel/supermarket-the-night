@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"basket_orbit"
 display_name = "Basket Orbit"
+shop_unlock_wave = 2
 description = "Three rotating stock items sweep a broad ring around the clerk."
 sprite = ExtResource("2_sprite")
+weapon_class = 0
 attack_mode = 1
 damage = 4
 damage_scaling_stat = 0

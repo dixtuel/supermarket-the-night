@@ -66,8 +66,8 @@ func _ready() -> void:
 	current_health = maxi(1, max_health)
 	max_health = current_health
 	_xp_required = maxi(1, starting_xp_to_next_level)
-	_update_mobile_camera_fit()
-	get_viewport().size_changed.connect(_update_mobile_camera_fit)
+	_update_camera_fit()
+	get_viewport().size_changed.connect(_update_camera_fit)
 	health_changed.emit(current_health, max_health)
 	progress_changed.emit(current_xp, _xp_required, current_level)
 
@@ -94,19 +94,24 @@ func get_character_definition() -> CharacterDefinition:
 	return CHARACTER_ROSTER.get_character(character_id)
 
 
-func _update_mobile_camera_fit() -> void:
+func _update_camera_fit() -> void:
 	var portmaster := OS.has_feature("portmaster")
 	var native_mobile := OS.has_feature("android") or OS.has_feature("ios")
-	if not is_instance_valid(_camera) or (not portmaster and not native_mobile):
+	if not is_instance_valid(_camera):
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return
-	# Room art is 1672×941 at a 0.7655 scale (~1280×720 world units).
-	# Phones cover the screen and accept a little crop at unusual aspect ratios.
-	# The handheld 4:3 port instead fits the full store width so aisle edges stay
-	# visible on the R36S; the extra vertical room gives the arena more space.
-	var fit_zoom := minf(viewport_size.x / 1279.9, viewport_size.y / 720.0) if portmaster else maxf(viewport_size.x / 1279.9, viewport_size.y / 720.0)
+	# The arena and its exterior backdrop both cover 1672×940 world units. Cover
+	# the viewport on desktop/phones to avoid exposing empty space at non-16:9
+	# sizes; matching the bounds at 1920×1080 also keeps the camera stationary
+	# against clamping while the player crosses aisles.
+	# PortMaster's 960×720 logical viewport instead fits the full store width.
+	var fit_zoom := maxf(viewport_size.x / 1672.0, viewport_size.y / 940.0)
+	if portmaster:
+		fit_zoom = minf(viewport_size.x / 1279.9, viewport_size.y / 720.0)
+	elif native_mobile:
+		fit_zoom = maxf(viewport_size.x / 1279.9, viewport_size.y / 720.0)
 	_camera.zoom = Vector2(fit_zoom, fit_zoom)
 
 
@@ -336,13 +341,14 @@ func apply_level_choice(choice: Dictionary) -> bool:
 
 
 func resolve_wave_harvesting() -> Dictionary:
-	if _is_dead or _harvesting == 0:
+	var effective_harvesting := get_harvesting()
+	if _is_dead or effective_harvesting == 0:
 		return {"materials": 0, "xp": 0}
-	var amount := ceili(absf(float(_harvesting)) * _harvesting_wave_multiplier)
+	var amount := ceili(absf(float(effective_harvesting)) * _harvesting_wave_multiplier)
 	# Preserve the reference's 5% per-shift growth without letting endless
 	# harvesting multiply currency and XP without bound.
 	_harvesting_wave_multiplier = minf(3.0, _harvesting_wave_multiplier * 1.05)
-	if _harvesting > 0:
+	if effective_harvesting > 0:
 		gain_xp(amount)
 		return {"materials": amount, "xp": amount}
 	return {"materials": -amount, "xp": 0}
@@ -458,15 +464,15 @@ func _apply_stat_delta(stat_id: StringName, value: float) -> void:
 
 
 func get_melee_damage() -> int:
-	return _melee_damage
+	return _melee_damage + roundi(_get_weapon_class_bonus(&"melee_damage"))
 
 
 func get_ranged_damage() -> int:
-	return _ranged_damage
+	return _ranged_damage + roundi(_get_weapon_class_bonus(&"ranged_damage"))
 
 
 func get_attack_speed_bonus() -> float:
-	return _attack_speed_bonus
+	return _attack_speed_bonus + _get_weapon_class_bonus(&"attack_speed")
 
 
 func get_critical_chance() -> float:
@@ -478,11 +484,25 @@ func get_attack_damage_multiplier() -> float:
 
 
 func get_elemental_damage() -> int:
-	return _elemental_damage
+	return _elemental_damage + roundi(_get_weapon_class_bonus(&"elemental_damage"))
 
 
 func get_engineering() -> int:
-	return _engineering
+	return _engineering + roundi(_get_weapon_class_bonus(&"engineering"))
+
+
+func get_life_steal_fraction() -> float:
+	return _life_steal_fraction + _get_weapon_class_bonus(&"lifesteal")
+
+
+func get_harvesting() -> int:
+	return _harvesting + roundi(_get_weapon_class_bonus(&"harvesting"))
+
+
+func _get_weapon_class_bonus(stat_id: StringName) -> float:
+	if is_instance_valid(_weapon_controller) and _weapon_controller.has_method("get_weapon_class_bonus"):
+		return float(_weapon_controller.call("get_weapon_class_bonus", stat_id))
+	return 0.0
 
 
 func get_level_choice_weapon_targets() -> Array[Dictionary]:
@@ -510,24 +530,32 @@ func get_shop_summary() -> Dictionary:
 		"level": current_level,
 		"health": "%d / %d" % [current_health, max_health],
 		"damage": "%+d%%" % roundi((_damage_multiplier - 1.0) * 100.0),
-		"elemental_damage": str(_elemental_damage),
-		"engineering": str(_engineering),
+		"elemental_damage": str(get_elemental_damage()),
+		"engineering": str(get_engineering()),
 		"speed": "%+d%%" % roundi((_move_speed_multiplier - 1.0) * 100.0),
-		"lifesteal": "%d%%" % roundi(_life_steal_fraction * 100.0),
+		"lifesteal": "%d%%" % roundi(get_life_steal_fraction() * 100.0),
 		"dodge": "%d%%" % roundi(_dodge_chance * 100.0),
 		"protection": "%d%%" % roundi(_protection_fraction * 100.0),
 		"armor": str(_armor),
-		"harvesting": str(_harvesting),
+		"harvesting": str(get_harvesting()),
 		"luck": "%+d%%" % _luck,
 		"luck_raw": _luck,
 		"xp_gain": "%+d%%" % roundi(_xp_gain_bonus * 100.0),
-		"melee_damage": str(_melee_damage),
-		"ranged_damage": str(_ranged_damage),
-		"attack_speed": "%+d%%" % roundi(_attack_speed_bonus * 100.0),
+		"melee_damage": str(get_melee_damage()),
+		"ranged_damage": str(get_ranged_damage()),
+		"attack_speed": "%+d%%" % roundi(get_attack_speed_bonus() * 100.0),
 		"crit_chance": "%d%%" % roundi(_critical_chance * 100.0),
 		"weapon_training": " · ".join(weapon_training),
+		"weapon_class_bonuses": " · ".join(_weapon_class_summary()),
 		"inventory": get_shop_inventory_summary(),
 	}
+
+
+func _weapon_class_summary() -> PackedStringArray:
+	if is_instance_valid(_weapon_controller) and _weapon_controller.has_method("get_weapon_class_summary"):
+		var summary: PackedStringArray = _weapon_controller.call("get_weapon_class_summary")
+		return summary
+	return PackedStringArray()
 
 
 func get_shop_inventory_summary() -> Dictionary:
@@ -596,9 +624,10 @@ func can_apply_level_stat_delta(choice_id: StringName, value: float) -> bool:
 
 
 func recover_from_damage_dealt(damage: int) -> void:
-	if _is_dead or damage <= 0 or _life_steal_fraction <= 0.0 or current_health >= max_health:
+	var effective_lifesteal := get_life_steal_fraction()
+	if _is_dead or damage <= 0 or effective_lifesteal <= 0.0 or current_health >= max_health:
 		return
-	_life_steal_remainder += float(damage) * _life_steal_fraction
+	_life_steal_remainder += float(damage) * effective_lifesteal
 	var recovery := floori(_life_steal_remainder)
 	if recovery <= 0:
 		return
@@ -628,17 +657,17 @@ func get_survivability_profile() -> Dictionary:
 		"max_health": max_health,
 		"current_health": current_health,
 		"dodge_chance": _dodge_chance,
-		"lifesteal_fraction": _life_steal_fraction,
+		"lifesteal_fraction": get_life_steal_fraction(),
 		"protection_fraction": _protection_fraction,
 		"armor": _armor,
-		"harvesting": _harvesting,
+		"harvesting": get_harvesting(),
 		"luck": _luck,
 		"harvesting_wave_multiplier": _harvesting_wave_multiplier,
 		"xp_gain_bonus": _xp_gain_bonus,
 		"xp_gain_remainder": _xp_gain_remainder,
-		"melee_damage": _melee_damage,
-		"ranged_damage": _ranged_damage,
-		"attack_speed_bonus": _attack_speed_bonus,
+		"melee_damage": get_melee_damage(),
+		"ranged_damage": get_ranged_damage(),
+		"attack_speed_bonus": get_attack_speed_bonus(),
 		"critical_chance": _critical_chance,
 		"effective_move_speed": get_effective_move_speed(),
 	}

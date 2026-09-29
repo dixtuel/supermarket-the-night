@@ -11,16 +11,25 @@ signal weapon_sell_requested(weapon_id: StringName)
 
 const TURKISH_FALLBACK_FONT: FontFile = preload("res://assets/fonts/DejaVuSans.ttf")
 
-const INK := Color("111a1c")
-const PANEL := Color("efebd8", 0.99)
-const PANEL_EDGE := Color("a59c80")
-const TEXT := Color("18231e")
-const MUTED := Color("56645a")
-const TEAL := Color("4d7658")
-const GOLD := Color("b3943d")
-const CARD := Color("f8f5e9")
-const MAX_OFFERS := 4
+const INK := Color("172421")
+const PANEL := Color("e7dec9", 0.99)
+const PANEL_EDGE := Color("886a50")
+const TEXT := Color("172421")
+const MUTED := Color("53645b")
+const TEAL := Color("6da4aa")
+const GOLD := Color("b8c7a3")
+const RED := Color("d96c4b")
+const CARD := Color("f8f1df")
+const MAX_OFFERS := 3
 const MAX_WEAPON_SLOTS := 6
+
+class ReceiptClamp extends Control:
+	func _draw() -> void:
+		var center := size.x * 0.5
+		draw_rect(Rect2(0, size.y * 0.33, size.x, size.y * 0.6), Color("29332e"))
+		draw_rect(Rect2(4, size.y * 0.40, size.x - 8, size.y * 0.45), Color("77776d"))
+		draw_rect(Rect2(center - size.x * 0.13, 0, size.x * 0.26, size.y * 0.62), Color("999588"))
+		draw_circle(Vector2(center, size.y * 0.22), size.y * 0.11, Color("202421"))
 
 var _round_label: Label
 var _currency_label: Label
@@ -37,13 +46,20 @@ var _inventory_deployables_label: Label
 var _inventory_upgrades_row: HBoxContainer
 var _inventory_deployables_row: HBoxContainer
 var _inventory_weapons_row: HBoxContainer
+var _inventory_open_button: Button
+var _inventory_overlay: Control
+var _inventory_panel: PanelContainer
+var _inventory_clip: ReceiptClamp
+var _inventory_items_list: VBoxContainer
 var _weapon_detail_overlay: Control
 var _weapon_detail_panel: PanelContainer
 var _weapon_detail_icon: TextureRect
 var _weapon_detail_name: Label
 var _weapon_detail_tier: Label
-var _weapon_detail_stats: GridContainer
+var _weapon_detail_stats: VBoxContainer
 var _weapon_detail_sell: Button
+var _weapon_detail_close: Button
+var _weapon_detail_clip: ReceiptClamp
 var _selected_weapon_id: StringName = &""
 var _selected_weapon: Dictionary = {}
 var _styles: Dictionary = {}
@@ -85,11 +101,21 @@ func _apply_turkish_font_fallback() -> void:
 
 func _notification(what: int) -> void:
 	if what == Node.NOTIFICATION_WM_GO_BACK_REQUEST and visible:
-		_on_continue_pressed()
+		if is_instance_valid(_inventory_overlay) and _inventory_overlay.visible:
+			_inventory_overlay.hide()
+		elif is_instance_valid(_weapon_detail_overlay) and _weapon_detail_overlay.visible:
+			_weapon_detail_overlay.hide()
+		else:
+			_on_continue_pressed()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
+		return
+	if is_instance_valid(_inventory_overlay) and _inventory_overlay.visible:
+		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):
+			_inventory_overlay.hide()
+			get_viewport().set_input_as_handled()
 		return
 	if is_instance_valid(_weapon_detail_overlay) and _weapon_detail_overlay.visible:
 		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):
@@ -159,6 +185,8 @@ func _update_shop_texts() -> void:
 		_note_label.text = String(_player_summary.get("difficulty_event_notice", I18n.t("SHOP_NOTE", "Offers restock after each wave.")))
 	if is_instance_valid(_continue_button):
 		_continue_button.text = I18n.t("SHOP_RETURN", "Return to aisles")
+	if is_instance_valid(_inventory_open_button):
+		_inventory_open_button.text = _ui_text("ENVANTER", "INVENTORY") + "   ›"
 
 
 func _build_shop() -> void:
@@ -174,6 +202,7 @@ func _build_shop() -> void:
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(shade)
 	_build_weapon_detail_overlay(root)
+	_build_inventory_overlay(root)
 
 	var panel := PanelContainer.new()
 	panel.name = "ShopPanel"
@@ -190,10 +219,10 @@ func _build_shop() -> void:
 	var layout_scale := _mobile_layout_scale(viewport_size) if mobile else 1.0
 	var usable_width := maxf(280.0, viewport_size.x - safe.x - safe.z)
 	var usable_height := maxf(320.0, viewport_size.y - safe.y - safe.w)
-	panel.offset_left = -usable_width * (0.47 if not mobile else 0.49) + (safe.x - safe.z) * 0.5
-	panel.offset_right = usable_width * (0.47 if not mobile else 0.49) + (safe.x - safe.z) * 0.5
-	panel.offset_top = -usable_height * (0.47 if not mobile else 0.49) + (safe.y - safe.w) * 0.5
-	panel.offset_bottom = usable_height * (0.47 if not mobile else 0.49) + (safe.y - safe.w) * 0.5
+	panel.offset_left = -usable_width * (0.485 if not mobile else 0.49) + (safe.x - safe.z) * 0.5
+	panel.offset_right = usable_width * (0.485 if not mobile else 0.49) + (safe.x - safe.z) * 0.5
+	panel.offset_top = -usable_height * (0.485 if not mobile else 0.49) + (safe.y - safe.w) * 0.5
+	panel.offset_bottom = usable_height * (0.485 if not mobile else 0.49) + (safe.y - safe.w) * 0.5
 	panel.add_theme_stylebox_override("panel", _style(PANEL, PANEL_EDGE, 0, 1))
 	root.add_child(panel)
 
@@ -211,15 +240,23 @@ func _build_shop() -> void:
 	header.add_theme_constant_override("separation", 20)
 	content.add_child(header)
 
+	var title_board := PanelContainer.new()
+	title_board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_board.add_theme_stylebox_override("panel", _style(Color("20362f"), Color("a88b5e"), 0, 2))
+	var title_margins := MarginContainer.new()
+	for side: String in ["left", "top", "right", "bottom"]:
+		title_margins.add_theme_constant_override("margin_" + side, 12 if not mobile else roundi(8.0 * layout_scale))
+	title_board.add_child(title_margins)
 	var title_stack := VBoxContainer.new()
 	title_stack.add_theme_constant_override("separation", 4)
 	title_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title_stack)
-	_title_label = _label("The stockroom", 44, TEXT)
+	title_margins.add_child(title_stack)
+	header.add_child(title_board)
+	_title_label = _label("The stockroom", 44, Color("f0e7cf"))
 	if mobile:
 		_title_label.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 38.0)))
 	title_stack.add_child(_title_label)
-	_subline_label = _label("Pick supplies for the next wave, or head back to the aisles.", 18, MUTED)
+	_subline_label = _label("Pick supplies for the next wave, or head back to the aisles.", 18, Color("b8c7a3"))
 	_subline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if mobile:
 		_subline_label.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 18.0)))
@@ -283,11 +320,11 @@ func _build_shop() -> void:
 	content.add_child(offer_layout)
 	_cards_row = GridContainer.new() if mobile else HBoxContainer.new()
 	if mobile:
-		(_cards_row as GridContainer).columns = 2 if portmaster else 4
+		(_cards_row as GridContainer).columns = 1 if portrait else (2 if portmaster else 3)
 	_cards_row.name = "OfferCards"
 	_cards_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_cards_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if mobile else Control.SIZE_EXPAND_FILL
-	_cards_row.add_theme_constant_override("separation", roundi(8.0 * layout_scale) if mobile else (10 if compact else 16))
+	_cards_row.add_theme_constant_override("separation", roundi(10.0 * layout_scale) if mobile else (14 if compact else 20))
 	if mobile:
 		var cards_scroll := ScrollContainer.new()
 		cards_scroll.name = "OfferCardsScroll"
@@ -330,7 +367,10 @@ func _build_shop() -> void:
 	_continue_button = _button("Return to aisles", true)
 	_continue_button.custom_minimum_size = Vector2((150 if mobile else 270), (48 * density_scale) if mobile else 52)
 	_continue_button.pressed.connect(_on_continue_pressed)
-	footer.add_child(_continue_button)
+	var continue_spacer := MarginContainer.new()
+	continue_spacer.add_theme_constant_override("margin_bottom", roundi(10.0 * layout_scale) if mobile else 10)
+	footer.add_child(continue_spacer)
+	continue_spacer.add_child(_continue_button)
 	if mobile or (portrait and not mobile):
 		var touch_size := _touch_target_size(viewport_size)
 		_continue_button.custom_minimum_size.x = 0.0
@@ -344,7 +384,7 @@ func _build_shop_sidebar() -> VBoxContainer:
 	var sidebar := VBoxContainer.new()
 	var viewport_size := get_viewport().get_visible_rect().size
 	var mobile := _is_mobile_platform()
-	sidebar.custom_minimum_size.x = 246 if viewport_size.x <= 1400.0 else 278
+	sidebar.custom_minimum_size.x = 280 if viewport_size.x <= 1400.0 else 300
 	if mobile:
 		sidebar.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sidebar.add_theme_constant_override("separation", 10)
@@ -402,6 +442,16 @@ func _build_shop_sidebar() -> VBoxContainer:
 		stats_content.add_child(training_row)
 	training_row.text = training_text
 	training_row.visible = not training_text.is_empty()
+	var class_bonus_values: PackedStringArray = _player_summary.get("weapon_class_bonuses", PackedStringArray())
+	var class_bonus_text := " · ".join(class_bonus_values)
+	var class_bonus_row := stats_content.find_child("WeaponClassBonuses", true, false) as Label
+	if not is_instance_valid(class_bonus_row):
+		class_bonus_row = _label("", 15, TEAL)
+		class_bonus_row.name = "WeaponClassBonuses"
+		class_bonus_row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		stats_content.add_child(class_bonus_row)
+	class_bonus_row.text = class_bonus_text
+	class_bonus_row.visible = not class_bonus_text.is_empty()
 	sidebar.add_child(stats_panel)
 	return sidebar
 
@@ -419,6 +469,11 @@ func _update_shop_sidebar() -> void:
 		if is_instance_valid(training_row):
 			training_row.text = String(_player_summary.get("weapon_training", ""))
 			training_row.visible = not training_row.text.is_empty()
+		var class_bonus_row := stats_content.find_child("WeaponClassBonuses", true, false) as Label
+		if is_instance_valid(class_bonus_row):
+			var class_bonus_values: PackedStringArray = _player_summary.get("weapon_class_bonuses", PackedStringArray())
+			class_bonus_row.text = " · ".join(class_bonus_values)
+			class_bonus_row.visible = not class_bonus_row.text.is_empty()
 	_update_inventory_strip()
 
 
@@ -426,7 +481,7 @@ func _build_inventory_strip(viewport_size: Vector2, mobile: bool, layout_scale: 
 	var panel := PanelContainer.new()
 	panel.name = "InventoryStrip"
 	panel.add_theme_stylebox_override("panel", _style(Color("e4dbb6"), PANEL_EDGE, 0, 1))
-	panel.custom_minimum_size.y = 112.0 if mobile else 126.0
+	panel.custom_minimum_size.y = 126.0 if mobile else 144.0
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 12)
 	panel.add_child(_margin(body, roundi(5.0 * layout_scale) if mobile else 8))
@@ -434,9 +489,11 @@ func _build_inventory_strip(viewport_size: Vector2, mobile: bool, layout_scale: 
 	active_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	active_column.add_theme_constant_override("separation", 4)
 	body.add_child(active_column)
-	var active_title := _label("SKILLS  /  UPGRADES · TURRETS · MINES", 16, TEXT)
-	_inventory_items_label = active_title
-	active_column.add_child(active_title)
+	_inventory_open_button = _button(_ui_text("ENVANTER", "INVENTORY") + "   ›", false)
+	_inventory_open_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_inventory_open_button.custom_minimum_size.y = _touch_target_size(viewport_size) if mobile else 34
+	_inventory_open_button.pressed.connect(_open_inventory)
+	active_column.add_child(_inventory_open_button)
 	_inventory_upgrades_row = HBoxContainer.new()
 	_inventory_deployables_row = HBoxContainer.new()
 	active_column.add_child(_make_inventory_scroll(_inventory_upgrades_row))
@@ -446,13 +503,12 @@ func _build_inventory_strip(viewport_size: Vector2, mobile: bool, layout_scale: 
 	weapon_column.custom_minimum_size.x = viewport_size.x * (0.32 if mobile else 0.35)
 	weapon_column.add_theme_constant_override("separation", 4)
 	body.add_child(weapon_column)
-	_inventory_weapons_label = _label("WEAPONS (0/6)  ·  tap for stats / sell", 16, TEXT)
+	_inventory_weapons_label = _label("WEAPONS (0/6)  ·  select for details", 16, TEXT)
 	if OS.has_feature("portmaster"):
 		_inventory_weapons_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	weapon_column.add_child(_inventory_weapons_label)
 	_inventory_weapons_row = HBoxContainer.new()
 	weapon_column.add_child(_make_inventory_scroll(_inventory_weapons_row))
-	_inventory_deployables_label = _label("", 12, MUTED)
 	_update_inventory_strip()
 	return panel
 
@@ -463,6 +519,7 @@ func _make_inventory_scroll(row: HBoxContainer) -> ScrollContainer:
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(row)
 	return scroll
@@ -483,10 +540,12 @@ func _update_inventory_strip() -> void:
 			_add_inventory_chip(_inventory_deployables_row, deployed, String(deployed.get("kind", "DEPLOYABLE")).to_upper(), int(deployed.get("count", 0)))
 	var weapons: Array = inventory.get("weapons", [])
 	if is_instance_valid(_inventory_weapons_label):
-		_inventory_weapons_label.text = "WEAPONS (%d/%d)  ·  tap for stats / sell" % [mini(weapons.size(), MAX_WEAPON_SLOTS), MAX_WEAPON_SLOTS]
+		_inventory_weapons_label.text = I18n.t("SHOP_WEAPONS_COUNT", "WEAPONS (%d/6)  ·  select for details") % [mini(weapons.size(), MAX_WEAPON_SLOTS)]
 	for weapon: Variant in weapons:
 		if weapon is Dictionary:
 			_add_weapon_chip(weapon)
+	for slot_index in range(mini(weapons.size(), MAX_WEAPON_SLOTS), MAX_WEAPON_SLOTS):
+		_add_empty_weapon_slot(slot_index)
 
 
 func _clear_inventory_row(row: Container) -> void:
@@ -501,14 +560,22 @@ func _add_inventory_chip(row: HBoxContainer, record: Dictionary, kind: String, c
 	if not is_instance_valid(row):
 		return
 	var id := String(record.get("id", ""))
-	var tier := clampi(int(record.get("tier", 1)), 1, 4)
+	var tier := clampi(int(record.get("tier", record.get("rank", 1))), 1, 4)
 	var name := String(record.get("name", id.replace("_", " ").capitalize()))
 	var button := Button.new()
 	var icon_only := kind in ["TURRET", "MINE", "UPGRADE"]
-	button.custom_minimum_size = Vector2(58, 50) if icon_only else Vector2(84, 42)
+	button.custom_minimum_size = Vector2(72, 62) if icon_only else Vector2(108, 52)
 	button.text = "" if icon_only else ("%s  ×%d" % [name, count] if count > 0 else name)
 	button.tooltip_text = "%s · %s" % [kind, name]
+	if kind == "WEAPON":
+		button.tooltip_text += " · " + String(record.get("weapon_class_name", ""))
 	var icon := record.get("icon") as Texture2D
+	if icon == null and kind == "UPGRADE":
+		var upgrade_path := "res://data/upgrades/%s.tres" % id
+		if ResourceLoader.exists(upgrade_path):
+			var upgrade_resource := load(upgrade_path) as UpgradeDefinition
+			if upgrade_resource != null:
+				icon = upgrade_resource.icon
 	if icon == null and ResourceLoader.exists("res://assets/generated/shop_icons/%s.png" % id):
 		icon = load("res://assets/generated/shop_icons/%s.png" % id) as Texture2D
 	if icon == null and icon_only:
@@ -528,7 +595,11 @@ func _add_inventory_chip(row: HBoxContainer, record: Dictionary, kind: String, c
 		button.add_child(image)
 	button.add_theme_font_size_override("font_size", 14)
 	button.add_theme_stylebox_override("normal", _tier_style(tier))
-	button.add_theme_stylebox_override("hover", _tier_style(tier).duplicate())
+	var hover_style := _tier_style(tier).duplicate() as StyleBoxFlat
+	hover_style.border_color = RED
+	hover_style.set_border_width_all(3)
+	button.add_theme_stylebox_override("hover", hover_style)
+	button.pressed.connect(_on_inventory_item_pressed.bind(record, kind, count))
 	if kind in ["TURRET", "MINE"]:
 		_add_inventory_badge(button, _tier_suffix(tier), true)
 		_add_inventory_badge(button, "×%d" % maxi(1, count), false)
@@ -564,9 +635,9 @@ func _add_weapon_chip(weapon: Dictionary) -> void:
 	var id := StringName(String(weapon.get("id", "")))
 	var name := String(weapon.get("name", "Weapon"))
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(56, 48)
+	button.custom_minimum_size = Vector2(68, 60)
 	button.text = ""
-	button.tooltip_text = "%s %s — tap for stats or sell" % [name, _tier_suffix(tier)]
+	button.tooltip_text = "%s %s · %s — tap for stats or sell" % [name, _tier_suffix(tier), String(weapon.get("weapon_class_name", ""))]
 	var icon := weapon.get("icon") as Texture2D
 	if icon != null:
 		var image := TextureRect.new()
@@ -599,21 +670,84 @@ func _add_weapon_chip(weapon: Dictionary) -> void:
 	_inventory_weapons_row.add_child(button)
 
 
+func _add_empty_weapon_slot(slot_index: int) -> void:
+	if not is_instance_valid(_inventory_weapons_row):
+		return
+	var slot := PanelContainer.new()
+	slot.custom_minimum_size = Vector2(68, 60)
+	slot.tooltip_text = _ui_text("Boş silah yuvası", "Empty weapon slot")
+	slot.add_theme_stylebox_override("panel", _style(Color("eee7d3"), Color("b5a88e"), 2, 1))
+	var mark := _label("+\n%02d" % (slot_index + 1), 12, MUTED)
+	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	slot.add_child(mark)
+	_inventory_weapons_row.add_child(slot)
+
+
 func _tier_style(tier: int) -> StyleBoxFlat:
-	var fills := [Color("d7d5cb"), Color("93abc0"), Color("b499c6"), Color("d5a35f")]
-	var edges := [Color("77766f"), Color("557a99"), Color("80609a"), Color("a96828")]
+	var fills := [Color("e7dec9"), Color("6da4aa"), Color("aa8db8"), Color("d6a35f")]
+	var edges := [Color("886a50"), Color("315f67"), Color("72547f"), Color("a96828")]
 	return _style(fills[clampi(tier, 1, 4) - 1], edges[clampi(tier, 1, 4) - 1], 2, 2)
+
+
+func _offer_tier(offer: Variant) -> int:
+	if offer is WeaponDefinition:
+		return clampi((offer as WeaponDefinition).tier, 1, 4)
+	return 1
+
+
+func _tier_offer_style(tier: int) -> StyleBoxFlat:
+	var style := _tier_style(tier).duplicate() as StyleBoxFlat
+	style.set_corner_radius_all(0)
+	style.set_border_width_all(2)
+	style.content_margin_left = 8
+	style.content_margin_top = 8
+	style.content_margin_right = 8
+	style.content_margin_bottom = 8
+	return style
+
+
+func _offer_value_lines(offer: Variant) -> PackedStringArray:
+	var lines := PackedStringArray()
+	if offer is WeaponDefinition:
+		var weapon := offer as WeaponDefinition
+		lines.append("%s  %d / %s · %s" % [_ui_text("HASAR", "DAMAGE"), _weapon_damage_at_tier(weapon, weapon.tier), _ui_text("VURUŞ", "HIT"), _scaling_stat_name(weapon.damage_scaling_stat).to_upper()])
+		lines.append("%s  %.2f s · %s  %d · %s  %d" % [_ui_text("ATIŞ", "FIRE"), maxf(0.05, weapon.fire_interval * pow(0.93, float(maxi(0, weapon.tier - 1)))), _ui_text("MERMI", "PROJECTILES"), _projectile_count_at_tier(weapon), _ui_text("MENZİL", "RANGE"), _weapon_range_at_tier(weapon, weapon.tier)])
+		if _weapon_area_at_tier(weapon, weapon.tier) > 0 or weapon.pierce_count > 0:
+			lines.append("%s  %d px · %s  %d" % [_ui_text("ALAN", "AREA"), _weapon_area_at_tier(weapon, weapon.tier), _ui_text("DELME", "PIERCE"), weapon.pierce_count])
+	elif offer is UpgradeDefinition:
+		var upgrade := offer as UpgradeDefinition
+		lines.append(_upgrade_effect_summary(upgrade, 1).to_upper())
+		if upgrade.target_weapon_id != &"":
+			lines.append("HEDEF  %s" % String(upgrade.target_weapon_id).replace("_", " ").to_upper())
+	elif offer is Dictionary:
+		var stat_offer := offer as Dictionary
+		lines.append(_format_shop_delta(String(stat_offer.get("id", "")), float(stat_offer.get("value", 0.0))).to_upper())
+	return lines
+
+
+func _projectile_count_at_tier(weapon: WeaponDefinition) -> int:
+	var extra := 0
+	if weapon.id == &"milk_hose":
+		extra = maxi(0, weapon.tier - 1)
+	elif weapon.tier >= 3 and weapon.attack_mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES, WeaponDefinition.AttackMode.ORBITAL_CONTACT, WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE]:
+		extra = 1
+	return weapon.projectile_count + extra
 
 
 func _on_weapon_chip_pressed(weapon: Dictionary) -> void:
 	_selected_weapon_id = StringName(String(weapon.get("id", "")))
 	_selected_weapon = weapon.duplicate(true)
 	_weapon_detail_name.text = String(weapon.get("name", "Weapon"))
-	_weapon_detail_tier.text = "TIER %s  /  SELECTED WEAPON" % _tier_suffix(int(weapon.get("tier", 1)))
+	_weapon_detail_tier.text = "TIER %s  /  %s" % [_tier_suffix(int(weapon.get("tier", 1))), String(weapon.get("weapon_class_name", weapon.get("category", "WEAPON"))).to_upper()]
 	_weapon_detail_icon.texture = weapon.get("icon") as Texture2D
 	_clear_inventory_row(_weapon_detail_stats)
-	_add_detail_stat("Weapon class", String(weapon.get("category", "Ranged")))
-	_add_detail_stat("Damage", str(weapon.get("damage", "—")))
+	_add_detail_stat("Weapon class", String(weapon.get("weapon_class_name", weapon.get("category", "Ranged"))))
+	var weapon_class_id := int(weapon.get("weapon_class", -1))
+	if weapon_class_id >= 0:
+		_add_detail_stat(_ui_text("Sınıf seti", "Class set"), _describe_class_set(weapon_class_id, false))
+	_add_detail_stat("Damage per hit", str(weapon.get("damage", "—")))
+	_add_detail_stat("Scales from", _scaling_stat_name(int(weapon.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED))))
 	if int(weapon.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)) == WeaponDefinition.DamageType.ELEMENTAL:
 		_add_detail_stat("Elemental scaling", "%d%%" % roundi(float(weapon.get("elemental_scaling_coefficient", 0.0)) * 100.0))
 	if String(weapon.get("category", "")) == "Melee":
@@ -626,19 +760,275 @@ func _on_weapon_chip_pressed(weapon: Dictionary) -> void:
 	_add_detail_stat("Range", str(weapon.get("range", 0)))
 	_add_detail_stat("Area", str(weapon.get("area", 0)))
 	_add_detail_stat("Pierce", str(weapon.get("pierce", 0)))
-	_weapon_detail_sell.text = "Sell · %d tokens" % _weapon_sell_price(weapon)
+	_weapon_detail_sell.text = I18n.t("SHOP_SELL_FOR", "SELL · %d TOKENS") % _weapon_sell_price(weapon)
 	_weapon_detail_sell.disabled = inventory_weapon_count() <= 1
+	_weapon_detail_sell.show()
+	_weapon_detail_close.text = I18n.t("SHOP_CLOSE", "CLOSE")
 	_weapon_detail_overlay.show()
+	_weapon_detail_panel.add_theme_stylebox_override("panel", _tier_style(int(weapon.get("tier", 1))))
 	_layout_weapon_detail()
 
 
 func _weapon_sell_price(weapon: Dictionary) -> int:
+	if weapon.has("sell_price"):
+		return int(weapon["sell_price"])
 	var tier := clampi(int(weapon.get("tier", 1)), 1, 4)
 	var base_price := 12 + (tier - 1) * 4
+	if String(weapon.get("kind", "")) in ["turret", "mine"]:
+		base_price = 8 + tier * 2
 	var wave := maxi(1, int(_player_summary.get("shop_wave", _current_round_number)))
 	var inflation := floori(float(wave) * (0.70 + float(base_price) * 0.05))
 	var endless_factor := 1.0 + float(maxi(0, wave - 20)) * 0.015 if bool(_player_summary.get("shop_endless", false)) else 1.0
 	return maxi(1, floori(float(floori(float(base_price + inflation) * endless_factor)) * 0.45))
+
+
+func _on_inventory_item_pressed(record: Dictionary, kind: String, count: int) -> void:
+	if kind == "WEAPON":
+		_on_weapon_chip_pressed(record)
+		return
+	var tier := clampi(int(record.get("tier", record.get("rank", 1))), 1, 4)
+	_weapon_detail_name.text = String(record.get("name", "Inventory item"))
+	_weapon_detail_tier.text = "%s  /  %s" % [_tier_suffix(tier), kind]
+	_weapon_detail_icon.texture = record.get("icon") as Texture2D
+	_clear_inventory_row(_weapon_detail_stats)
+	_weapon_detail_sell.hide()
+	_weapon_detail_close.text = I18n.t("SHOP_CLOSE", "CLOSE")
+	if kind == "UPGRADE":
+		var path := "res://data/upgrades/%s.tres" % String(record.get("id", ""))
+		var upgrade := load(path) as UpgradeDefinition if ResourceLoader.exists(path) else null
+		_add_detail_stat("Rank", "%d%s" % [count, (" / %d" % upgrade.max_rank) if upgrade != null else ""])
+		if upgrade != null:
+			_weapon_detail_icon.texture = upgrade.icon
+			_add_detail_stat("Effect", _upgrade_effect_summary(upgrade, count))
+			if upgrade.unlocks_weapon != null:
+				_add_weapon_definition_details(upgrade.unlocks_weapon)
+			else:
+				_add_detail_stat("Details", upgrade.description)
+	else:
+		_add_detail_stat("Type", kind.capitalize())
+		_add_detail_stat("Owned / active", str(count))
+		var definition_path := "res://data/weapons/%s.tres" % String(record.get("id", ""))
+		var definition := load(definition_path) as WeaponDefinition if ResourceLoader.exists(definition_path) else null
+		if definition != null:
+			if _weapon_detail_icon.texture == null:
+				_weapon_detail_icon.texture = definition.sprite
+			_add_detail_stat("Damage / hit", str(record.get("damage", _weapon_damage_at_tier(definition, tier))))
+			_add_detail_stat(_ui_text("Sınıf seti", "Class set"), _describe_class_set(int(record.get("weapon_class", definition.weapon_class)), false))
+			_add_detail_stat("Engineering scaling", "×%.2f" % float(record.get("engineering_coefficient", definition.engineering_coefficient)))
+			_add_detail_stat("Attack interval", "%.2f s" % float(record.get("fire_interval", definition.fire_interval)))
+			_add_detail_stat("Range", "%d px" % roundi(float(record.get("range", definition.target_range))))
+			if float(record.get("area", definition.area_radius)) > 0.0:
+				_add_detail_stat("Area", "%d px" % roundi(float(record.get("area", definition.area_radius))))
+			if float(record.get("duration", definition.effect_duration)) > 0.0:
+				_add_detail_stat("Duration", "%.1f s" % float(record.get("duration", definition.effect_duration)))
+			if definition.attack_mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+				_add_detail_stat("Targeting", "Automatic · nearest enemy")
+			elif definition.attack_mode == WeaponDefinition.AttackMode.DEPLOYED_MINE:
+				_add_detail_stat("Trigger", "Enemy contact · one blast")
+			_add_detail_stat("Effect", definition.description)
+	_weapon_detail_overlay.show()
+	_weapon_detail_panel.add_theme_stylebox_override("panel", _tier_style(tier))
+	_layout_weapon_detail()
+
+
+func _show_offer_detail(offer: Variant, index: int) -> void:
+	_clear_inventory_row(_weapon_detail_stats)
+	_weapon_detail_sell.hide()
+	_weapon_detail_close.text = I18n.t("SHOP_CLOSE", "CLOSE")
+	if offer is WeaponDefinition:
+		var weapon := offer as WeaponDefinition
+		_weapon_detail_name.text = weapon.display_name
+		_weapon_detail_tier.text = "%s  /  %s" % [_tier_suffix(weapon.tier), _weapon_class_name(weapon)]
+		_weapon_detail_icon.texture = weapon.sprite
+		_add_weapon_definition_details(weapon, weapon.tier)
+		_add_detail_stat("Offer price", "%d %s" % [_current_prices[index], I18n.t("SHOP_TOKENS", "stock tokens")])
+		_add_detail_stat("Type", _weapon_offer_type(weapon))
+		_add_detail_stat("Available from", "Wave %d" % weapon.shop_unlock_wave)
+	elif offer is UpgradeDefinition:
+		var upgrade := offer as UpgradeDefinition
+		_weapon_detail_name.text = upgrade.display_name
+		_weapon_detail_tier.text = I18n.t("SHOP_UPGRADE", "SHIFT UPGRADE")
+		_weapon_detail_icon.texture = upgrade.icon
+		_add_detail_stat("Effect", _upgrade_effect_summary(upgrade, 1))
+		_add_detail_stat("Rank limit", str(upgrade.max_rank))
+		if upgrade.unlocks_weapon != null:
+			_add_weapon_definition_details(upgrade.unlocks_weapon)
+		_add_detail_stat("Details", upgrade.description)
+		_add_detail_stat("Offer price", "%d %s" % [_current_prices[index], I18n.t("SHOP_TOKENS", "stock tokens")])
+	elif offer is Dictionary:
+		var stat_offer := offer as Dictionary
+		_weapon_detail_name.text = String(stat_offer.get("name", "Shift stat"))
+		_weapon_detail_tier.text = I18n.t("SHOP_STAT", "SHIFT STAT")
+		_weapon_detail_icon.texture = _stat_offer_icon(stat_offer)
+		_add_detail_stat("Change", _format_shop_delta(String(stat_offer.get("id", "")), float(stat_offer.get("value", 0.0))))
+		_add_detail_stat("Details", String(stat_offer.get("description", "")))
+		_add_detail_stat("Offer price", "%d %s" % [_current_prices[index], I18n.t("SHOP_TOKENS", "stock tokens")])
+	_weapon_detail_overlay.show()
+	_weapon_detail_panel.add_theme_stylebox_override("panel", _tier_style(_offer_tier(offer)))
+	_layout_weapon_detail()
+
+
+func _add_weapon_definition_details(weapon: WeaponDefinition, tier: int = 1) -> void:
+	_add_detail_stat("Weapon class", _weapon_class_name(weapon))
+	var class_count := _owned_class_count(int(weapon.weapon_class))
+	if not _inventory_has_weapon(weapon.id):
+		class_count += 1
+	if class_count > 0:
+		_add_detail_stat(_ui_text("Alım sonrası sınıf seti", "Class set after purchase"), _describe_class_set(int(weapon.weapon_class), not _inventory_has_weapon(weapon.id)))
+	_add_detail_stat("Damage / hit", str(_weapon_damage_at_tier(weapon, tier)))
+	_add_detail_stat("Scales from", _scaling_stat_name(weapon.damage_scaling_stat))
+	_add_detail_stat("Attack interval", "%.2f s" % maxf(0.05, weapon.fire_interval * pow(0.93, float(maxi(0, tier - 1)))))
+	_add_detail_stat("Projectiles", str(_projectile_count_at_tier(weapon)))
+	_add_detail_stat("Range", "%d px" % _weapon_range_at_tier(weapon, tier))
+	if _weapon_area_at_tier(weapon, tier) > 0:
+		_add_detail_stat("Area", "%d px" % _weapon_area_at_tier(weapon, tier))
+	if weapon.pierce_count > 0:
+		_add_detail_stat("Pierce", str(weapon.pierce_count))
+	if weapon.engineering_coefficient > 0.0:
+		_add_detail_stat("Engineering scaling", "×%.2f" % weapon.engineering_coefficient)
+
+
+func _weapon_damage_at_tier(weapon: WeaponDefinition, tier: int = 1) -> int:
+	var damage := weapon.damage
+	for _tier_index in range(1, clampi(tier, 1, 4)):
+		if weapon.id == &"milk_hose":
+			damage += 1
+		else:
+			damage = roundi(float(damage) * 1.2)
+	if weapon.attack_mode in [WeaponDefinition.AttackMode.DEPLOYED_TURRET, WeaponDefinition.AttackMode.DEPLOYED_MINE]:
+		return maxi(1, damage + roundi(float(int(_player_summary.get("engineering", 0))) * clampf(weapon.engineering_coefficient, 0.0, 2.0)))
+	if weapon.elemental_damage_only:
+		damage += roundi(float(int(_player_summary.get("elemental_damage", 0))) * clampf(weapon.damage_scaling_coefficient, 0.0, 2.0))
+		var elemental_count := _owned_class_count(int(weapon.weapon_class))
+		if not _inventory_has_weapon(weapon.id):
+			elemental_count += 1
+		damage = roundi(float(damage) * (1.0 + WeaponClassCatalog.get_bonus(int(weapon.weapon_class), WeaponClassDefinition.BonusStat.WEAPON_DAMAGE, elemental_count)))
+		return maxi(1, damage)
+	var scaling_stat := weapon.damage_scaling_stat
+	var player_stat := 0
+	match scaling_stat:
+		WeaponDefinition.DamageScalingStat.MELEE:
+			player_stat = int(_player_summary.get("melee_damage", 0))
+		WeaponDefinition.DamageScalingStat.RANGED:
+			player_stat = int(_player_summary.get("ranged_damage", 0))
+		WeaponDefinition.DamageScalingStat.ELEMENTAL:
+			player_stat = int(_player_summary.get("elemental_damage", 0))
+		WeaponDefinition.DamageScalingStat.ENGINEERING:
+			player_stat = int(_player_summary.get("engineering", 0))
+	if weapon.damage_scaling_stat != WeaponDefinition.DamageScalingStat.ELEMENTAL or weapon.elemental_damage_only:
+		damage += roundi(float(player_stat) * weapon.damage_scaling_coefficient)
+	if weapon.damage_type == WeaponDefinition.DamageType.ELEMENTAL and not weapon.elemental_damage_only:
+		damage += roundi(float(int(_player_summary.get("elemental_damage", 0))) * weapon.damage_scaling_coefficient)
+	var class_count := _owned_class_count(int(weapon.weapon_class))
+	if not _inventory_has_weapon(weapon.id):
+		class_count += 1
+	damage = roundi(float(damage) * (1.0 + WeaponClassCatalog.get_bonus(int(weapon.weapon_class), WeaponClassDefinition.BonusStat.WEAPON_DAMAGE, class_count)))
+	var global_bonus := String(_player_summary.get("damage", "+0%")).replace("%", "").replace("+", "").to_float() / 100.0
+	return maxi(1, roundi(float(damage) * (1.0 + global_bonus)))
+
+
+func _owned_class_count(class_id: int) -> int:
+	var inventory: Dictionary = _player_summary.get("inventory", {}) if _player_summary.get("inventory", {}) is Dictionary else {}
+	var count := 0
+	for key: String in ["weapons", "deployables"]:
+		for item: Variant in inventory.get(key, []):
+			if item is Dictionary and int(item.get("weapon_class", -1)) == class_id:
+				count += 1
+	return count
+
+
+func _describe_class_set(class_id: int, adding_item: bool) -> String:
+	var class_count := _owned_class_count(class_id)
+	if adding_item:
+		class_count += 1
+	return WeaponClassCatalog.describe_set(class_id, class_count)
+
+
+func _inventory_has_weapon(weapon_id: StringName) -> bool:
+	var inventory: Dictionary = _player_summary.get("inventory", {}) if _player_summary.get("inventory", {}) is Dictionary else {}
+	for key: String in ["weapons", "deployables"]:
+		for item: Variant in inventory.get(key, []):
+			if item is Dictionary and String(item.get("id", "")) == String(weapon_id):
+				return true
+	return false
+
+
+func _weapon_range_at_tier(weapon: WeaponDefinition, tier: int) -> int:
+	var range_value := weapon.target_range
+	for _tier_index in range(2, clampi(tier, 1, 4) + 1):
+		if weapon.id == &"box_cutter":
+			range_value = minf(118.0, range_value + 7.0)
+		elif weapon.attack_mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+			range_value += 20.0
+		elif weapon.attack_mode == WeaponDefinition.AttackMode.MELEE_SWEEP:
+			range_value = minf(220.0, range_value + 8.0)
+	return roundi(range_value)
+
+
+func _weapon_area_at_tier(weapon: WeaponDefinition, tier: int) -> int:
+	var area := weapon.area_radius
+	if weapon.attack_mode in [WeaponDefinition.AttackMode.ORBITAL_CONTACT, WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE, WeaponDefinition.AttackMode.DEPLOYED_MINE, WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE]:
+		area += 8.0 * float(maxi(0, clampi(tier, 1, 4) - 1))
+	return roundi(area)
+
+
+func _weapon_class_name(weapon: WeaponDefinition) -> String:
+	var class_definition := WeaponClassCatalog.get_definition(int(weapon.weapon_class))
+	return class_definition.display_name if class_definition != null else "Weapon"
+
+
+func _scaling_stat_name(stat: int) -> String:
+	match stat:
+		WeaponDefinition.DamageScalingStat.MELEE: return _ui_text("Yakın Dövüş Hasarı", "Melee Damage")
+		WeaponDefinition.DamageScalingStat.RANGED: return _ui_text("Menzilli Hasar", "Ranged Damage")
+		WeaponDefinition.DamageScalingStat.ELEMENTAL: return _ui_text("Element Hasarı", "Elemental Damage")
+		WeaponDefinition.DamageScalingStat.ENGINEERING: return _ui_text("Mühendislik", "Engineering")
+	return _ui_text("Yok", "None")
+
+
+func _upgrade_effect_summary(upgrade: UpgradeDefinition, rank: int) -> String:
+	var value := upgrade.value * float(maxi(1, rank))
+	match upgrade.effect:
+		UpgradeDefinition.Effect.UNLOCK_WEAPON:
+			return "%s %s" % [_ui_text("Aç", "Unlock"), upgrade.unlocks_weapon.display_name if upgrade.unlocks_weapon != null else _ui_text("silah", "weapon")]
+		UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD: return "%+d %s" % [roundi(value), _ui_text("silah hasarı", "weapon damage")]
+		UpgradeDefinition.Effect.FIRE_RATE_MULTIPLIER: return "%+d%% %s" % [roundi(value * 100.0), _ui_text("saldırı hızı", "attack rate")]
+		UpgradeDefinition.Effect.PROJECTILE_COUNT_ADD: return "%+d %s" % [roundi(value), _ui_text("mermi", "projectile(s)")]
+		UpgradeDefinition.Effect.PROJECTILE_SPEED_MULTIPLIER: return "%+d%% %s" % [roundi(value * 100.0), _ui_text("mermi hızı", "projectile speed")]
+		UpgradeDefinition.Effect.WEAPON_DAMAGE_MULTIPLIER: return "%+d%% %s" % [roundi(value * 100.0), _ui_text("silah hasarı", "weapon damage")]
+		UpgradeDefinition.Effect.WEAPON_PIERCE_ADD: return "%+d %s" % [roundi(value), _ui_text("delme", "pierce")]
+		UpgradeDefinition.Effect.WEAPON_RADIUS_ADD: return "%+d px %s" % [roundi(value), _ui_text("alan", "area")]
+		UpgradeDefinition.Effect.PLAYER_MOVE_SPEED_MULTIPLIER: return "%+d%% %s" % [roundi(value * 100.0), _ui_text("hareket hızı", "movement speed")]
+		UpgradeDefinition.Effect.PLAYER_MAX_HEALTH_ADD: return "%+d %s · %d %s" % [roundi(value), _ui_text("maks. CAN", "max HP"), roundi(upgrade.immediate_heal), _ui_text("hemen iyileşme", "heal now")]
+		UpgradeDefinition.Effect.PLAYER_LIFESTEAL_ADD: return "%+d%% %s" % [roundi(value * 100.0), _ui_text("can çalma", "lifesteal")]
+		UpgradeDefinition.Effect.PLAYER_DODGE_ADD: return "%+d%% %s" % [roundi(value * 100.0), _ui_text("kaçınma", "dodge")]
+		UpgradeDefinition.Effect.PLAYER_ENGINEERING_ADD: return "%+d %s" % [roundi(value), _ui_text("mühendislik", "engineering")]
+		UpgradeDefinition.Effect.WEAPON_REACH_ADD: return "%+d px %s" % [roundi(value), _ui_text("erişim", "reach")]
+	return upgrade.description
+
+
+func _format_shop_delta(stat_id: String, value: float) -> String:
+	var label := stat_id.replace("_", " ").capitalize()
+	var percent := stat_id in ["speed", "lifesteal", "dodge", "protection"]
+	var localized := _ui_text(label, label)
+	return ("%+d%% %s" % [roundi(value * 100.0), localized]) if percent else ("%+d %s" % [roundi(value), localized])
+
+
+func _stat_offer_icon(offer: Dictionary) -> Texture2D:
+	var id := String(offer.get("id", ""))
+	var path := "res://assets/generated/shop_icons/%s.png" % id
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
+
+
+func _weapon_offer_type(weapon: WeaponDefinition) -> String:
+	match weapon.shop_offer_kind:
+		WeaponDefinition.ShopOfferKind.NEW_WEAPON: return "New weapon"
+		WeaponDefinition.ShopOfferKind.MERGE_COPY: return "Merge copy"
+		WeaponDefinition.ShopOfferKind.DIRECT_TIER: return "Direct tier upgrade"
+		WeaponDefinition.ShopOfferKind.DEPLOYABLE_COPY: return "Additional deployable"
+	return "Weapon"
 
 
 func inventory_weapon_count() -> int:
@@ -660,8 +1050,7 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	_weapon_detail_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_weapon_detail_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_weapon_detail_overlay.visible = false
-	if OS.has_feature("portmaster"):
-		_weapon_detail_overlay.z_index = 100
+	_weapon_detail_overlay.z_index = 100
 	parent.add_child(_weapon_detail_overlay)
 	var shade := ColorRect.new()
 	shade.color = Color(0.035, 0.055, 0.052, 0.78)
@@ -676,6 +1065,8 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	_weapon_detail_panel.anchor_bottom = 0.5
 	_weapon_detail_panel.add_theme_stylebox_override("panel", _style(PANEL, GOLD, 1, 2))
 	_weapon_detail_overlay.add_child(_weapon_detail_panel)
+	_weapon_detail_clip = ReceiptClamp.new()
+	_weapon_detail_overlay.add_child(_weapon_detail_clip)
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", 8)
 	_weapon_detail_panel.add_child(_margin(body, 14))
@@ -710,11 +1101,16 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	var divider := HSeparator.new()
 	divider.add_theme_stylebox_override("separator", _line_style(GOLD))
 	body.add_child(divider)
-	_weapon_detail_stats = GridContainer.new()
-	_weapon_detail_stats.columns = 2
-	_weapon_detail_stats.add_theme_constant_override("h_separation", 12)
-	_weapon_detail_stats.add_theme_constant_override("v_separation", 4)
-	body.add_child(_weapon_detail_stats)
+	_weapon_detail_stats = VBoxContainer.new()
+	_weapon_detail_stats.add_theme_constant_override("separation", 4)
+	var stats_scroll := ScrollContainer.new()
+	stats_scroll.custom_minimum_size.y = 92
+	stats_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stats_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	stats_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	stats_scroll.add_child(_weapon_detail_stats)
+	body.add_child(stats_scroll)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	body.add_child(actions)
@@ -722,11 +1118,193 @@ func _build_weapon_detail_overlay(parent: Control) -> void:
 	_weapon_detail_sell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_weapon_detail_sell.pressed.connect(_on_weapon_sell_confirmed)
 	actions.add_child(_weapon_detail_sell)
-	var close_button := _button("Close", false)
-	close_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	close_button.pressed.connect(_weapon_detail_overlay.hide)
-	actions.add_child(close_button)
+	_weapon_detail_close = _button("Close", false)
+	_weapon_detail_close.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_weapon_detail_close.pressed.connect(_weapon_detail_overlay.hide)
+	actions.add_child(_weapon_detail_close)
 	get_viewport().size_changed.connect(_layout_weapon_detail)
+
+
+func _build_inventory_overlay(parent: Control) -> void:
+	_inventory_overlay = Control.new()
+	_inventory_overlay.name = "InventoryReceipt"
+	_inventory_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_inventory_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_inventory_overlay.visible = false
+	_inventory_overlay.z_index = 100
+	parent.add_child(_inventory_overlay)
+	var shade := ColorRect.new()
+	shade.color = Color(0.035, 0.055, 0.052, 0.82)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	_inventory_overlay.add_child(shade)
+	_inventory_panel = PanelContainer.new()
+	_inventory_panel.anchor_left = 0.5
+	_inventory_panel.anchor_right = 0.5
+	_inventory_panel.anchor_top = 0.5
+	_inventory_panel.anchor_bottom = 0.5
+	_inventory_panel.add_theme_stylebox_override("panel", _style(PANEL, PANEL_EDGE, 0, 2))
+	_inventory_overlay.add_child(_inventory_panel)
+	_inventory_clip = ReceiptClamp.new()
+	_inventory_overlay.add_child(_inventory_clip)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	_inventory_panel.add_child(_margin(content, 14))
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	content.add_child(header)
+	var title := _label(_ui_text("ENVANTER", "INVENTORY"), 30, TEXT)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close := _button(I18n.t("SHOP_CLOSE", "KAPAT"), false)
+	close.custom_minimum_size = Vector2(110, 46)
+	close.pressed.connect(_inventory_overlay.hide)
+	header.add_child(close)
+	var subtitle := _label(_ui_text("Tüm yükseltmeler ve konuşlandırılanlar silah yuvalarından ayrı tutulur.", "All upgrades and deployables are tracked separately from weapon slots."), 15, MUTED)
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(subtitle)
+	var divider := HSeparator.new()
+	divider.add_theme_stylebox_override("separator", _line_style(PANEL_EDGE))
+	content.add_child(divider)
+	var scroll := ScrollContainer.new()
+	scroll.name = "InventoryScroll"
+	scroll.custom_minimum_size.y = 180
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.follow_focus = true
+	content.add_child(scroll)
+	_inventory_items_list = VBoxContainer.new()
+	_inventory_items_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_inventory_items_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(_inventory_items_list)
+	get_viewport().size_changed.connect(_layout_inventory_overlay)
+	_layout_inventory_overlay()
+
+
+func _layout_inventory_overlay() -> void:
+	if not is_instance_valid(_inventory_panel):
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var usable_width := maxf(280.0, viewport_size.x - safe.x - safe.z)
+	var usable_height := maxf(240.0, viewport_size.y - safe.y - safe.w)
+	var panel_width := minf(860.0, usable_width * 0.92)
+	var inventory: Dictionary = _player_summary.get("inventory", {}) if _player_summary.get("inventory", {}) is Dictionary else {}
+	var entry_count := (inventory.get("upgrades", []) as Array).size() + (inventory.get("deployables", []) as Array).size()
+	var desired_height := maxf(300.0, 270.0 + float(entry_count) * maxf(58.0, _touch_target_size(viewport_size) + 8.0))
+	var panel_height := minf(desired_height, minf(760.0, usable_height * 0.86))
+	_inventory_panel.offset_left = -panel_width * 0.5 + (safe.x - safe.z) * 0.5
+	_inventory_panel.offset_right = panel_width * 0.5 + (safe.x - safe.z) * 0.5
+	_inventory_panel.offset_top = -panel_height * 0.5 + (safe.y - safe.w) * 0.5
+	_inventory_panel.offset_bottom = panel_height * 0.5 + (safe.y - safe.w) * 0.5
+	_inventory_clip.size = Vector2(170.0, 42.0)
+	_inventory_clip.position = Vector2(viewport_size.x * 0.5 - 85.0 + (safe.x - safe.z) * 0.5, viewport_size.y * 0.5 - panel_height * 0.5 + (safe.y - safe.w) * 0.5 - 14.0)
+	_inventory_clip.queue_redraw()
+
+
+func _open_inventory() -> void:
+	_rebuild_inventory_contents()
+	_layout_inventory_overlay()
+	_inventory_overlay.show()
+	var first_button := _inventory_items_list.find_child("InventoryEntry", true, false) as Button
+	if is_instance_valid(first_button):
+		first_button.grab_focus.call_deferred()
+
+
+func _rebuild_inventory_contents() -> void:
+	_clear_inventory_row(_inventory_items_list)
+	var inventory: Dictionary = _player_summary.get("inventory", {}) if _player_summary.get("inventory", {}) is Dictionary else {}
+	var upgrades: Array = inventory.get("upgrades", [])
+	var deployables: Array = inventory.get("deployables", [])
+	_add_inventory_section(_ui_text("YÜKSELTMELER", "UPGRADES"), upgrades, "UPGRADE", "rank")
+	_add_inventory_section(_ui_text("KONUŞLANDIRILANLAR", "DEPLOYABLES"), deployables, "DEPLOYABLE", "count")
+	if upgrades.is_empty() and deployables.is_empty():
+		var empty := _label(_ui_text("Henüz yükseltme veya konuşlandırılan yok. Market teklifleri dalga sonunda açılır.", "No upgrades or deployables yet. Shop offers appear after each wave."), 17, MUTED)
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_inventory_items_list.add_child(empty)
+
+
+func _add_inventory_section(section_title: String, records: Array, default_kind: String, count_key: String) -> void:
+	if records.is_empty():
+		return
+	var heading := _label(section_title, 18, RED)
+	_inventory_items_list.add_child(heading)
+	for record_value: Variant in records:
+		if not record_value is Dictionary:
+			continue
+		var record: Dictionary = record_value
+		var kind := String(record.get("kind", default_kind)).to_upper()
+		var count := int(record.get(count_key, 0))
+		var tier := clampi(int(record.get("tier", record.get("rank", 1))), 1, 4)
+		var entry := Button.new()
+		entry.name = "InventoryEntry"
+		entry.custom_minimum_size.y = maxf(58.0, _touch_target_size(get_viewport().get_visible_rect().size))
+		entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		entry.focus_mode = Control.FOCUS_ALL
+		entry.add_theme_stylebox_override("normal", _tier_style(tier))
+		var hover := _tier_style(tier).duplicate() as StyleBoxFlat
+		hover.border_color = RED
+		hover.set_border_width_all(3)
+		entry.add_theme_stylebox_override("hover", hover)
+		entry.add_theme_color_override("font_color", TEXT)
+		entry.add_theme_color_override("font_hover_color", TEXT)
+		entry.add_theme_font_override("font", display_font)
+		var row := HBoxContainer.new()
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.offset_left = 10
+		row.offset_top = 4
+		row.offset_right = -10
+		row.offset_bottom = -4
+		row.add_theme_constant_override("separation", 12)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		entry.add_child(row)
+		var icon_rect := TextureRect.new()
+		icon_rect.custom_minimum_size = Vector2(42, 42)
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var icon := record.get("icon") as Texture2D
+		if icon == null and kind == "UPGRADE":
+			var path := "res://data/upgrades/%s.tres" % String(record.get("id", ""))
+			if ResourceLoader.exists(path):
+				var upgrade := load(path) as UpgradeDefinition
+				icon = upgrade.icon if upgrade != null else null
+		icon_rect.texture = icon
+		row.add_child(icon_rect)
+		var item_copy := VBoxContainer.new()
+		item_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		item_copy.add_theme_constant_override("separation", 2)
+		row.add_child(item_copy)
+		var item_name := _label(String(record.get("name", String(record.get("id", "Item")).replace("_", " ").capitalize())), 17, TEXT)
+		item_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		item_copy.add_child(item_name)
+		var item_value := _label(_inventory_item_summary(record, kind, count), 13, MUTED)
+		item_value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		item_copy.add_child(item_value)
+		var badge_text := ("R%d" % count) if kind == "UPGRADE" else ("×%d" % maxi(0, count))
+		var badge := _label(badge_text, 15, TEXT)
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(badge)
+		entry.pressed.connect(_on_inventory_entry_pressed.bind(record, kind, count))
+		_inventory_items_list.add_child(entry)
+
+
+func _on_inventory_entry_pressed(record: Dictionary, kind: String, count: int) -> void:
+	_inventory_overlay.hide()
+	_on_inventory_item_pressed(record, kind, count)
+
+
+func _inventory_item_summary(record: Dictionary, kind: String, count: int) -> String:
+	if kind == "UPGRADE":
+		var path := "res://data/upgrades/%s.tres" % String(record.get("id", ""))
+		if ResourceLoader.exists(path):
+			var upgrade := load(path) as UpgradeDefinition
+			if upgrade != null:
+				return _upgrade_effect_summary(upgrade, count)
+	return "%s  ·  %s %s %d" % [String(record.get("weapon_class_name", kind.capitalize())), _tier_suffix(int(record.get("tier", 1))), _ui_text("ADET", "COUNT") if kind != "UPGRADE" else _ui_text("RÜTBE", "RANK"), count]
 
 
 func _layout_weapon_detail() -> void:
@@ -742,10 +1320,14 @@ func _layout_weapon_detail() -> void:
 	_weapon_detail_panel.offset_right = width * 0.5 + (safe.x - safe.z) * 0.5
 	_weapon_detail_panel.offset_top = -height * 0.5 + (safe.y - safe.w) * 0.5
 	_weapon_detail_panel.offset_bottom = height * 0.5 + (safe.y - safe.w) * 0.5
+	_weapon_detail_clip.size = Vector2(170.0, 42.0)
+	_weapon_detail_clip.position = Vector2(viewport_size.x * 0.5 - 85.0 + (safe.x - safe.z) * 0.5, viewport_size.y * 0.5 - height * 0.5 + (safe.y - safe.w) * 0.5 - 14.0)
+	_weapon_detail_clip.queue_redraw()
 	var compact := viewport_size.y <= 500.0
 	_weapon_detail_icon.custom_minimum_size = Vector2(52, 52) if compact else Vector2(68, 68)
 	_weapon_detail_name.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 25.0)) if _is_mobile_platform() else 28)
 	_weapon_detail_sell.custom_minimum_size.y = _touch_target_size(viewport_size) if _is_mobile_platform() else 46
+	_weapon_detail_close.custom_minimum_size.y = _touch_target_size(viewport_size) if _is_mobile_platform() else 46
 
 
 func _add_detail_stat(stat_name: String, value: String) -> void:
@@ -753,8 +1335,10 @@ func _add_detail_stat(stat_name: String, value: String) -> void:
 	row.add_theme_constant_override("separation", 6)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var name_label := _label(stat_name, 17, MUTED)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.custom_minimum_size.x = clampf(get_viewport().get_visible_rect().size.x * 0.26, 96.0, 190.0)
 	var value_label := _label(value, 18, TEXT)
+	value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(name_label)
 	row.add_child(value_label)
@@ -803,11 +1387,12 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	var mobile := _is_mobile_platform()
 	var portmaster := OS.has_feature("portmaster")
 	var layout_scale := _mobile_layout_scale(viewport_size)
-	var card_height := maxf(260.0, viewport_size.y * 0.34) if portmaster else (maxf(300.0, viewport_size.y * 0.38) if mobile else 0.0)
+	var card_height := maxf(268.0, viewport_size.y * 0.40) if portmaster else (maxf(318.0, viewport_size.y * 0.39) if mobile else clampf(viewport_size.y * 0.46, 430.0, 510.0))
 	card.custom_minimum_size = Vector2(0, card_height)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_stretch_ratio = 1.0
 	card.size_flags_vertical = Control.SIZE_FILL
-	card.add_theme_stylebox_override("panel", _style(CARD, PANEL_EDGE, 0, 1))
+	card.add_theme_stylebox_override("panel", _tier_offer_style(_offer_tier(offer)))
 
 	var margins := MarginContainer.new()
 	for side: String in ["left", "top", "right", "bottom"]:
@@ -818,7 +1403,7 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	stack.add_theme_constant_override("separation", roundi(6.0 * layout_scale) if mobile else 8)
 	margins.add_child(stack)
 
-	var type_name := "UPGRADE"
+	var type_name := I18n.t("SHOP_UPGRADE", "SHIFT UPGRADE")
 	var display_name := "Unavailable offer"
 	var description := "This item cannot be displayed."
 	var purchase_text := "BUY OFFER"
@@ -831,7 +1416,7 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 		match weapon.shop_offer_kind:
 			WeaponDefinition.ShopOfferKind.MERGE_COPY:
 				type_name = "%s COPY / MERGE  ·  %s" % ["SKILL · " + deployable_kind if not deployable_kind.is_empty() else "WEAPON", tier_name]
-				purchase_text = "BUY MERGE COPY"
+				purchase_text = I18n.t("SHOP_MERGE", "MERGE COPY")
 			WeaponDefinition.ShopOfferKind.DIRECT_TIER:
 				type_name = "%s DIRECT %s" % ["SKILL · " + deployable_kind if not deployable_kind.is_empty() else "WEAPON", tier_name]
 				purchase_text = "BUY %s" % tier_name
@@ -839,19 +1424,18 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 				type_name = "EXTRA %s  ·  %s" % [deployable_kind, tier_name]
 				purchase_text = "BUY EXTRA"
 			_:
-				type_name = "NEW SKILL · %s  ·  %s" % [deployable_kind, tier_name] if not deployable_kind.is_empty() else "NEW WEAPON  ·  %s" % tier_name
+				type_name = "%s · %s · %s" % [_ui_text("YENİ YETENEK", "NEW SKILL"), deployable_kind, tier_name] if not deployable_kind.is_empty() else "%s · %s" % [I18n.t("SHOP_NEW_WEAPON", "NEW WEAPON"), tier_name]
 				purchase_text = "BUY WEAPON"
+		var class_definition := WeaponClassCatalog.get_definition(int(weapon.weapon_class))
+		if class_definition != null:
+			type_name += " · " + class_definition.display_name.to_upper()
 		display_name = weapon.display_name
 		description = weapon.description
-		var icon_path := "res://assets/generated/shop_icons/%s.png" % String(weapon.id)
-		var generated_icon: Texture2D
-		if ResourceLoader.exists(icon_path):
-			generated_icon = load(icon_path) as Texture2D
-		texture = generated_icon if generated_icon != null else weapon.sprite
+		texture = weapon.sprite
 		resource_valid = true
 	elif offer is UpgradeDefinition:
 		var upgrade := offer as UpgradeDefinition
-		type_name = "SHIFT UPGRADE"
+		type_name = I18n.t("SHOP_UPGRADE", "SHIFT UPGRADE")
 		display_name = upgrade.display_name
 		description = upgrade.description
 		texture = upgrade.icon
@@ -860,7 +1444,7 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 		var stat_offer := offer as Dictionary
 		if String(stat_offer.get("kind", "")) == "stat" and not String(stat_offer.get("id", "")).is_empty():
 			var stat_id := String(stat_offer.get("id", ""))
-			type_name = "SHIFT STAT"
+			type_name = I18n.t("SHOP_STAT", "SHIFT STAT")
 			display_name = String(stat_offer.get("name", "Shift stat"))
 			description = String(stat_offer.get("description", "A lasting shift adjustment."))
 			resource_valid = true
@@ -891,14 +1475,14 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 
 	var mobile_type_size := _mobile_shop_font(viewport_size, 16.0)
 	var mobile_body_size := _mobile_shop_font(viewport_size, 19.0)
-	var type_label := _label("SHELF %02d   /   %s" % [index + 1, type_name], 15, GOLD)
+	var type_label := _label("SHELF %02d   /   %s" % [index + 1, type_name], 17, GOLD)
 	if mobile:
 		type_label.add_theme_font_size_override("font_size", roundi(mobile_type_size))
 		type_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	type_label.autowrap_mode = TextServer.AUTOWRAP_OFF if mobile else TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(type_label)
 	var icon_panel := PanelContainer.new()
-	icon_panel.custom_minimum_size = Vector2(0, (76.0 * layout_scale) if mobile else (92 if viewport_size.y <= 800.0 else 116))
+	icon_panel.custom_minimum_size = Vector2(0, (88.0 * layout_scale) if mobile else (112 if viewport_size.y <= 800.0 else 136))
 	icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
 	stack.add_child(icon_panel)
 	if texture != null:
@@ -916,19 +1500,27 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon_panel.add_child(icon)
 
-	var title := _label(display_name, 25, TEXT)
-	title.autowrap_mode = TextServer.AUTOWRAP_OFF if mobile else TextServer.AUTOWRAP_WORD_SMART
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS if mobile else TextServer.OVERRUN_NO_TRIMMING
-	title.custom_minimum_size.y = (32.0 * layout_scale) if mobile else 44
+	var title := _label(display_name, 28, TEXT)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	title.custom_minimum_size.y = (44.0 * layout_scale) if mobile else 48
 	if mobile:
-		title.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 28.0)))
+		title.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 30.0)))
 	stack.add_child(title)
-	var detail := _label(description, 17, MUTED)
+	var detail := _label(description, 19, MUTED)
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if mobile:
-		detail.add_theme_font_size_override("font_size", roundi(mobile_body_size))
+		detail.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 20.0)))
 	stack.add_child(detail)
+	var offer_value_lines := _offer_value_lines(offer)
+	var values := _label("\n".join(offer_value_lines), 17, TEXT)
+	values.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	values.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	values.custom_minimum_size.y = maxf(26.0, float(offer_value_lines.size()) * (21.0 if mobile else 22.0))
+	if mobile:
+		values.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 17.0)))
+	stack.add_child(values)
 
 	var is_purchased := _purchased_indices.has(index)
 	var price: int = _current_prices[index] if index < _current_prices.size() else -1
@@ -939,14 +1531,26 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 		price_label.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 21.0)))
 	stack.add_child(price_label)
 
-	var actions: Control = HBoxContainer.new() if mobile else VBoxContainer.new()
-	actions.add_theme_constant_override("separation", roundi(6.0 * layout_scale) if mobile else 6)
+	var actions := VBoxContainer.new()
+	actions.add_theme_constant_override("separation", roundi(5.0 * layout_scale) if mobile else 6)
 	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.add_child(actions)
+	var secondary_actions := HBoxContainer.new()
+	secondary_actions.add_theme_constant_override("separation", 6)
+	actions.add_child(secondary_actions)
+	var details_button := _button(I18n.t("SHOP_DETAILS", "DETAYLAR"), false)
+	details_button.custom_minimum_size.y = _touch_target_size(viewport_size) if mobile else 38
+	details_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	details_button.pressed.connect(_show_offer_detail.bind(offer, index))
+	secondary_actions.add_child(details_button)
+	var lock_button := _button(I18n.t("SHOP_LOCK", "KİLİTLE") if not _locked_indices.has(index) else I18n.t("SHOP_UNLOCK", "KİLİDİ AÇ"), false)
+	lock_button.custom_minimum_size.y = details_button.custom_minimum_size.y
+	lock_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lock_button.pressed.connect(_on_offer_lock_pressed.bind(index))
+	secondary_actions.add_child(lock_button)
 	var buy_button := _button(purchase_text, true)
 	buy_button.custom_minimum_size.y = _touch_target_size(viewport_size) if mobile else 48
-	if mobile:
-		buy_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	buy_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if is_purchased:
 		buy_button.text = I18n.t("SHOP_PURCHASED", "SATIN ALINDI")
 		buy_button.disabled = true
@@ -957,12 +1561,6 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 		buy_button.pressed.connect(_on_offer_pressed.bind(index, buy_button))
 		card.modulate = Color.WHITE
 	actions.add_child(buy_button)
-	var lock_button := _button("Unlock offer" if _locked_indices.has(index) else "Lock offer", false)
-	lock_button.custom_minimum_size.y = _touch_target_size(viewport_size) if mobile else 40
-	if mobile:
-		lock_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lock_button.pressed.connect(_on_offer_lock_pressed.bind(index))
-	actions.add_child(lock_button)
 	return card
 
 
@@ -1004,18 +1602,22 @@ func _format_tier(tier: int) -> String:
 			return "TIER IV"
 
 
+func _ui_text(turkish: String, english: String) -> String:
+	return turkish if I18n.current_locale == "tr" else english
+
+
 func _button(text: String, primary: bool) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.focus_mode = Control.FOCUS_ALL
 	button.add_theme_font_size_override("font_size", _responsive_font_size(17))
-	button.add_theme_color_override("font_color", INK if primary else TEXT)
-	button.add_theme_color_override("font_hover_color", INK if primary else GOLD)
-	button.add_theme_color_override("font_focus_color", INK)
-	button.add_theme_color_override("font_pressed_color", INK)
+	button.add_theme_color_override("font_color", PANEL if primary else TEXT)
+	button.add_theme_color_override("font_hover_color", PANEL if primary else RED)
+	button.add_theme_color_override("font_focus_color", PANEL if primary else TEXT)
+	button.add_theme_color_override("font_pressed_color", PANEL)
 	button.add_theme_color_override("font_disabled_color", MUTED)
-	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24) if primary else CARD, GOLD if primary else PANEL_EDGE, 0, 1))
-	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32) if primary else Color("fffdf4"), GOLD, 0, 2))
+	button.add_theme_stylebox_override("normal", _style(RED if primary else CARD, RED.darkened(0.2) if primary else PANEL_EDGE, 0, 1))
+	button.add_theme_stylebox_override("hover", _style(RED.lightened(0.1) if primary else Color("fffdf4"), GOLD, 0, 2))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 	button.add_theme_stylebox_override("disabled", _style(Color("ded9c7"), PANEL_EDGE, 0, 1))
 	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))

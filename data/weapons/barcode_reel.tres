@@ -7,9 +7,11 @@
 script = ExtResource("1_weapon")
 id = &"barcode_reel"
 display_name = "Barcode Reel"
+shop_unlock_wave = 3
 description = "Flicks a stiff price strip down an aisle; the strip reels back through targets."
 ## The shop offers new weapons at Tier I; duplicates merge from there.
 tier = 1
+weapon_class = 1
 attack_mode = 2
 damage = 15
 damage_type = 0

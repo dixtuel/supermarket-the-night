@@ -1,4 +1,4 @@
-# Supermarket: The Night — v0.3.1-alpha
+# Supermarket: The Night — v0.3.2-alpha
 
 Producer: dixtuel  
 Engine: Godot 4.7.2  
@@ -6,19 +6,21 @@ Platforms: Windows x86_64, Linux x86_64, Android 8+.
 
 ## What's new
 
-- Added seven selectable difficulty levels, with each level applying its own progression profile to enemy health, damage and speed, economy, loot, wave pressure, elites, and environmental hazards.
-- Difficulty levels unlock in order: complete the 20-wave shift on the current level to unlock the next one.
-- Difficulty selection now follows character selection and shows the selected level's player-facing description and effects. Turkish text is supported by the bundled font.
-- Difficulty tuning and its wave/economy effects were reconciled against the Brotato wiki reference notes in the repository.
+- Weapon class families now grant set bonuses when matching weapons are held together. Class bonuses feed into the live player stats and weapon calculations.
+- Added the Stock Hook and Case Breaker weapons, with matching upgrade definitions, art, tier progression, and shop integration.
+- Reworked the title, character and difficulty selection, shop, level-up choices, inventory details, and pause/help panels to use responsive layouts across desktop, mobile, and PortMaster screens.
+- Shop offers and inventory entries show their actual names, values, levels, and prices; weapon and item details open in a readable modal. Inventory can exceed the six weapon slots.
+- Added saved-run resume to the title screen when a valid run is available.
+- Adjusted difficulty profiles, weapon/stat links, XP and material harvesting interactions, and weapon-class contributions.
+- Filled the 1920×1080 gameplay viewport and removed black gutters at common desktop aspect ratios without changing the separate Android and PortMaster camera-fitting paths.
+- Simplified gameplay HUD panels and left-aligned the cleared count and its room line like the health readout.
 
 ## Also included
 
-- Select Night Clerk or DNZ before an Endless or 20-wave shift. The title screen remembers the last character played.
-- DNZ has a dedicated look, starting stats, and the Milk Hose, an elemental cone weapon with four shop tiers.
-- The unkillable manager boss appears for DNZ in waves 8 and 16 of a 20-wave shift, then every 10 Endless waves after wave 20. His dash, flame burst, tether slow, hit reactions, and wall collision stuns make room to dodge without turning the fight into a damage race.
-- Weapons use their authored damage category: melee, ranged, elemental, or engineering. The Box Cutter swings at nearby enemies and is available through the normal shop and tier system.
-- Improved the turret, mine, helper-follow, depot crate, and manager-office table presentation.
-- Character and difficulty selection work with keyboard, gamepad, touch, and PortMaster input.
+- Seven selectable difficulty levels with distinct enemy, economy, loot, wave pressure, elite, and hazard profiles. Higher levels unlock by completing the 20-wave shift.
+- Night Clerk and DNZ characters; DNZ keeps a dedicated starting weapon, stat profile, and manager-boss encounters.
+- Weapons use their authored melee, ranged, elemental, and engineering categories. The shop, level-up, and inventory screens read the live weapon and stat data.
+- Keyboard, mouse, gamepad, touch, and PortMaster controls remain available on their supported platforms.
 
 ## Windows touchscreen status
 
@@ -26,8 +28,7 @@ The Windows executable and package in this release were exported with Godot 4.7.
 
 ## Downloads
 
-- **Windows x86_64:** `SupermarketTheNight-0.3.1-alpha-Windows-x86_64.zip`
-- **Linux x86_64:** `SupermarketTheNight-0.3.1-alpha-Linux-x86_64.zip`
-- **Android 8+:** `SupermarketTheNight-0.3.1-alpha.apk` — install the APK directly; it is not wrapped in a ZIP. Includes ARMv7, ARM64, and x86_64.
-
+- **Windows x86_64:** `SupermarketTheNight-0.3.2-alpha-Windows-x86_64.zip`
+- **Linux x86_64:** `SupermarketTheNight-0.3.2-alpha-Linux-x86_64.zip`
+- **Android 8+:** `SupermarketTheNight-0.3.2-alpha.apk` — install the APK directly; it is not wrapped in a ZIP. Includes ARMv7, ARM64, and x86_64.
 This is an alpha build. Save data and balance may change before the first stable release.

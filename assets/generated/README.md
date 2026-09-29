@@ -55,6 +55,8 @@ layer before moving.
 - `weapons/mop_whirl.png` — Mop Whirl sweep effect.
 - `weapons/receipt_boomerang.png` — blank receipt projectile.
 - `weapons/milk_hose.svg` — original project SVG icon for DNZ's elemental milk-hose starter weapon and its droplets.
+- `content_pack/stock_hook.svg` — original stock-hook icon for the long-reach melee weapon.
+- `content_pack/case_breaker.svg` — original crate-lobber icon for the ranged explosive weapon.
 
 DNZ and the Manager art were generated with OpenAI ImageGen on 2026-09-29
 using the existing Night Clerk atlas as a style and cell-layout reference. The

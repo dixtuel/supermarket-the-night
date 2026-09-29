@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"bulk_basket_fan"
 display_name = "Bulk Basket Fan"
+shop_unlock_wave = 2
 description = "Sends three cans down a tight fan toward the nearest target."
 sprite = ExtResource("2_sprite")
+weapon_class = 1
 attack_mode = 0
 damage = 5
 damage_type = 0

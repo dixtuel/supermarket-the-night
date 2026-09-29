@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"receipt_boomerang"
 display_name = "Receipt Boomerang"
+shop_unlock_wave = 1
 description = "A receipt roll travels through enemies and returns."
 sprite = ExtResource("2_sprite")
+weapon_class = 1
 attack_mode = 2
 damage = 18
 damage_type = 0

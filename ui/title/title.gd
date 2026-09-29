@@ -10,11 +10,11 @@ const DIFFICULTY_CATALOG := preload("res://data/difficulty_catalog.gd")
 const TURKISH_FALLBACK_FONT: FontFile = preload("res://assets/fonts/DejaVuSans.ttf")
 
 # Core Palette Tokens
-const COLOR_BASE_DARK := Color("10191c")     # Coolers after closing
-const COLOR_SURFACE := Color("263630")       # Deep aisle green
-const COLOR_RECEIPT_PAPER := Color("efebd8") # Stockroom paper
-const COLOR_ACCENT_LIME := Color("d6c479")   # Faded yellow price sticker
-const COLOR_ACCENT_CORAL := Color("d9786b")  # Marked-down produce label
+const COLOR_BASE_DARK := Color("172421")     # Dark checkout green
+const COLOR_SURFACE := Color("283a34")       # Deep aisle green
+const COLOR_RECEIPT_PAPER := Color("e7dec9") # Thermal receipt paper
+const COLOR_ACCENT_LIME := Color("b8c7a3")   # Sage shelf label
+const COLOR_ACCENT_CORAL := Color("d96c4b")  # Marked-down produce label
 
 # Supporting Tonal Tokens
 const COLOR_SURFACE_DARK := Color(0.07, 0.11, 0.10, 0.94)
@@ -48,9 +48,13 @@ var _character_preview: TextureRect
 var _character_name_label: Label
 var _character_description_label: Label
 var _character_stats_label: Label
+var _character_start_weapon_icon: TextureRect
 var _difficulty_name_label: Label
 var _difficulty_description_label: Label
 var _difficulty_effects_label: Label
+var _difficulty_preview: TextureRect
+var _difficulty_buttons: Array[Button] = []
+var _difficulty_start_button: Button
 
 
 # Custom receipt divider line (dashed or double)
@@ -94,6 +98,121 @@ class DotLeader extends Control:
 		while x < size.x - 4.0:
 			draw_circle(Vector2(x, y), 1.0, dot_color)
 			x += 6.0
+
+
+class HangingShopSign extends Control:
+	func _draw() -> void:
+		var s := size
+		var scale := minf(s.x / 700.0, s.y / 290.0)
+		var board := Rect2(0.0, 18.0 * scale, s.x, s.y - 18.0 * scale)
+		draw_rect(Rect2(board.position + Vector2(7, 9) * scale, board.size), Color(0.0, 0.0, 0.0, 0.72))
+		# Two real hanging chains sit behind a pressed steel lip.
+		for x_ratio in [0.15, 0.86]:
+			var x: float = s.x * float(x_ratio)
+			draw_line(Vector2(x, 0), Vector2(x, 30.0 * scale), Color("826c4c"), 7.0 * scale, true)
+			draw_line(Vector2(x - 1.5 * scale, 0), Vector2(x - 1.5 * scale, 30.0 * scale), Color("d0b17b"), 1.5 * scale, true)
+			for i in range(3):
+				var cy := (7.0 + i * 8.0) * scale
+				draw_arc(Vector2(x, cy), 5.0 * scale, 0.0, TAU, 16, Color("d1b47c"), 2.0 * scale, true)
+		# Layered, chipped enamel and an inset olive-black sign face.
+		draw_rect(board, Color("796648"))
+		draw_rect(board.grow(-4.0 * scale), Color("c2a06b"))
+		draw_rect(board.grow(-10.0 * scale), Color("172923"))
+		draw_rect(board.grow(-16.0 * scale), Color("233831"))
+		draw_rect(Rect2(board.position + Vector2(13, 12) * scale, Vector2(board.size.x - 26 * scale, 2 * scale)), Color(0.78, 0.69, 0.49, 0.38))
+		# Old paint breaks around the rim; deterministic marks keep every launch consistent.
+		for i in range(22):
+			var x := fposmod(float(i * 73 + 17) * scale, maxf(board.size.x - 20 * scale, 1.0)) + 10 * scale
+			var y := fposmod(float(i * 41 + 11) * scale, maxf(board.size.y - 24 * scale, 1.0)) + 12 * scale
+			var length := (3.0 + float(i % 5) * 1.4) * scale
+			draw_line(Vector2(x, y), Vector2(x + length, y + (1.0 if i % 2 == 0 else -1.0) * scale), Color(0.78, 0.68, 0.48, 0.16), 1.0 * scale, true)
+		# Four brass washers with dark screw heads make the board read as hardware.
+		for p in [Vector2(17, 17), Vector2(s.x - 17, 17), Vector2(17, s.y - 17), Vector2(s.x - 17, s.y - 17)]:
+			draw_circle(p, 5.0 * scale, Color("b69a67"))
+			draw_circle(p, 2.0 * scale, Color("463c2a"))
+			draw_line(p + Vector2(-1.2, 0) * scale, p + Vector2(1.2, 0) * scale, Color("d9c18b"), 0.8 * scale)
+
+
+class ReceiptPaper extends Control:
+	func _draw() -> void:
+		var s := size
+		var scale := minf(s.x / 560.0, s.y / 470.0)
+		var edge := PackedVector2Array([
+			Vector2(5, 0), Vector2(s.x - 7, 0), Vector2(s.x - 2, 11), Vector2(s.x - 6, 24),
+			Vector2(s.x - 2, 37), Vector2(s.x - 7, 51), Vector2(s.x - 3, s.y - 28),
+			Vector2(s.x - 13, s.y - 17), Vector2(s.x - 23, s.y - 25), Vector2(s.x - 35, s.y - 14),
+			Vector2(s.x - 48, s.y - 22), Vector2(s.x - 63, s.y - 13), Vector2(s.x - 78, s.y - 23),
+			Vector2(s.x - 91, s.y - 14), Vector2(s.x - 108, s.y - 24), Vector2(s.x - 122, s.y - 15),
+			Vector2(2, s.y - 26), Vector2(8, s.y - 45), Vector2(3, 63), Vector2(8, 42), Vector2(2, 24)
+		])
+		var shadow := PackedVector2Array()
+		for p in edge:
+			shadow.append(p + Vector2(5, 8) * scale)
+		draw_colored_polygon(shadow, Color(0.0, 0.0, 0.0, 0.7))
+		draw_colored_polygon(edge, Color("d7c8a7"))
+		draw_polyline(edge, Color("8b7654"), 2.0 * scale, true)
+		draw_rect(Rect2(Vector2(13, 13) * scale, s - Vector2(26, 37) * scale), Color(0.92, 0.87, 0.75, 0.48), false, 1.0 * scale)
+		# Fibres, folds, and old handling marks stay very low contrast behind the menu.
+		for i in range(18):
+			var x := fposmod(float(i * 47 + 9) * scale, maxf(s.x - 28 * scale, 1.0)) + 14 * scale
+			var y := fposmod(float(i * 67 + 21) * scale, maxf(s.y - 46 * scale, 1.0)) + 12 * scale
+			draw_line(Vector2(x, y), Vector2(x + (8 + i % 14) * scale, y + ((i % 3) - 1) * scale), Color(0.37, 0.29, 0.18, 0.12), 1.0 * scale, true)
+		draw_line(Vector2(s.x * 0.04, s.y * 0.29), Vector2(s.x * 0.96, s.y * 0.29), Color(0.43, 0.34, 0.22, 0.20), 1.0 * scale, true)
+		draw_line(Vector2(s.x * 0.04, s.y * 0.75), Vector2(s.x * 0.96, s.y * 0.75), Color(0.43, 0.34, 0.22, 0.15), 1.0 * scale, true)
+
+
+class MenuGlyph extends Control:
+	var kind: String = ""
+	var tint := Color("26342b")
+
+	func _draw() -> void:
+		var c := size * 0.5
+		var unit := minf(size.x, size.y) / 32.0
+		match kind:
+			"cart":
+				draw_line(c + Vector2(-12, -9) * unit, c + Vector2(-8, -9) * unit, tint, 2.2 * unit, true)
+				draw_line(c + Vector2(-8, -9) * unit, c + Vector2(-4, 4) * unit, tint, 2.2 * unit, true)
+				draw_line(c + Vector2(-4, 4) * unit, c + Vector2(10, 4) * unit, tint, 2.2 * unit, true)
+				draw_line(c + Vector2(-6, -5) * unit, c + Vector2(12, -5) * unit, tint, 2.2 * unit, true)
+				draw_line(c + Vector2(12, -5) * unit, c + Vector2(9, 1) * unit, tint, 2.2 * unit, true)
+				for x in [-1.0, 8.0]:
+					draw_circle(c + Vector2(x, 9) * unit, 2.1 * unit, tint)
+			"infinity":
+				var font := ThemeDB.fallback_font
+				if font != null:
+					draw_string(font, c + Vector2(-13, 8) * unit, "∞", HORIZONTAL_ALIGNMENT_LEFT, 26 * unit, roundi(24 * unit), tint)
+			"gear":
+				for i in range(8):
+					var angle := TAU * float(i) / 8.0
+					var start := c + Vector2(cos(angle), sin(angle)) * 7.0 * unit
+					var finish := c + Vector2(cos(angle), sin(angle)) * 12.0 * unit
+					draw_line(start, finish, tint, 3.2 * unit, true)
+				draw_circle(c, 7.0 * unit, tint)
+				draw_circle(c, 2.4 * unit, Color("dfd3b8"))
+			"door":
+				draw_rect(Rect2(c + Vector2(-8, -12) * unit, Vector2(12, 24) * unit), tint, false, 2.0 * unit)
+				draw_circle(c + Vector2(1, 0) * unit, 1.2 * unit, tint)
+				draw_line(c + Vector2(2, 0) * unit, c + Vector2(13, 0) * unit, tint, 2.0 * unit, true)
+				draw_line(c + Vector2(9, -4) * unit, c + Vector2(13, 0) * unit, tint, 2.0 * unit, true)
+				draw_line(c + Vector2(9, 4) * unit, c + Vector2(13, 0) * unit, tint, 2.0 * unit, true)
+			"start":
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-4, -7) * unit, c + Vector2(7, 0) * unit, c + Vector2(-4, 7) * unit]), tint)
+			"menu":
+				for i in range(3):
+					var y := (float(i) - 1.0) * 7.0 * unit
+					draw_line(c + Vector2(-11, y), c + Vector2(11, y), tint, 2.4 * unit, true)
+
+
+class ClipboardClamp extends Control:
+	func _draw() -> void:
+		var middle := size.x * 0.5
+		draw_rect(Rect2(0, size.y * 0.30, size.x, size.y * 0.62), Color("29332e"))
+		draw_rect(Rect2(4, size.y * 0.37, size.x - 8, size.y * 0.46), Color("7c7a6c"))
+		draw_rect(Rect2(7, size.y * 0.42, size.x - 14, size.y * 0.14), Color("b9b5a1"))
+		draw_rect(Rect2(middle - size.x * 0.16, 0, size.x * 0.32, size.y * 0.54), Color("64675f"))
+		draw_rect(Rect2(middle - size.x * 0.11, 3, size.x * 0.22, size.y * 0.38), Color("77786e"))
+		draw_circle(Vector2(middle, size.y * 0.19), size.y * 0.10, Color("171b19"))
+		draw_circle(Vector2(middle - 2, size.y * 0.16), size.y * 0.045, Color("a9a28e"))
 
 
 func _ready() -> void:
@@ -152,7 +271,7 @@ func _notification(what: int) -> void:
 func _build() -> void:
 	# 1. Full-store interior background
 	var background := TextureRect.new()
-	background.texture = load("res://assets/generated/rooms/market_tidy_lights_on.png")
+	background.texture = load("res://assets/generated/rooms/market_lights_out.png")
 	background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -163,7 +282,7 @@ func _build() -> void:
 	# 2. Restrained late-night atmospheric vignette (keeps store art prominent)
 	var shade := ColorRect.new()
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(COLOR_BASE_DARK.r, COLOR_BASE_DARK.g, COLOR_BASE_DARK.b, 0.50)
+	shade.color = Color(COLOR_BASE_DARK.r, COLOR_BASE_DARK.g, COLOR_BASE_DARK.b, 0.20)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(shade)
 
@@ -187,13 +306,13 @@ func _build() -> void:
 
 	# 3. Night Clerk Character & Grounded Shadow (Firmly grounded, no decorative motion)
 	var clerk_shadow := PanelContainer.new()
-	clerk_shadow.anchor_left = 0.455
-	clerk_shadow.anchor_right = 0.585
-	clerk_shadow.anchor_top = 0.725
-	clerk_shadow.anchor_bottom = 0.755
+	clerk_shadow.anchor_left = 0.68
+	clerk_shadow.anchor_right = 0.77
+	clerk_shadow.anchor_top = 0.70
+	clerk_shadow.anchor_bottom = 0.735
 	if OS.has_feature("portmaster"):
-		clerk_shadow.anchor_left += 0.13
-		clerk_shadow.anchor_right += 0.13
+		clerk_shadow.anchor_left -= 0.12
+		clerk_shadow.anchor_right -= 0.12
 	clerk_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var shadow_style := StyleBoxFlat.new()
 	shadow_style.bg_color = Color(0.0, 0.0, 0.0, 0.55)
@@ -203,13 +322,13 @@ func _build() -> void:
 
 	_clerk = TextureRect.new()
 	_clerk.texture = _character_portrait(_last_character_id())
-	_clerk.anchor_left = 0.38
-	_clerk.anchor_right = 0.66
-	_clerk.anchor_top = 0.13
-	_clerk.anchor_bottom = 0.88
+	_clerk.anchor_left = 0.66
+	_clerk.anchor_right = 0.79
+	_clerk.anchor_top = 0.405
+	_clerk.anchor_bottom = 0.745
 	if OS.has_feature("portmaster"):
-		_clerk.anchor_left += 0.13
-		_clerk.anchor_right += 0.13
+		_clerk.anchor_left -= 0.12
+		_clerk.anchor_right -= 0.12
 	_clerk.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_clerk.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_clerk.modulate = Color(1.0, 0.99, 0.96, 0.98)
@@ -219,23 +338,20 @@ func _build() -> void:
 	var last_character_prefix := "LAST PLAYED · " if I18n.current_locale == "en" else "SON OYNANAN · "
 	_last_character_label = _label(last_character_prefix + _character_display_name(_last_character_id()), 12, COLOR_RECEIPT_PAPER)
 	_last_character_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_last_character_label.anchor_left = 0.40
-	_last_character_label.anchor_right = 0.67
-	_last_character_label.anchor_top = 0.10
-	_last_character_label.anchor_bottom = 0.15
+	_last_character_label.anchor_left = 0.63
+	_last_character_label.anchor_right = 0.82
+	_last_character_label.anchor_top = 0.35
+	_last_character_label.anchor_bottom = 0.39
 	_last_character_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if OS.has_feature("portmaster"):
-		_last_character_label.anchor_left += 0.13
-		_last_character_label.anchor_right += 0.13
+		_last_character_label.anchor_left -= 0.12
+		_last_character_label.anchor_right -= 0.12
 	add_child(_last_character_label)
 
-	# 4. Compact Operator Terminal Menu (Target: ~320-330px wide, ~420-440px tall at 1280x720)
+	# 4. Left-side store sign and receipt menu from the concept composition.
 	_build_compact_menu()
 
-	# 5. Concise Status Badge in Top Right (Compact score/mode status)
-	_build_concise_status()
-
-	# 6. Minimal Footer
+	# 5. Minimal Footer
 	_build_footer()
 
 	# 7. Focus Traversal Setup
@@ -249,56 +365,129 @@ func _build_compact_menu() -> void:
 	var mobile := _is_mobile_platform()
 	var mobile_landscape := mobile and not portrait
 	var scale_factor := _receipt_ui_scale()
-	var inset := 8.0 * scale_factor if mobile else 24.0
-	var available_width := maxf(200.0 * scale_factor, viewport_size.x - safe.x - safe.z - inset * 2.0)
-	var available_height := maxf(200.0 * scale_factor, viewport_size.y - safe.y - safe.w - inset * 2.0)
 	var portmaster := OS.has_feature("portmaster")
-	var menu_width := available_width * (0.46 if portmaster else (0.29 if mobile_landscape else 0.90)) if mobile else (available_width * 0.88 if portrait else minf(390.0 * scale_factor, available_width * 0.48))
-	var menu_height := available_height * (0.78 if portmaster else (0.72 if mobile_landscape else 0.90)) if mobile else (available_height * 0.68 if portrait else minf(462.0 * scale_factor, available_height * 0.88))
-	var card := PanelContainer.new()
-	card.anchor_left = 0.0
-	card.anchor_right = 0.0
-	card.anchor_top = 1.0
-	card.anchor_bottom = 1.0
-	card.offset_left = safe.x + inset
-	card.offset_right = card.offset_left + menu_width
-	card.offset_top = -menu_height - safe.w - inset
-	card.offset_bottom = -safe.w - inset
-	card.custom_minimum_size = Vector2(menu_width, 0)
-	card.add_theme_stylebox_override("panel", _receipt_panel_style())
-	add_child(card)
+	var inset := 10.0 * scale_factor if mobile else 26.0
+	var usable_width := maxf(220.0, viewport_size.x - safe.x - safe.z - inset * 2.0)
+	var desktop := not mobile and not portmaster
+	var sign_width := minf(usable_width * (0.39 if desktop else (0.44 if mobile_landscape else 0.92)), 720.0 * scale_factor)
+	var paper_width := minf(sign_width * 0.78, 560.0 * scale_factor)
+	var sign_height := 320.0 * scale_factor if desktop else (88.0 * scale_factor if mobile_landscape else 158.0 * scale_factor)
+	var left := safe.x + (viewport_size.x * 0.05 if desktop else inset)
+	var top := safe.y + (viewport_size.y * 0.03 if desktop else inset)
+	if portmaster:
+		# The handheld's logical canvas is 960x720; leave the background readable
+		# while keeping controls comfortably reachable from the device bezel.
+		sign_width = minf(usable_width * 0.66, 510.0)
+		paper_width = sign_width * 0.95
+		sign_height = 154.0
 
-	var margins := _margins(roundi((2.0 if mobile_landscape else 12.0) * scale_factor) if mobile else 18)
-	card.add_child(margins)
+	# The hanging shop sign and paper menu are two independent physical pieces.
+	# Keeping them as siblings preserves the reference's clear silhouette and
+	# prevents the receipt from growing to fill unused screen height.
+	var sign := HangingShopSign.new()
+	sign.anchor_left = 0.0
+	sign.anchor_right = 0.0
+	sign.anchor_top = 0.0
+	sign.anchor_bottom = 0.0
+	sign.offset_left = left
+	sign.offset_top = top
+	sign.offset_right = left + sign_width
+	sign.offset_bottom = top + sign_height
+	sign.custom_minimum_size = Vector2(sign_width, sign_height)
+	add_child(sign)
 
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", roundi((1.0 if mobile_landscape else 8.0) * scale_factor) if mobile else 8)
-	margins.add_child(stack)
-
+	var sign_margins := _margins(roundi((20.0 if desktop else 12.0) * scale_factor))
+	sign_margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sign.add_child(sign_margins)
+	var sign_center := VBoxContainer.new()
+	sign_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sign_center.alignment = BoxContainer.ALIGNMENT_CENTER
+	sign_margins.add_child(sign_center)
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 12)
+	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sign_center.add_child(header_row)
 	var header := VBoxContainer.new()
 	header.add_theme_constant_override("separation", 0)
-	stack.add_child(header)
-	var title_line := HBoxContainer.new()
-	title_line.add_theme_constant_override("separation", 8)
-	header.add_child(title_line)
-	var brand_title := _label("SUPERMARKET", 13 if mobile_landscape else 22, COLOR_BASE_DARK)
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_child(header)
+	var title_font_size := 42 if desktop else (19 if mobile_landscape else 30)
+	var brand_title := _label("SUPERMARKET:", title_font_size, COLOR_RECEIPT_PAPER)
+	if display_font != null:
+		brand_title.add_theme_font_override("font", display_font)
 	brand_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_line.add_child(brand_title)
-	title_line.add_child(_label("THE NIGHT", 9 if mobile_landscape else 12, COLOR_ACCENT_CORAL))
-	var receipt_subtitle := _label("NIGHT SHIFT  /  CHOOSE YOUR ROUTE", 6 if mobile_landscape else 10, COLOR_SURFACE)
+	brand_title.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	header.add_child(brand_title)
+	var night_title := _label("THE NIGHT", title_font_size - 2, COLOR_ACCENT_CORAL)
+	if display_font != null:
+		night_title.add_theme_font_override("font", display_font)
+	header.add_child(night_title)
+	var receipt_subtitle := _label(
+		"NIGHT SHIFT  /  CHOOSE YOUR ROUTE" if I18n.current_locale == "en" else "GECE VARDİYASI  /  ROTANI SEÇ",
+		8 if mobile_landscape else 11,
+		COLOR_RECEIPT_PAPER
+	)
 	header.add_child(receipt_subtitle)
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, Color(COLOR_BASE_DARK, 0.55)))
+	var sign_mark := HBoxContainer.new()
+	sign_mark.add_theme_constant_override("separation", 12)
+	for mark_kind in ["cart", "menu"]:
+		var mark_button := Button.new()
+		mark_button.custom_minimum_size = Vector2(48.0 * scale_factor, 52.0 * scale_factor)
+		mark_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		mark_button.focus_mode = Control.FOCUS_ALL
+		mark_button.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+		mark_button.add_theme_stylebox_override("hover", _stylebox(Color(1, 1, 1, 0.08), COLOR_ACCENT_LIME, 1))
+		mark_button.add_theme_stylebox_override("focus", _stylebox(Color(1, 1, 1, 0.08), COLOR_ACCENT_LIME, 1))
+		mark_button.pressed.connect(_start_run if mark_kind == "cart" else _show_auxiliary_menu)
+		var mark := MenuGlyph.new()
+		mark.kind = mark_kind
+		mark.tint = COLOR_ACCENT_LIME
+		mark.custom_minimum_size = Vector2(42.0 * scale_factor, 42.0 * scale_factor)
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark_button.add_child(mark)
+		sign_mark.add_child(mark_button)
+	sign_mark.custom_minimum_size.x = 96.0 * scale_factor
+	header_row.add_child(sign_mark)
 
+	var paper := ReceiptPaper.new()
+	paper.anchor_left = 0.0
+	paper.anchor_right = 0.0
+	paper.anchor_top = 0.0
+	paper.anchor_bottom = 0.0
+	paper.offset_left = left + (sign_width - paper_width) * 0.5
+	paper.offset_top = top + sign_height + 6.0 * scale_factor
+	var has_saved_run := RunSaveManager != null and RunSaveManager.has_saved_run()
+	var resume_menu_extra := 68.0 * scale_factor if has_saved_run else 0.0
+	var paper_height := (430.0 * scale_factor + resume_menu_extra) if desktop else (minf(viewport_size.y * 0.51, 470.0) + resume_menu_extra if portrait else (250.0 * scale_factor + resume_menu_extra))
+	if portmaster:
+		paper_height = 370.0 + (68.0 if has_saved_run else 0.0)
+	if portrait:
+		paper_height = minf(paper_height, maxf(220.0, viewport_size.y - top - sign_height - 24.0))
+	paper.offset_right = paper.offset_left + paper_width
+	paper.offset_bottom = paper.offset_top + paper_height
+	paper.custom_minimum_size = Vector2(paper_width, paper_height)
+	add_child(paper)
+	var paper_margins := _margins(roundi((18.0 if desktop else 12.0) * scale_factor))
+	paper_margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if desktop:
+		paper_margins.add_theme_constant_override("margin_top", 30)
+		paper_margins.add_theme_constant_override("margin_bottom", 22)
+	paper.add_child(paper_margins)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", roundi((5.0 if desktop else 3.0) * scale_factor))
+	paper_margins.add_child(stack)
+	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, Color(COLOR_BASE_DARK, 0.55)))
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", roundi((1.0 if mobile_landscape else 4.0) * scale_factor) if mobile else 4)
+	list.add_theme_constant_override("separation", roundi((3.0 if desktop else 2.0) * scale_factor))
 	_menu = list
-	_menu.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(_menu)
 	_build_menu()
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_BASE_DARK, 0.42)))
-	var receipt_footer := _label("KEEP AISLES CLEAR UNTIL MORNING", 6 if mobile_landscape else 10, COLOR_SURFACE)
+	var day_number := posmod(Time.get_date_dict_from_system().day, 20) + 1
+	var receipt_footer := _label(("NIGHT %02d  ·  STORE CLOSED" if I18n.current_locale == "en" else "GECE %02d  ·  MAĞAZA KAPALI") % day_number, 9 if desktop else 8, COLOR_SURFACE)
 	receipt_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(receipt_footer)
+	paper.queue_redraw()
 
 
 func _build_menu() -> void:
@@ -322,56 +511,97 @@ func _build_menu() -> void:
 			_resume_saved_run,
 			first_focus,
 			false,
-			42,
+			58,
 			true
 		)
 		first_focus = false
 		if not _is_mobile_landscape():
 			_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
 
-	# 1. Primary Action: 20-Round Campaign
+	# The two game modes are the prominent receipt choices.
 	_add_menu_button(
-		I18n.t("TITLE_CAMPAIGN", "START SHIFT"),
-		"01",
+	("START SHIFT" if I18n.current_locale == "en" else "VARDIYAYA BAŞLA"),
+		"▶",
 		"",
 		COLOR_ACCENT_LIME,
 		_start_run,
 		first_focus,
 		false,
-		42,
+	76,
 		true
 	)
 	first_focus = false
 
-	# 2. Endless Night Mode
 	_add_menu_button(
 		I18n.t("TITLE_ENDLESS", "ENDLESS NIGHT"),
-		"02",
+		"∞",
 		"",
 		COLOR_ACCENT_CORAL,
 		_start_endless_run,
 		false,
 		false,
-		40,
+	70,
 		true
 	)
 
 	if not _is_mobile_landscape():
 		_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
 
-	# 3. Subpage Actions
-	_add_menu_button(I18n.t("TITLE_MANUAL", "HOW TO PLAY"), "03", "", COLOR_MUTED, _show_controls, false, false, 36, true)
-	_add_menu_button(I18n.t("TITLE_SETTINGS", "OPTIONS"), "04", "", COLOR_MUTED, _show_settings, false, false, 36, true)
-	_add_menu_button(I18n.t("TITLE_RECORDS", "RECORDS"), "05", "", COLOR_MUTED, _show_records, false, false, 36, true)
-	_add_menu_button(I18n.t("TITLE_CREDITS", "CREDITS"), "06", "", COLOR_MUTED, _show_credits, false, false, 36, true)
+	_add_menu_button(I18n.t("TITLE_SETTINGS", "OPTIONS"), "⚙", "", COLOR_MUTED, _show_settings, false, false, 66, true)
+	_add_menu_button(I18n.t("TITLE_QUIT", "QUIT"), "↗", "", COLOR_ACCENT_CORAL, _quit_game, false, true, 66, true)
 
 	if not _is_mobile_landscape():
 		_menu.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.3)))
 
-	# 4. Quit Action
-	_add_menu_button(I18n.t("TITLE_QUIT", "QUIT"), "ESC", "", COLOR_ACCENT_CORAL, _quit_game, false, true, 36, true)
-
 	_setup_focus_navigation()
+
+
+func _show_auxiliary_menu() -> void:
+	var stack := _open_modal("STORE OFFICE", Vector2i(500, 340))
+	if stack == null:
+		return
+	var options := [
+		[I18n.t("TITLE_MANUAL", "HOW TO PLAY"), _show_controls],
+		[I18n.t("TITLE_RECORDS", "RECORDS"), _show_records],
+		[I18n.t("TITLE_CREDITS", "CREDITS"), _show_credits]
+	]
+	for option: Array in options:
+		var button := _character_select_button(String(option[0]), _open_auxiliary_option.bind(Callable(option[1])), 54)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
+		button.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
+		stack.add_child(button)
+	var back := _character_select_button(I18n.t("MANUAL_CLOSE", "BACK TO SHIFT"), _close_modal, 44)
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	back.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
+	stack.add_child(back)
+
+
+func _open_auxiliary_option(callback: Callable) -> void:
+	BakkalAudio.play_sfx(&"ui_confirm")
+	callback.call()
+
+
+func _add_menu_utility(parent: Control, label_text: String, callback: Callable) -> void:
+	var button := Button.new()
+	button.text = label_text
+	button.custom_minimum_size = Vector2(0.0, maxf(24.0, _mobile_touch_target(get_viewport().get_visible_rect().size) * 0.56))
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_ALL
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_size_override("font_size", roundi(10.0 * _receipt_ui_scale()))
+	button.add_theme_color_override("font_color", COLOR_SURFACE)
+	button.add_theme_color_override("font_hover_color", COLOR_ACCENT_CORAL)
+	button.add_theme_color_override("font_focus_color", COLOR_ACCENT_CORAL)
+	button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
+	button.add_theme_stylebox_override("hover", _receipt_button_style(false, false, &"hover"))
+	button.add_theme_stylebox_override("focus", _receipt_button_style(false, false, &"focus"))
+	button.pressed.connect(func() -> void:
+		BakkalAudio.play_sfx(&"ui_confirm")
+		callback.call()
+	)
+	parent.add_child(button)
+	_buttons.append(button)
 
 
 func _resume_saved_run() -> void:
@@ -490,10 +720,11 @@ func _add_menu_button(
 	button.add_theme_stylebox_override("focus", _receipt_button_style(is_primary, is_danger, &"focus") if use_receipt_style else _button_focus_style(is_primary, is_danger))
 	button.add_theme_stylebox_override("pressed", _receipt_button_style(is_primary, is_danger, &"pressed") if use_receipt_style else _button_pressed_style(is_danger))
 	if use_receipt_style:
-		button.add_theme_color_override("font_color", COLOR_BASE_DARK)
-		button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
-		button.add_theme_color_override("font_pressed_color", COLOR_BASE_DARK)
-		button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+		var receipt_text_color := COLOR_RECEIPT_PAPER if is_primary else COLOR_BASE_DARK
+		button.add_theme_color_override("font_color", receipt_text_color)
+		button.add_theme_color_override("font_hover_color", receipt_text_color)
+		button.add_theme_color_override("font_pressed_color", receipt_text_color)
+		button.add_theme_color_override("font_focus_color", receipt_text_color)
 	button.clip_contents = true
 
 	var margin := MarginContainer.new()
@@ -520,9 +751,9 @@ func _add_menu_button(
 	_btn_focus_indicators[button] = focus_cursor
 
 	var code_lbl := Label.new()
-	code_lbl.text = "[%s]" % code
-	code_lbl.add_theme_font_size_override("font_size", roundi((10.0 if mobile_landscape else 13.0) * scale_factor))
-	code_lbl.add_theme_color_override("font_color", COLOR_SURFACE if use_receipt_style else COLOR_MUTED)
+	code_lbl.text = "▶" if code == "▶" else ""
+	code_lbl.add_theme_font_size_override("font_size", roundi((12.0 if mobile_landscape else 18.0) * scale_factor))
+	code_lbl.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER if is_primary else COLOR_SURFACE)
 	code_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if display_font != null:
 		code_lbl.add_theme_font_override("font", display_font)
@@ -531,8 +762,8 @@ func _add_menu_button(
 	var main_lbl := Label.new()
 	main_lbl.text = text
 	var landscape_font_compaction := 0.85 if OS.has_feature("portmaster") else (0.50 if mobile_landscape else 1.0)
-	main_lbl.add_theme_font_size_override("font_size", roundi(float(16 if is_primary else 15) * scale_factor * landscape_font_compaction))
-	main_lbl.add_theme_color_override("font_color", COLOR_BASE_DARK if use_receipt_style else COLOR_RECEIPT_PAPER)
+	main_lbl.add_theme_font_size_override("font_size", roundi(float(24 if is_primary else 22) * scale_factor * landscape_font_compaction))
+	main_lbl.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER if use_receipt_style and is_primary else (COLOR_BASE_DARK if use_receipt_style else COLOR_RECEIPT_PAPER))
 	main_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if mobile_landscape:
 		main_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -549,11 +780,19 @@ func _add_menu_button(
 		var badge := Label.new()
 		badge.text = badge_text
 		badge.add_theme_font_size_override("font_size", roundi(12.0 * scale_factor))
-		badge.add_theme_color_override("font_color", COLOR_BASE_DARK if use_receipt_style else badge_color)
+		badge.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER if use_receipt_style and is_primary else (COLOR_BASE_DARK if use_receipt_style else badge_color))
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if display_font != null:
 			badge.add_theme_font_override("font", display_font)
 		row.add_child(badge)
+
+	var glyph := MenuGlyph.new()
+	glyph.kind = "cart" if code == "▶" else ("infinity" if code == "∞" else ("gear" if code == "⚙" else ("door" if code == "↗" else "start")))
+	glyph.tint = COLOR_RECEIPT_PAPER if is_primary else COLOR_BASE_DARK
+	glyph.custom_minimum_size = Vector2(36.0 * scale_factor, 36.0 * scale_factor)
+	glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(glyph)
 
 	button.focus_entered.connect(func() -> void:
 		if is_instance_valid(focus_cursor):
@@ -604,10 +843,10 @@ func _show_character_select(is_endless: bool) -> void:
 	_selected_run_is_endless = is_endless
 	_selected_character_index = CHARACTER_ROSTER.get_index(_last_character_id())
 	var title := "CHOOSE YOUR CHARACTER" if I18n.current_locale == "en" else "KARAKTERİNİ SEÇ"
-	var stack := _open_modal(title, Vector2i(560, 550))
+	var stack := _open_modal(title, Vector2i(840, 740))
 	_active_modal.set_meta("is_character_select", true)
 	var mode_text := "ENDLESS NIGHT" if is_endless else "20-ROUND CAMPAIGN"
-	stack.add_child(_label(mode_text, 11, COLOR_SURFACE))
+	stack.add_child(_label(mode_text, 15, COLOR_SURFACE))
 
 	var character_row := HBoxContainer.new()
 	character_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -616,7 +855,7 @@ func _show_character_select(is_endless: bool) -> void:
 	var previous := _character_select_button("←", func() -> void: _cycle_character(-1), 96)
 	character_row.add_child(previous)
 	_character_preview = TextureRect.new()
-	_character_preview.custom_minimum_size = Vector2(200, 235)
+	_character_preview.custom_minimum_size = Vector2(340, 360)
 	_character_preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_character_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -627,16 +866,30 @@ func _show_character_select(is_endless: bool) -> void:
 	var next := _character_select_button("→", func() -> void: _cycle_character(1), 96)
 	character_row.add_child(next)
 
-	_character_name_label = _label("", 20, COLOR_BASE_DARK)
+	_character_name_label = _label("", 28, COLOR_BASE_DARK)
 	_character_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(_character_name_label)
-	_character_description_label = _label("", 11, COLOR_SURFACE)
+	_character_description_label = _label("", 17, COLOR_SURFACE)
 	_character_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_character_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(_character_description_label)
-	_character_stats_label = _label("", 11, COLOR_BASE_DARK)
-	_character_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stack.add_child(_character_stats_label)
+	var loadout := HBoxContainer.new()
+	loadout.alignment = BoxContainer.ALIGNMENT_CENTER
+	loadout.add_theme_constant_override("separation", 12)
+	stack.add_child(loadout)
+	_character_start_weapon_icon = TextureRect.new()
+	_character_start_weapon_icon.custom_minimum_size = Vector2(56, 56)
+	_character_start_weapon_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	_character_start_weapon_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_character_start_weapon_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var weapon_icon_center := CenterContainer.new()
+	weapon_icon_center.custom_minimum_size = Vector2(72, 72)
+	weapon_icon_center.add_child(_character_start_weapon_icon)
+	loadout.add_child(weapon_icon_center)
+	_character_stats_label = _label("", 16, COLOR_BASE_DARK)
+	_character_stats_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_character_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loadout.add_child(_character_stats_label)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
@@ -669,12 +922,20 @@ func _character_select_button(text: String, callback: Callable, height: float) -
 	var is_carousel_arrow := text in ["←", "→"]
 	button.add_theme_font_size_override("font_size", roundi((30.0 if is_carousel_arrow else 15.0) * _receipt_ui_scale()))
 	button.add_theme_color_override("font_color", COLOR_BASE_DARK)
-	button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
-	button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+	button.add_theme_color_override("font_hover_color", COLOR_ACCENT_CORAL.darkened(0.15))
+	button.add_theme_color_override("font_focus_color", COLOR_ACCENT_CORAL.darkened(0.15))
+	button.add_theme_color_override("font_pressed_color", COLOR_ACCENT_CORAL.darkened(0.15))
 	button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
-	button.add_theme_stylebox_override("hover", _receipt_button_style(false, false, &"hover"))
-	button.add_theme_stylebox_override("focus", _receipt_button_style(false, false, &"focus"))
-	button.add_theme_stylebox_override("pressed", _receipt_button_style(false, false, &"pressed"))
+	button.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	button.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	if display_font != null:
+		var emphasized_font := FontVariation.new()
+		emphasized_font.base_font = display_font
+		emphasized_font.variation_embolden = 0.35
+		button.add_theme_font_override("font_hover", emphasized_font)
+		button.add_theme_font_override("font_focus", emphasized_font)
+		button.add_theme_font_override("font_pressed", emphasized_font)
 	button.pressed.connect(callback)
 	return button
 
@@ -693,6 +954,10 @@ func _refresh_character_selection() -> void:
 		return
 	var definition: CharacterDefinition = CHARACTER_ROSTER.CHARACTERS[_selected_character_index]
 	_character_preview.texture = _character_portrait(definition.id)
+	var weapon_path := "res://data/weapons/%s.tres" % String(definition.starting_weapon_id)
+	if ResourceLoader.exists(weapon_path):
+		var weapon := load(weapon_path) as WeaponDefinition
+		_character_start_weapon_icon.texture = weapon.sprite if weapon != null else null
 	var english := I18n.current_locale == "en"
 	_character_name_label.text = definition.display_name if english else definition.display_name_tr
 	_character_description_label.text = definition.description if english else definition.description_tr
@@ -719,52 +984,97 @@ func _show_difficulty_select() -> void:
 	_selected_difficulty_level = mini(_max_difficulty_unlocked, _selected_difficulty_level)
 	var english := I18n.current_locale == "en"
 	var title := "CHOOSE DIFFICULTY" if english else "ZORLUĞU SEÇ"
-	var stack := _open_modal(title, Vector2i(620, 530))
+	var stack := _open_modal(title, Vector2i(1120, 560))
 	_active_modal.set_meta("is_difficulty_select", true)
 	var definition := CHARACTER_ROSTER.get_character(_pending_character_id)
-	stack.add_child(_label(("%s · %s" if english else "%s · %s") % [definition.display_name if english else definition.display_name_tr, "ENDLESS NIGHT" if _selected_run_is_endless else ("20-ROUND CAMPAIGN" if english else "20 DALGALIK KAMPANYA")], 11, COLOR_SURFACE))
-	var choice_row := HBoxContainer.new()
-	choice_row.add_theme_constant_override("separation", 14)
-	choice_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.add_child(choice_row)
-	choice_row.add_child(_character_select_button("←", func() -> void: _cycle_difficulty(-1), 96))
+	var context := _label("%s     /     %s" % [definition.display_name if english else definition.display_name_tr, "ENDLESS NIGHT" if _selected_run_is_endless else ("20-ROUND CAMPAIGN" if english else "20 DALGALIK KAMPANYA")], 14, COLOR_SURFACE)
+	stack.add_child(context)
+	var selector_scroll := ScrollContainer.new()
+	selector_scroll.name = "DifficultySelectorScroll"
+	selector_scroll.custom_minimum_size.y = 104.0
+	selector_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	selector_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	selector_scroll.follow_focus = true
+	stack.add_child(selector_scroll)
+	var selector := HBoxContainer.new()
+	selector.add_theme_constant_override("separation", 8)
+	selector.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	selector_scroll.add_child(selector)
+	_difficulty_buttons.clear()
+	for level in range(DIFFICULTY_CATALOG.MAX_LEVEL + 1):
+		var profile: Dictionary = DIFFICULTY_CATALOG.get_profile(level)
+		var profile_name := String(profile.get("name" if english else "name_tr", ""))
+		var locked := level > _max_difficulty_unlocked
+		var tier_button := Button.new()
+		tier_button.custom_minimum_size = Vector2(116.0, 92.0)
+		tier_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tier_button.focus_mode = Control.FOCUS_ALL
+		tier_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		tier_button.text = "%02d\n%s\n%s" % [level, profile_name.to_upper(), ("LOCKED" if english else "KİLİTLİ") if locked else ("OPEN" if english else "AÇIK")]
+		tier_button.add_theme_font_size_override("font_size", roundi(13.0 * _receipt_ui_scale()))
+		tier_button.add_theme_color_override("font_color", COLOR_BASE_DARK)
+		tier_button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
+		tier_button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
+		tier_button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
+		tier_button.add_theme_stylebox_override("hover", _receipt_button_style(false, false, &"hover"))
+		tier_button.add_theme_stylebox_override("focus", _receipt_button_style(false, false, &"focus"))
+		tier_button.pressed.connect(_select_difficulty.bind(level))
+		selector.add_child(tier_button)
+		_difficulty_buttons.append(tier_button)
+
+	var info_row := HBoxContainer.new()
+	info_row.add_theme_constant_override("separation", 18)
+	info_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(info_row)
+	var preview_panel := PanelContainer.new()
+	preview_panel.custom_minimum_size = Vector2(210, 160)
+	preview_panel.add_theme_stylebox_override("panel", _stylebox(COLOR_SURFACE, COLOR_SURFACE_BORDER, 2))
+	info_row.add_child(preview_panel)
+	_difficulty_preview = TextureRect.new()
+	_difficulty_preview.texture = load("res://assets/generated/rooms/market_lights_out.png") as Texture2D
+	_difficulty_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_difficulty_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_difficulty_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_difficulty_preview.modulate = Color(0.78, 0.84, 0.78)
+	preview_panel.add_child(_difficulty_preview)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	info.add_theme_constant_override("separation", 12)
-	choice_row.add_child(info)
-	_difficulty_name_label = _label("", 20, COLOR_BASE_DARK)
-	_difficulty_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.add_theme_constant_override("separation", 8)
+	info_row.add_child(info)
+	_difficulty_name_label = _label("", 24, COLOR_BASE_DARK)
+	_difficulty_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	info.add_child(_difficulty_name_label)
-	_difficulty_description_label = _label("", 12, COLOR_SURFACE)
+	_difficulty_description_label = _label("", 16, COLOR_SURFACE)
 	_difficulty_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_difficulty_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_difficulty_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	info.add_child(_difficulty_description_label)
-	_difficulty_effects_label = _label("", 12, COLOR_BASE_DARK)
-	_difficulty_effects_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_difficulty_effects_label = _label("", 16, COLOR_BASE_DARK)
+	_difficulty_effects_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_difficulty_effects_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_child(_difficulty_effects_label)
-	choice_row.add_child(_character_select_button("→", func() -> void: _cycle_difficulty(1), 96))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	stack.add_child(actions)
 	var back := _character_select_button("BACK" if english else "GERİ", _show_character_select.bind(_selected_run_is_endless), 60)
-	var begin := _character_select_button("START SHIFT" if english else "VARDİYAYI BAŞLAT", _confirm_difficulty_selection, 60)
-	begin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_difficulty_start_button = _character_select_button("START SHIFT" if english else "VARDİYAYI BAŞLAT", _confirm_difficulty_selection, 60)
+	_difficulty_start_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(back)
-	actions.add_child(begin)
-	choice_row.get_child(0).focus_neighbor_right = choice_row.get_child(1).get_path()
-	choice_row.get_child(0).focus_neighbor_bottom = begin.get_path()
-	choice_row.get_child(2).focus_neighbor_left = choice_row.get_child(1).get_path()
-	choice_row.get_child(2).focus_neighbor_bottom = begin.get_path()
-	back.focus_neighbor_right = begin.get_path()
-	begin.focus_neighbor_left = back.get_path()
-	begin.grab_focus.call_deferred()
+	actions.add_child(_difficulty_start_button)
+	back.focus_neighbor_right = _difficulty_start_button.get_path()
+	_difficulty_start_button.focus_neighbor_left = back.get_path()
+	_difficulty_start_button.grab_focus.call_deferred()
 	_refresh_difficulty_selection()
 
 
 func _cycle_difficulty(direction: int) -> void:
 	_selected_difficulty_level = posmod(_selected_difficulty_level + direction, DIFFICULTY_CATALOG.MAX_LEVEL + 1)
+	_refresh_difficulty_selection()
+	BakkalAudio.play_sfx(&"ui_confirm")
+
+
+func _select_difficulty(level: int) -> void:
+	_selected_difficulty_level = clampi(level, 0, DIFFICULTY_CATALOG.MAX_LEVEL)
 	_refresh_difficulty_selection()
 	BakkalAudio.play_sfx(&"ui_confirm")
 
@@ -795,6 +1105,23 @@ func _refresh_difficulty_selection() -> void:
 	if bool(profile.get("environmental_hazards", false)):
 		pressure_line += "\n" + ("NIGHTMARE: hazards + fog · enemy speed +10%" if english else "KÂBUS: çevresel atışlar + sis · düşman hızı +%10")
 	_difficulty_effects_label.text = "%s\n%s\n%s\n%s" % [enemies_line, pressure_line, scaling_line, economy_line]
+	if is_instance_valid(_difficulty_start_button):
+		_difficulty_start_button.disabled = locked
+		_difficulty_start_button.tooltip_text = "Complete Wave 20 at the previous difficulty to unlock this one." if locked and english else ("Önceki zorluğu açmak için önceki zorlukta 20. dalgayı tamamla." if locked else "")
+	for index in range(_difficulty_buttons.size()):
+		var button := _difficulty_buttons[index]
+		var is_selected := index == _selected_difficulty_level
+		var is_locked := index > _max_difficulty_unlocked
+		var fill := COLOR_ACCENT_CORAL if is_selected else (Color("9c9887") if is_locked else Color("d2d3ae"))
+		var edge := COLOR_ACCENT_CORAL.darkened(0.25) if is_selected else COLOR_SURFACE_BORDER
+		var state_style := _stylebox(fill, edge, 2 if is_selected else 1)
+		button.add_theme_stylebox_override("normal", state_style)
+		button.add_theme_stylebox_override("hover", _stylebox(fill.lightened(0.08), edge, 2))
+		button.add_theme_stylebox_override("focus", _stylebox(fill.lightened(0.08), edge, 2))
+		var color := COLOR_RECEIPT_PAPER if is_selected else COLOR_BASE_DARK
+		button.add_theme_color_override("font_color", color)
+		button.add_theme_color_override("font_hover_color", color)
+		button.add_theme_color_override("font_focus_color", color)
 	for child: Node in _active_modal.find_children("", "Button", true, false):
 		if child is Button and child.text in ["START SHIFT", "VARDİYAYI BAŞLAT"]:
 			(child as Button).disabled = locked
@@ -891,7 +1218,7 @@ func _open_modal(title_text: String, min_size: Vector2i) -> VBoxContainer:
 	var safe := _safe_insets(viewport_size)
 	var available_size := Vector2(viewport_size.x - safe.x - safe.z, viewport_size.y - safe.y - safe.w)
 	var scale_factor := _receipt_ui_scale()
-	var mobile := OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+	var mobile := _is_mobile_platform()
 	var modal_size := Vector2(minf(min_size.x * scale_factor, available_size.x * 0.92), minf(min_size.y * scale_factor, available_size.y * 0.92))
 	var safe_center := Vector2((safe.x - safe.z) / 2.0, (safe.y - safe.w) / 2.0)
 	card.offset_left = safe_center.x - modal_size.x / 2.0
@@ -899,20 +1226,62 @@ func _open_modal(title_text: String, min_size: Vector2i) -> VBoxContainer:
 	card.offset_top = safe_center.y - modal_size.y / 2.0
 	card.offset_bottom = safe_center.y + modal_size.y / 2.0
 	card.custom_minimum_size = modal_size
+	var clipboard := PanelContainer.new()
+	clipboard.anchor_left = 0.5
+	clipboard.anchor_right = 0.5
+	clipboard.anchor_top = 0.5
+	clipboard.anchor_bottom = 0.5
+	clipboard.offset_left = card.offset_left - 12.0 * scale_factor
+	clipboard.offset_right = card.offset_right + 12.0 * scale_factor
+	clipboard.offset_top = card.offset_top - 8.0 * scale_factor
+	clipboard.offset_bottom = card.offset_bottom + 18.0 * scale_factor
+	clipboard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var clipboard_style := StyleBoxFlat.new()
+	clipboard_style.bg_color = COLOR_SURFACE
+	clipboard_style.border_color = Color("80694a")
+	clipboard_style.set_border_width_all(roundi(7.0 * scale_factor))
+	clipboard_style.set_corner_radius_all(0)
+	clipboard_style.shadow_color = Color(0.0, 0.0, 0.0, 0.78)
+	clipboard_style.shadow_size = 20.0 * scale_factor
+	clipboard_style.shadow_offset = Vector2(3.0, 8.0) * scale_factor
+	clipboard.add_theme_stylebox_override("panel", clipboard_style)
+	overlay.add_child(clipboard)
+	var paper := ReceiptPaper.new()
+	paper.anchor_left = card.anchor_left
+	paper.anchor_right = card.anchor_right
+	paper.anchor_top = card.anchor_top
+	paper.anchor_bottom = card.anchor_bottom
+	paper.offset_left = card.offset_left
+	paper.offset_right = card.offset_right
+	paper.offset_top = card.offset_top
+	paper.offset_bottom = card.offset_bottom
+	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(paper)
 
 	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = COLOR_RECEIPT_PAPER
-	card_style.border_color = COLOR_SURFACE_BORDER
-	card_style.set_border_width_all(1)
+	card_style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+	card_style.border_color = Color(0.0, 0.0, 0.0, 0.0)
+	card_style.set_border_width_all(0)
 	card_style.set_corner_radius_all(0)
-	card_style.shadow_color = COLOR_SHADOW
-	card_style.shadow_size = 18
 	card.add_theme_stylebox_override("panel", card_style)
 	overlay.add_child(card)
+	var clamp := ClipboardClamp.new()
+	clamp.anchor_left = 0.5
+	clamp.anchor_right = 0.5
+	clamp.anchor_top = 0.5
+	clamp.anchor_bottom = 0.5
+	clamp.offset_left = -105.0 * scale_factor
+	clamp.offset_right = 105.0 * scale_factor
+	clamp.offset_top = card.offset_top - 18.0 * scale_factor
+	clamp.offset_bottom = card.offset_top + 32.0 * scale_factor
+	clamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clamp.z_index = 2
+	overlay.add_child(clamp)
 
 	var margins := _margins(roundi(12.0 * scale_factor) if mobile else 18)
+	margins.add_theme_constant_override("margin_top", roundi((44.0 if not mobile else 34.0) * scale_factor))
 	var settings_scroll := mobile and (title_text.to_upper().contains("OPTIONS") or title_text.to_upper().contains("AYARLAR"))
-	var selection_scroll := (mobile or OS.has_feature("portmaster")) and (title_text.to_upper().contains("CHARACTER") or title_text.to_upper().contains("KARAKTER") or title_text.to_upper().contains("DIFFICULTY") or title_text.to_upper().contains("ZORLUĞ"))
+	var selection_scroll := mobile and (title_text.to_upper().contains("CHARACTER") or title_text.to_upper().contains("KARAKTER") or title_text.to_upper().contains("DIFFICULTY") or title_text.to_upper().contains("ZORLUĞ"))
 	if settings_scroll or selection_scroll:
 		var scroll := ScrollContainer.new()
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1103,12 +1472,13 @@ func _add_modal_section(parent: VBoxContainer, sec_title: String, description: S
 
 
 func _show_controls() -> void:
-	var stack := _open_modal("HOW TO PLAY — TERMINAL GUIDE", Vector2i(560, 420))
+	var stack := _open_modal("HOW TO PLAY — TERMINAL GUIDE", Vector2i(760, 540))
 	if stack == null:
 		return
 
 	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var mobile := _is_mobile_platform()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL if mobile else Control.SIZE_SHRINK_BEGIN
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	stack.add_child(scroll)
 
@@ -1117,13 +1487,15 @@ func _show_controls() -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
 
-	_add_modal_section(body, "MOVEMENT & AISLE NAVIGATION", "Move with WASD or arrow keys to patrol grocery aisles and evade cart hazards.")
-	_add_modal_section(body, "AUTOMATIC TOOLS", "Store tools engage nearby targets automatically. Position your reach to clear aisles.")
-	_add_modal_section(body, "STOCK TOKENS & XP", "Collect tokens and XP for upgrades between rounds.")
-	_add_modal_section(body, "SHIFT MODES", "Choose the 20-round campaign or Endless Night.")
-	_add_modal_section(body, "PAUSE TERMINAL", "Press ESC anytime to pause the shift.")
+	_add_controls_row(body, "MOVEMENT & AISLE NAVIGATION", "Move through the store and evade cart hazards.", "↕", "W A S D\n← ↑ ↓ →")
+	_add_controls_row(body, "AUTOMATIC TOOLS", "Tools engage nearby targets. Position your reach to clear aisles.", "✦", "AUTO")
+	_add_controls_row(body, "STOCK TOKENS & XP", "Collect tokens and XP for upgrades between rounds.", "¤", "PICK UP")
+	_add_controls_row(body, "SHIFT MODES", "Choose the 20-round campaign or Endless Night.", "☾", "ROUTE")
+	_add_controls_row(body, "PAUSE TERMINAL", "Pause the shift at any time.", "Ⅱ", "ESC")
 
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
+	var close_area := CenterContainer.new()
+	close_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	var close_btn := Button.new()
 	close_btn.text = "BACK TO SHIFT"
@@ -1142,12 +1514,53 @@ func _show_controls() -> void:
 		BakkalAudio.play_sfx(&"ui_confirm")
 		_close_modal()
 	)
-	stack.add_child(close_btn)
+	if mobile:
+		stack.add_child(close_btn)
+	else:
+		close_area.add_child(close_btn)
+		stack.add_child(close_area)
 	close_btn.grab_focus.call_deferred()
 
 
+func _add_controls_row(parent: Control, heading: String, description: String, symbol: String, key_text: String) -> void:
+	var row := PanelContainer.new()
+	row.custom_minimum_size.y = 62.0 * _receipt_ui_scale()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_stylebox_override("panel", _stylebox(Color("e8dfc3"), Color("aa9978"), 1))
+	parent.add_child(row)
+	var layout := HBoxContainer.new()
+	layout.add_theme_constant_override("separation", 12)
+	row.add_child(_margins(8))
+	row.get_child(0).add_child(layout)
+	var badge := PanelContainer.new()
+	badge.custom_minimum_size = Vector2(48, 44)
+	badge.add_theme_stylebox_override("panel", _stylebox(COLOR_BASE_DARK, Color("7c755f"), 1))
+	var glyph := _label(symbol, 25, COLOR_RECEIPT_PAPER)
+	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	badge.add_child(glyph)
+	layout.add_child(badge)
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	copy.alignment = BoxContainer.ALIGNMENT_CENTER
+	copy.add_child(_label(heading, 13, COLOR_BASE_DARK))
+	var detail := _label(description, 13, COLOR_SURFACE)
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	copy.add_child(detail)
+	layout.add_child(copy)
+	var key_panel := PanelContainer.new()
+	key_panel.custom_minimum_size = Vector2(104, 42)
+	key_panel.add_theme_stylebox_override("panel", _stylebox(Color("f3eedb"), Color("817960"), 1))
+	var key := _label(key_text, 12, COLOR_BASE_DARK)
+	key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	key.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	key_panel.add_child(key)
+	layout.add_child(key_panel)
+
+
 func _show_settings() -> void:
-	var stack := _open_modal(I18n.t("SETTINGS_TITLE", "OPTIONS — SOUND, DISPLAY & LANGUAGE"), Vector2i(620, 560))
+	var stack := _open_modal(I18n.t("SETTINGS_TITLE", "OPTIONS — SOUND, DISPLAY & LANGUAGE"), Vector2i(760, 600))
 	if stack == null:
 		return
 	_active_modal.set_meta("is_settings", true)
@@ -1167,6 +1580,7 @@ func _show_settings() -> void:
 	tr_btn.custom_minimum_size = Vector2(100, 36)
 	tr_btn.custom_minimum_size.y = maxf(tr_btn.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	tr_btn.disabled = (I18n.current_locale == "tr")
+	_style_setting_choice(tr_btn, tr_btn.disabled)
 	tr_btn.focus_mode = Control.FOCUS_ALL
 	tr_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	tr_btn.pressed.connect(func() -> void:
@@ -1186,6 +1600,7 @@ func _show_settings() -> void:
 	en_btn.custom_minimum_size = Vector2(100, 36)
 	en_btn.custom_minimum_size.y = maxf(en_btn.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	en_btn.disabled = (I18n.current_locale == "en")
+	_style_setting_choice(en_btn, en_btn.disabled)
 	en_btn.focus_mode = Control.FOCUS_ALL
 	en_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	en_btn.pressed.connect(func() -> void:
@@ -1217,6 +1632,7 @@ func _show_settings() -> void:
 			r_btn.custom_minimum_size = Vector2(110, maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size)))
 			r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
+			_style_setting_choice(r_btn, r_btn.disabled)
 			r_btn.focus_mode = Control.FOCUS_ALL
 			r_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			r_btn.pressed.connect(func() -> void:
@@ -1249,6 +1665,7 @@ func _show_settings() -> void:
 			m_btn.custom_minimum_size = Vector2(140, maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size)))
 			m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
+			_style_setting_choice(m_btn, m_btn.disabled)
 			m_btn.focus_mode = Control.FOCUS_ALL
 			m_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			m_btn.pressed.connect(func() -> void:
@@ -1260,7 +1677,7 @@ func _show_settings() -> void:
 			m_btn.custom_minimum_size.y = maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
 			mode_row.add_child(m_btn)
 
-	if not _is_native_mobile_platform():
+	if not OS.has_feature("portmaster") and not _is_native_mobile_platform():
 		_add_touch_controls_setting(stack)
 
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
@@ -1298,7 +1715,7 @@ func _show_settings() -> void:
 
 
 func _show_records() -> void:
-	var stack := _open_modal("SHIFT AUDIT — PERFORMANCE RECORDS", Vector2i(500, 360))
+	var stack := _open_modal("SHIFT AUDIT — PERFORMANCE RECORDS", Vector2i(760, 460))
 	if stack == null:
 		return
 
@@ -1358,7 +1775,7 @@ func _add_record_entry(parent: Control, key: String, val: String, val_color: Col
 
 
 func _show_credits() -> void:
-	var stack := _open_modal("CREDITS", Vector2i(620, 470))
+	var stack := _open_modal("CREDITS", Vector2i(840, 680))
 	if stack == null:
 		return
 
@@ -1566,6 +1983,15 @@ func _receipt_panel_style() -> StyleBoxFlat:
 	return style
 
 
+func _stylebox(fill: Color, border: Color, border_width: int = 1) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.border_color = border
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(0)
+	return style
+
+
 func _receipt_button_style(is_primary: bool, is_danger: bool, state: StringName) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	if state == &"pressed":
@@ -1573,14 +1999,14 @@ func _receipt_button_style(is_primary: bool, is_danger: bool, state: StringName)
 		style.border_color = COLOR_ACCENT_CORAL if is_danger else COLOR_SURFACE
 		style.set_border_width_all(1)
 	elif state in [&"hover", &"focus"]:
-		style.bg_color = Color("fffdf4")
+		style.bg_color = COLOR_ACCENT_CORAL.lightened(0.1) if is_primary else Color("fffdf4")
 		style.border_color = COLOR_ACCENT_CORAL if is_danger else COLOR_SURFACE
 		style.set_border_width_all(1)
 		if state == &"focus":
 			style.shadow_color = Color(COLOR_ACCENT_LIME, 0.75)
 			style.shadow_size = 5
 	else:
-		style.bg_color = Color(COLOR_RECEIPT_PAPER.lightened(0.08), 0.86) if is_primary else Color(COLOR_RECEIPT_PAPER, 0.0)
+		style.bg_color = COLOR_ACCENT_CORAL if is_primary else Color(COLOR_RECEIPT_PAPER, 0.0)
 		style.border_color = Color(COLOR_BASE_DARK, 0.18) if not is_primary else Color(COLOR_BASE_DARK, 0.58)
 		style.set_border_width_all(0)
 		style.border_width_left = 3 if is_primary else 0
@@ -1591,6 +2017,19 @@ func _receipt_button_style(is_primary: bool, is_danger: bool, state: StringName)
 	style.content_margin_top = 3
 	style.content_margin_bottom = 3
 	return style
+
+
+func _style_setting_choice(button: Button, selected: bool) -> void:
+	var fill := COLOR_ACCENT_CORAL if selected else COLOR_ACCENT_LIME
+	var ink := COLOR_RECEIPT_PAPER if selected else COLOR_BASE_DARK
+	button.add_theme_stylebox_override("normal", _stylebox(fill, COLOR_SURFACE, 1 if selected else 1))
+	button.add_theme_stylebox_override("hover", _stylebox(fill.lightened(0.08), COLOR_ACCENT_CORAL, 2))
+	button.add_theme_stylebox_override("focus", _stylebox(fill.lightened(0.08), COLOR_ACCENT_CORAL, 2))
+	button.add_theme_stylebox_override("pressed", _stylebox(COLOR_RECEIPT_PAPER, COLOR_SURFACE, 2))
+	button.add_theme_color_override("font_color", ink)
+	button.add_theme_color_override("font_hover_color", ink)
+	button.add_theme_color_override("font_focus_color", ink)
+	button.add_theme_font_size_override("font_size", roundi(15.0 * _receipt_ui_scale()))
 
 
 func _chip_panel_style() -> StyleBoxFlat:
@@ -1607,8 +2046,8 @@ func _chip_panel_style() -> StyleBoxFlat:
 func _button_normal_style(is_primary: bool, is_danger: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	if is_primary:
-		style.bg_color = Color(0.12, 0.22, 0.20, 0.98)
-		style.border_color = Color("557733")
+		style.bg_color = COLOR_ACCENT_CORAL
+		style.border_color = COLOR_BASE_DARK
 		style.border_width_left = 3
 		style.border_width_top = 1
 		style.border_width_right = 1
@@ -1629,8 +2068,8 @@ func _button_normal_style(is_primary: bool, is_danger: bool) -> StyleBoxFlat:
 func _button_hover_style(is_primary: bool, is_danger: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	if is_primary:
-		style.bg_color = Color(0.16, 0.30, 0.26, 1.0)
-		style.border_color = COLOR_ACCENT_LIME
+		style.bg_color = COLOR_ACCENT_CORAL.lightened(0.1)
+		style.border_color = COLOR_RECEIPT_PAPER
 		style.border_width_left = 4
 		style.border_width_top = 1
 		style.border_width_right = 1

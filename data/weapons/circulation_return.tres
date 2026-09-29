@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"circulation_return"
 display_name = "Circulation Return"
+shop_unlock_wave = 3
 description = "Throws two receipt rolls that turn back after a short lane."
 sprite = ExtResource("2_sprite")
+weapon_class = 5
 attack_mode = 2
 damage = 9
 damage_type = 0

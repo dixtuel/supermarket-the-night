@@ -7,8 +7,10 @@
 script = ExtResource("1_weapon")
 id = &"box_cutter"
 display_name = "Box Cutter"
+shop_unlock_wave = 1
 description = "A close-range utility knife sweeps a short arc through nearby enemies. Its damage scales with Melee Damage."
 sprite = ExtResource("2_sprite")
+weapon_class = 0
 attack_mode = 7
 damage = 8
 damage_type = 0

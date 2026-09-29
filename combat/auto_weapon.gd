@@ -19,6 +19,7 @@ const DEPLOYABLE_ROOM_IDS: Array[StringName] = [&"market", &"depot", &"restroom"
 @export var muzzle_offset: float = 12.0
 
 var _projectile_layer: Node2D
+var _structure_layer: Node2D
 var _owner_actor: Node2D
 var _weapon_catalog: Dictionary = {}
 var _weapon_states: Dictionary = {}
@@ -38,6 +39,12 @@ func _ready() -> void:
 
 func configure_projectile_layer(layer: Node2D) -> void:
 	_projectile_layer = layer
+	if not is_instance_valid(_structure_layer):
+		_structure_layer = layer
+
+
+func configure_structure_layer(layer: Node2D) -> void:
+	_structure_layer = layer
 
 
 func set_current_room_id(room_id: StringName) -> void:
@@ -81,6 +88,8 @@ func configure_weapon_catalog(
 		starter_weapon_ids: Array[StringName] = []
 	) -> void:
 	_projectile_layer = projectile_layer
+	if not is_instance_valid(_structure_layer):
+		_structure_layer = projectile_layer
 	_weapon_catalog.clear()
 	_weapon_states.clear()
 	_weapon_order.clear()
@@ -226,11 +235,23 @@ func _state_supports_upgrade(state: Dictionary, effect: int, weapon_specific: bo
 		UpgradeDefinition.Effect.PROJECTILE_COUNT_ADD:
 			return mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.ORBITAL_CONTACT, WeaponDefinition.AttackMode.CONE_PROJECTILES]
 		UpgradeDefinition.Effect.PROJECTILE_SPEED_MULTIPLIER:
-			return mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES]
+			return mode in [
+				WeaponDefinition.AttackMode.TARGETED_PROJECTILE,
+				WeaponDefinition.AttackMode.RETURNING_PROJECTILE,
+				WeaponDefinition.AttackMode.CONE_PROJECTILES,
+				WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE,
+			]
 		UpgradeDefinition.Effect.WEAPON_PIERCE_ADD:
 			return mode in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES]
 		UpgradeDefinition.Effect.WEAPON_RADIUS_ADD:
-			return mode in [WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE, WeaponDefinition.AttackMode.DEPLOYED_MINE, WeaponDefinition.AttackMode.ORBITAL_CONTACT]
+			return mode in [
+				WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE,
+				WeaponDefinition.AttackMode.DEPLOYED_MINE,
+				WeaponDefinition.AttackMode.ORBITAL_CONTACT,
+				WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE,
+			]
+		UpgradeDefinition.Effect.WEAPON_REACH_ADD:
+			return mode == WeaponDefinition.AttackMode.MELEE_SWEEP
 		UpgradeDefinition.Effect.WEAPON_DAMAGE_ADD, UpgradeDefinition.Effect.WEAPON_DAMAGE_MULTIPLIER:
 			return true
 	return false
@@ -285,6 +306,47 @@ func get_weapon_slot_count() -> int:
 	return count
 
 
+func get_weapon_class_bonus(stat_id: StringName) -> float:
+	var bonus_stat := _class_bonus_stat_id(stat_id)
+	if bonus_stat == WeaponClassDefinition.BonusStat.NONE:
+		return 0.0
+	var class_counts: Dictionary = {}
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		var class_id := int(state.get("weapon_class", WeaponDefinition.WeaponClass.GUN))
+		class_counts[class_id] = int(class_counts.get(class_id, 0)) + 1
+	var total := 0.0
+	for class_id: Variant in class_counts.keys():
+		total += WeaponClassCatalog.get_bonus(int(class_id), bonus_stat, int(class_counts[class_id]))
+	return total
+
+
+func get_weapon_class_summary() -> PackedStringArray:
+	var class_counts: Dictionary = {}
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		var class_id := int(state.get("weapon_class", WeaponDefinition.WeaponClass.GUN))
+		class_counts[class_id] = int(class_counts.get(class_id, 0)) + 1
+	var summaries := PackedStringArray()
+	for class_id: Variant in class_counts.keys():
+		summaries.append(WeaponClassCatalog.describe_set(int(class_id), int(class_counts[class_id])))
+	summaries.sort()
+	return summaries
+
+
+func _class_bonus_stat_id(stat_id: StringName) -> int:
+	match stat_id:
+		&"melee_damage": return WeaponClassDefinition.BonusStat.MELEE_DAMAGE
+		&"ranged_damage": return WeaponClassDefinition.BonusStat.RANGED_DAMAGE
+		&"elemental_damage": return WeaponClassDefinition.BonusStat.ELEMENTAL_DAMAGE
+		&"engineering": return WeaponClassDefinition.BonusStat.ENGINEERING
+		&"attack_speed": return WeaponClassDefinition.BonusStat.ATTACK_SPEED
+		&"lifesteal": return WeaponClassDefinition.BonusStat.LIFESTEAL
+		&"harvesting": return WeaponClassDefinition.BonusStat.HARVESTING
+		&"weapon_damage": return WeaponClassDefinition.BonusStat.WEAPON_DAMAGE
+	return WeaponClassDefinition.BonusStat.NONE
+
+
 func _raise_weapon_tier(weapon_id: StringName, target_tier: int) -> bool:
 	if not _weapon_states.has(weapon_id):
 		return false
@@ -310,12 +372,38 @@ func _raise_weapon_tier(weapon_id: StringName, target_tier: int) -> bool:
 		else:
 			state["damage"] = maxi(1, roundi(float(state["damage"]) * 1.2))
 		state["fire_interval"] = maxf(0.05, float(state["fire_interval"]) * 0.93)
-		if int(state.get("attack_mode", -1)) in [WeaponDefinition.AttackMode.TARGETED_PROJECTILE, WeaponDefinition.AttackMode.RETURNING_PROJECTILE, WeaponDefinition.AttackMode.CONE_PROJECTILES]:
+		var mode := int(state.get("attack_mode", -1))
+		if mode in [
+			WeaponDefinition.AttackMode.TARGETED_PROJECTILE,
+			WeaponDefinition.AttackMode.RETURNING_PROJECTILE,
+			WeaponDefinition.AttackMode.CONE_PROJECTILES,
+			WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE,
+		]:
 			state["projectile_speed"] = float(state["projectile_speed"]) * 1.05
-		if weapon_id not in [&"milk_hose", &"box_cutter"]:
+		if mode in [
+			WeaponDefinition.AttackMode.ORBITAL_CONTACT,
+			WeaponDefinition.AttackMode.DEPLOYED_SLOW_ZONE,
+			WeaponDefinition.AttackMode.DEPLOYED_MINE,
+			WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE,
+		]:
 			state["area_radius"] = float(state["area_radius"]) + 8.0
-			if current_tier % 2 == 1:
-				state["projectile_count"] = clampi(int(state["projectile_count"]) + 1, 1, 32)
+		elif mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
+			state["target_range"] = float(state["target_range"]) + 20.0
+		elif mode == WeaponDefinition.AttackMode.MELEE_SWEEP and weapon_id != &"box_cutter":
+			state["target_range"] = minf(220.0, float(state["target_range"]) + 8.0)
+			state["melee_arc_degrees"] = minf(160.0, float(state.get("melee_arc_degrees", 100.0)) + 6.0)
+		if (
+			weapon_id != &"milk_hose"
+			and current_tier == 3
+			and mode in [
+				WeaponDefinition.AttackMode.TARGETED_PROJECTILE,
+				WeaponDefinition.AttackMode.RETURNING_PROJECTILE,
+				WeaponDefinition.AttackMode.CONE_PROJECTILES,
+				WeaponDefinition.AttackMode.ORBITAL_CONTACT,
+				WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE,
+			]
+		):
+			state["projectile_count"] = clampi(int(state["projectile_count"]) + 1, 1, 32)
 	_weapon_states[weapon_id] = state
 	return true
 
@@ -349,6 +437,8 @@ func apply_upgrade(upgrade: UpgradeDefinition) -> bool:
 				state["pierce_count"] = clampi(int(state["pierce_count"]) + roundi(upgrade.value), 0, 32)
 			UpgradeDefinition.Effect.WEAPON_RADIUS_ADD:
 				state["area_radius"] = maxf(0.0, float(state["area_radius"]) + upgrade.value)
+			UpgradeDefinition.Effect.WEAPON_REACH_ADD:
+				state["target_range"] = minf(260.0, float(state["target_range"]) + upgrade.value)
 			_:
 				continue
 		_weapon_states[weapon_id] = state
@@ -388,11 +478,27 @@ func get_shop_inventory_summary() -> Dictionary:
 			var kind := "turret" if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET else "mine"
 			var key := "%s:%d" % [String(weapon_id), tier]
 			deployable_indices[key] = deployables.size()
-			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": maxi(1, int(state.get("deployable_count", 1))), "icon": definition.sprite if definition != null else null})
+			deployables.append({
+				"id": weapon_id,
+				"name": name,
+				"weapon_class": int(state.get("weapon_class", WeaponDefinition.WeaponClass.SUPPORT)),
+				"tier": tier,
+				"kind": kind,
+				"count": maxi(1, int(state.get("deployable_count", 1))),
+				"damage": _effective_structure_damage(state),
+				"fire_interval": float(state.get("fire_interval", 0.0)),
+				"range": roundi(float(state.get("target_range", 0.0))),
+				"area": roundi(float(state.get("area_radius", 0.0))),
+				"duration": float(state.get("effect_duration", 0.0)),
+				"engineering_coefficient": float(state.get("engineering_coefficient", 0.0)),
+				"icon": definition.sprite if definition != null else null,
+			})
 			continue
 		weapons.append({
 			"id": String(weapon_id),
 			"name": name,
+			"weapon_class": int(state.get("weapon_class", WeaponDefinition.WeaponClass.GUN)),
+			"weapon_class_name": WeaponClassCatalog.get_definition(int(state.get("weapon_class", 1))).display_name if WeaponClassCatalog.get_definition(int(state.get("weapon_class", 1))) != null else "",
 			"tier": tier,
 			"damage": _effective_weapon_damage(state),
 			"category": _weapon_category_name(state),
@@ -400,7 +506,7 @@ func get_shop_inventory_summary() -> Dictionary:
 			"damage_type": int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
 			"elemental_damage_only": bool(state.get("elemental_damage_only", false)),
 			"elemental_scaling_coefficient": float(state.get("damage_scaling_coefficient", 0.0)),
-			"fire_interval": float(state.get("fire_interval", 0.0)),
+					"fire_interval": _effective_fire_interval(state),
 			"projectile_count": int(state.get("projectile_count", 1)),
 			"projectile_spread_degrees": float(state.get("projectile_spread_degrees", 0.0)),
 			"melee_arc_degrees": float(state.get("melee_arc_degrees", 100.0)),
@@ -420,7 +526,7 @@ func get_shop_inventory_summary() -> Dictionary:
 			var kind := "turret" if structure.is_in_group("deployed_turrets") else "mine"
 			var definition := _weapon_catalog.get(weapon_id) as WeaponDefinition
 			deployable_indices[key] = deployables.size()
-			deployables.append({"id": weapon_id, "name": name, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
+			deployables.append({"id": weapon_id, "name": name, "weapon_class": int(definition.weapon_class) if definition != null else WeaponDefinition.WeaponClass.SUPPORT, "tier": tier, "kind": kind, "count": 0, "icon": definition.sprite if definition != null else null})
 	return {"weapons": weapons, "deployables": deployables}
 
 
@@ -481,7 +587,7 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 	if mode == WeaponDefinition.AttackMode.DEPLOYED_TURRET:
 		if projectile_scene == null:
 			return false
-		var turret := _create_projectile(global_position) as SurvivorProjectile
+		var turret := _create_projectile(global_position, _structure_layer) as SurvivorProjectile
 		if turret == null:
 			return false
 		turret.set_life_steal_source(_owner_actor)
@@ -495,7 +601,7 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 	if mode == WeaponDefinition.AttackMode.DEPLOYED_MINE:
 		if projectile_scene == null:
 			return false
-		var mine := _create_projectile(global_position) as SurvivorProjectile
+		var mine := _create_projectile(global_position, _structure_layer) as SurvivorProjectile
 		if mine == null:
 			return false
 		mine.set_life_steal_source(_owner_actor)
@@ -546,6 +652,15 @@ func _fire_weapon(state: Dictionary, target: Node2D, direction: Vector2) -> bool
 				float(state["projectile_lifetime"]),
 				int(state["pierce_count"]),
 				float(state["return_distance"]),
+				_owner_actor
+			)
+		elif mode == WeaponDefinition.AttackMode.EXPLOSIVE_PROJECTILE:
+			projectile.launch_explosive(
+				shot_direction,
+				_effective_weapon_damage(state),
+				float(state["projectile_speed"]),
+				float(state["projectile_lifetime"]),
+				float(state["area_radius"]),
 				_owner_actor
 			)
 		else:
@@ -667,7 +782,7 @@ func _effective_weapon_damage(state: Dictionary) -> int:
 	if elemental_only:
 		if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_elemental_damage"):
 			tuned_damage += roundi(float(_owner_actor.call("get_elemental_damage")) * coefficient)
-		return maxi(1, tuned_damage)
+		return _apply_class_damage(tuned_damage, state)
 	if is_instance_valid(_owner_actor):
 		match int(state.get("damage_scaling_stat", WeaponDefinition.DamageScalingStat.RANGED)):
 			WeaponDefinition.DamageScalingStat.MELEE:
@@ -681,11 +796,29 @@ func _effective_weapon_damage(state: Dictionary) -> int:
 			WeaponDefinition.DamageScalingStat.ENGINEERING:
 				if _owner_actor.has_method("get_engineering"):
 					tuned_damage += roundi(float(_owner_actor.call("get_engineering")) * coefficient)
-	return _effective_damage(
+	return _apply_class_damage(_effective_damage(
 		tuned_damage,
 		int(state.get("damage_type", WeaponDefinition.DamageType.PHYSICAL)),
 		coefficient
+	), state)
+
+
+func _apply_class_damage(damage_value: int, state: Dictionary) -> int:
+	var class_bonus := WeaponClassCatalog.get_bonus(
+		int(state.get("weapon_class", WeaponDefinition.WeaponClass.GUN)),
+		WeaponClassDefinition.BonusStat.WEAPON_DAMAGE,
+		_weapon_class_count(int(state.get("weapon_class", WeaponDefinition.WeaponClass.GUN)))
 	)
+	return maxi(1, roundi(float(damage_value) * (1.0 + class_bonus)))
+
+
+func _weapon_class_count(class_id: int) -> int:
+	var count := 0
+	for weapon_id: StringName in _weapon_order:
+		var state: Dictionary = _weapon_states.get(weapon_id, {})
+		if int(state.get("weapon_class", -1)) == class_id:
+			count += 1
+	return count
 
 
 func _effective_structure_damage(state: Dictionary) -> int:
@@ -705,14 +838,15 @@ func _effective_fire_interval(state: Dictionary) -> float:
 	return maxf(1.0 / 12.0, float(state.get("fire_interval", fire_interval)) / ((1.0 + rate_bonus) * (1.0 + player_rate_bonus)))
 
 
-func _create_projectile(spawn_position: Vector2) -> Area2D:
-	if projectile_scene == null or not is_instance_valid(_projectile_layer):
+func _create_projectile(spawn_position: Vector2, parent_layer: Node2D = null) -> Area2D:
+	var target_layer := parent_layer if is_instance_valid(parent_layer) else _projectile_layer
+	if projectile_scene == null or not is_instance_valid(target_layer):
 		return null
 	var projectile := projectile_scene.instantiate() as Area2D
 	if projectile == null:
 		push_warning("AutoWeapon projectile_scene must have an Area2D root.")
 		return null
-	_projectile_layer.add_child(projectile)
+	target_layer.add_child(projectile)
 	projectile.set_meta("room_id", _current_room_id)
 	projectile.global_position = spawn_position
 	return projectile
@@ -830,7 +964,7 @@ func _spawn_deployable(weapon_id: StringName, state: Dictionary, slot_index: int
 		if not other_rooms.is_empty():
 			placement_room = other_rooms[_deployable_rng.randi_range(0, other_rooms.size() - 1)]
 	var spawn_position := _choose_deployable_position(placement_room, last_positions[slot_index] as Vector2)
-	var deployed := _create_projectile(spawn_position) as SurvivorProjectile
+	var deployed := _create_projectile(spawn_position, _structure_layer) as SurvivorProjectile
 	if deployed == null:
 		return
 	deployed.set_life_steal_source(_owner_actor)
@@ -940,6 +1074,7 @@ func _build_runtime_state(definition: WeaponDefinition) -> Dictionary:
 		"display_name": definition.display_name,
 		"sprite": definition.sprite,
 		"attack_mode": definition.attack_mode,
+		"weapon_class": definition.weapon_class,
 		"damage": definition.damage,
 		"damage_type": definition.damage_type,
 		"damage_scaling_stat": definition.damage_scaling_stat,

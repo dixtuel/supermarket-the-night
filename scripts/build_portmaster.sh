@@ -39,10 +39,37 @@ cp "$GAME_ROOT/licenses/"* "$STAGE_DIR/supermarketthenight/licenses/"
 chmod -R a+rX "$STAGE_DIR"
 find "$STAGE_DIR" -type f -exec chmod 0644 {} +
 find "$STAGE_DIR" -type d -exec chmod 0755 {} +
-(
-  cd "$STAGE_DIR"
-  zip -9 -FS -r "$PACKAGE_PATH" "Supermarket The Night.sh" supermarketthenight
-)
+if command -v zip >/dev/null 2>&1; then
+	(
+		cd "$STAGE_DIR"
+		zip -9 -FS -r "$PACKAGE_PATH" "Supermarket The Night.sh" supermarketthenight
+	)
+else
+	python3 - "$STAGE_DIR" "$PACKAGE_PATH" <<'PY'
+import os
+import stat
+import sys
+import zipfile
+from pathlib import Path
+
+stage_dir = Path(sys.argv[1])
+package_path = Path(sys.argv[2])
+with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+	for relative_path in (Path("Supermarket The Night.sh"), Path("supermarketthenight")):
+		paths = [stage_dir / relative_path]
+		if paths[0].is_dir():
+			paths.extend(sorted(paths[0].rglob("*")))
+		for path in paths:
+			archive_name = path.relative_to(stage_dir).as_posix()
+			info = zipfile.ZipInfo.from_file(path, archive_name)
+			mode = stat.S_IMODE(path.stat().st_mode)
+			info.external_attr = (stat.S_IFDIR if path.is_dir() else stat.S_IFREG | mode) << 16
+			if path.is_dir():
+				info.external_attr = (stat.S_IFDIR | mode) << 16
+				info.filename = archive_name.rstrip("/") + "/"
+			archive.writestr(info, b"" if path.is_dir() else path.read_bytes())
+PY
+fi
 
 echo "Created $PCK_PATH"
 echo "Created $PACKAGE_PATH"
