@@ -9,6 +9,8 @@ signal weapon_sell_requested(weapon_id: StringName)
 
 @export var display_font: FontFile
 
+const TURKISH_FALLBACK_FONT: FontFile = preload("res://assets/fonts/DejaVuSans.ttf")
+
 const INK := Color("111a1c")
 const PANEL := Color("efebd8", 0.99)
 const PANEL_EDGE := Color("a59c80")
@@ -58,6 +60,7 @@ var _weapon_names: PackedStringArray = []
 
 
 func _ready() -> void:
+	_apply_turkish_font_fallback()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_shop()
 	_update_shop_texts()
@@ -68,6 +71,16 @@ func _ready() -> void:
 			_update_shop_texts()
 			_rebuild_offer_cards()
 		)
+
+
+func _apply_turkish_font_fallback() -> void:
+	if display_font == null:
+		return
+	display_font = display_font.duplicate() as FontFile
+	var fallbacks: Array[Font] = display_font.fallbacks.duplicate()
+	if not fallbacks.has(TURKISH_FALLBACK_FONT):
+		fallbacks.append(TURKISH_FALLBACK_FONT)
+	display_font.fallbacks = fallbacks
 
 
 func _notification(what: int) -> void:

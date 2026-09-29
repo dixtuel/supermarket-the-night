@@ -12,6 +12,8 @@ signal settings_requested
 
 @export var display_font: FontFile
 
+const TURKISH_FALLBACK_FONT: FontFile = preload("res://assets/fonts/DejaVuSans.ttf")
+
 const INK := Color("111a1c")
 const PANEL := Color("efebd8", 0.97)
 const PANEL_EDGE := Color("a59c80")
@@ -47,8 +49,19 @@ var _touch_pause_button: Button
 
 
 func _ready() -> void:
+	_apply_turkish_font_fallback()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_hud()
+
+
+func _apply_turkish_font_fallback() -> void:
+	if display_font == null:
+		return
+	display_font = display_font.duplicate() as FontFile
+	var fallbacks: Array[Font] = display_font.fallbacks.duplicate()
+	if not fallbacks.has(TURKISH_FALLBACK_FONT):
+		fallbacks.append(TURKISH_FALLBACK_FONT)
+	display_font.fallbacks = fallbacks
 
 
 func _notification(what: int) -> void:
@@ -762,6 +775,7 @@ func show_results(report: Dictionary, victory: bool) -> void:
 	metrics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_overlay_body.add_child(metrics)
 	_add_result_metric(metrics, "SHIFT", String(report.get("mode", "CAMPAIGN")))
+	_add_result_metric(metrics, "DIFFICULTY", String(report.get("difficulty", "QUIET SHIFT")))
 	_add_result_metric(metrics, "TIME ON CLOCK", _format_clock(float(report.get("time", 0.0))))
 	_add_result_metric(metrics, "AISLES CLEARED", "%03d" % int(report.get("kills", 0)))
 	_add_result_metric(metrics, "SHIFT LEVEL", "%02d" % int(report.get("level", 1)))

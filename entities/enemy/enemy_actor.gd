@@ -39,6 +39,7 @@ var _target: Node2D
 var _health: int = 1
 var _health_multiplier: float = 1.0
 var _damage_multiplier: float = 1.0
+var _difficulty_speed_multiplier: float = 1.0
 var _round_number: int = 1
 var _attack_cooldown: float = 0.8
 var _phase: Phase = Phase.APPROACH
@@ -71,10 +72,12 @@ func configure(
 		health_multiplier: float,
 		target: Node2D,
 		damage_multiplier: float = 1.0,
-		round_number: int = 1) -> void:
+		round_number: int = 1,
+		difficulty_speed_multiplier: float = 1.0) -> void:
 	_definition = definition
 	_health_multiplier = maxf(0.1, health_multiplier)
 	_damage_multiplier = maxf(0.0, damage_multiplier)
+	_difficulty_speed_multiplier = maxf(0.1, difficulty_speed_multiplier)
 	_round_number = maxi(1, round_number)
 	_target = target
 	if _definition != null:
@@ -898,7 +901,7 @@ func _movement_speed() -> float:
 		multiplier = minf(multiplier, float(effect.get("multiplier", 1.0)))
 	if _is_manager_boss() and _manager_slow_timer > 0.0:
 		multiplier = minf(multiplier, 0.55)
-	return _definition.move_speed * multiplier
+	return _definition.move_speed * multiplier * _difficulty_speed_multiplier
 
 
 func _manager_move_speed() -> float:

@@ -6,6 +6,8 @@ const TEST_ARENA_PATH := "res://levels/arena/test_arena.tscn"
 const RECORD_PATH := "user://bakkal_records.cfg"
 const CHARACTER_PREFERENCE_PATH := "user://character_preferences.cfg"
 const CHARACTER_ROSTER := preload("res://data/character_roster.gd")
+const DIFFICULTY_CATALOG := preload("res://data/difficulty_catalog.gd")
+const TURKISH_FALLBACK_FONT: FontFile = preload("res://assets/fonts/DejaVuSans.ttf")
 
 # Core Palette Tokens
 const COLOR_BASE_DARK := Color("10191c")     # Coolers after closing
@@ -38,11 +40,17 @@ var _modal_return_focus: Control
 var _buttons: Array[Button] = []
 var _btn_focus_indicators: Dictionary = {}
 var _selected_character_index: int = 0
+var _pending_character_id: StringName = &"night_clerk"
+var _selected_difficulty_level: int = 0
+var _max_difficulty_unlocked: int = 0
 var _selected_run_is_endless: bool = false
 var _character_preview: TextureRect
 var _character_name_label: Label
 var _character_description_label: Label
 var _character_stats_label: Label
+var _difficulty_name_label: Label
+var _difficulty_description_label: Label
+var _difficulty_effects_label: Label
 
 
 # Custom receipt divider line (dashed or double)
@@ -89,6 +97,12 @@ class DotLeader extends Control:
 
 
 func _ready() -> void:
+	if display_font != null:
+		display_font = display_font.duplicate() as FontFile
+		var fallbacks: Array[Font] = display_font.fallbacks.duplicate()
+		fallbacks.append(TURKISH_FALLBACK_FONT)
+		display_font.fallbacks = fallbacks
+	ThemeDB.fallback_font = TURKISH_FALLBACK_FONT
 	BakkalAudio.play_music()
 	_build()
 	if I18n != null and I18n.has_signal("language_changed"):
@@ -101,6 +115,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_active_modal) and _active_modal.has_meta("is_character_select"):
 		if event.is_action_pressed("ui_left"):
 			_cycle_character(-1)
+			get_viewport().set_input_as_handled()
+			return
+	if is_instance_valid(_active_modal) and _active_modal.has_meta("is_difficulty_select"):
+		if event.is_action_pressed("ui_left") or event.is_action_pressed("ui_up"):
+			_cycle_difficulty(-1)
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action_pressed("ui_right") or event.is_action_pressed("ui_down"):
+			_cycle_difficulty(1)
 			get_viewport().set_input_as_handled()
 			return
 		if event.is_action_pressed("ui_right"):
@@ -581,19 +604,19 @@ func _show_character_select(is_endless: bool) -> void:
 	_selected_run_is_endless = is_endless
 	_selected_character_index = CHARACTER_ROSTER.get_index(_last_character_id())
 	var title := "CHOOSE YOUR CHARACTER" if I18n.current_locale == "en" else "KARAKTERİNİ SEÇ"
-	var stack := _open_modal(title, Vector2i(560, 510))
+	var stack := _open_modal(title, Vector2i(560, 550))
 	_active_modal.set_meta("is_character_select", true)
 	var mode_text := "ENDLESS NIGHT" if is_endless else "20-ROUND CAMPAIGN"
 	stack.add_child(_label(mode_text, 11, COLOR_SURFACE))
 
 	var character_row := HBoxContainer.new()
 	character_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	character_row.add_theme_constant_override("separation", 8)
+	character_row.add_theme_constant_override("separation", 14)
 	stack.add_child(character_row)
-	var previous := _character_select_button("‹", func() -> void: _cycle_character(-1), 54)
+	var previous := _character_select_button("←", func() -> void: _cycle_character(-1), 96)
 	character_row.add_child(previous)
 	_character_preview = TextureRect.new()
-	_character_preview.custom_minimum_size = Vector2(180, 210)
+	_character_preview.custom_minimum_size = Vector2(200, 235)
 	_character_preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_character_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -601,7 +624,7 @@ func _show_character_select(is_endless: bool) -> void:
 	_character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_character_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	character_row.add_child(_character_preview)
-	var next := _character_select_button("›", func() -> void: _cycle_character(1), 54)
+	var next := _character_select_button("→", func() -> void: _cycle_character(1), 96)
 	character_row.add_child(next)
 
 	_character_name_label = _label("", 20, COLOR_BASE_DARK)
@@ -618,8 +641,8 @@ func _show_character_select(is_endless: bool) -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	stack.add_child(actions)
-	var back := _character_select_button("BACK" if I18n.current_locale == "en" else "GERİ", _close_modal, 48)
-	var begin := _character_select_button("START SHIFT" if I18n.current_locale == "en" else "VARDİYAYI BAŞLAT", _confirm_character_selection, 48)
+	var back := _character_select_button("BACK" if I18n.current_locale == "en" else "GERİ", _close_modal, 60)
+	var begin := _character_select_button("CHOOSE DIFFICULTY" if I18n.current_locale == "en" else "ZORLUK SEÇ", _confirm_character_selection, 60)
 	begin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(back)
 	actions.add_child(begin)
@@ -641,9 +664,10 @@ func _character_select_button(text: String, callback: Callable, height: float) -
 	var button := Button.new()
 	button.text = text
 	button.focus_mode = Control.FOCUS_ALL
-	button.custom_minimum_size = Vector2(0, maxf(height, _mobile_touch_target(get_viewport().get_visible_rect().size)))
+	button.custom_minimum_size = Vector2(maxf(72.0, _mobile_touch_target(get_viewport().get_visible_rect().size)), maxf(height, _mobile_touch_target(get_viewport().get_visible_rect().size)))
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	button.add_theme_font_size_override("font_size", roundi(15.0 * _receipt_ui_scale()))
+	var is_carousel_arrow := text in ["←", "→"]
+	button.add_theme_font_size_override("font_size", roundi((30.0 if is_carousel_arrow else 15.0) * _receipt_ui_scale()))
 	button.add_theme_color_override("font_color", COLOR_BASE_DARK)
 	button.add_theme_color_override("font_hover_color", COLOR_BASE_DARK)
 	button.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
@@ -686,10 +710,112 @@ func _refresh_character_selection() -> void:
 func _confirm_character_selection() -> void:
 	var definition: CharacterDefinition = CHARACTER_ROSTER.CHARACTERS[_selected_character_index]
 	_save_last_character_id(definition.id)
+	_pending_character_id = definition.id
+	_show_difficulty_select()
+
+
+func _show_difficulty_select() -> void:
+	_max_difficulty_unlocked = _load_max_difficulty_unlocked()
+	_selected_difficulty_level = mini(_max_difficulty_unlocked, _selected_difficulty_level)
+	var english := I18n.current_locale == "en"
+	var title := "CHOOSE DIFFICULTY" if english else "ZORLUĞU SEÇ"
+	var stack := _open_modal(title, Vector2i(620, 530))
+	_active_modal.set_meta("is_difficulty_select", true)
+	var definition := CHARACTER_ROSTER.get_character(_pending_character_id)
+	stack.add_child(_label(("%s · %s" if english else "%s · %s") % [definition.display_name if english else definition.display_name_tr, "ENDLESS NIGHT" if _selected_run_is_endless else ("20-ROUND CAMPAIGN" if english else "20 DALGALIK KAMPANYA")], 11, COLOR_SURFACE))
+	var choice_row := HBoxContainer.new()
+	choice_row.add_theme_constant_override("separation", 14)
+	choice_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(choice_row)
+	choice_row.add_child(_character_select_button("←", func() -> void: _cycle_difficulty(-1), 96))
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	info.add_theme_constant_override("separation", 12)
+	choice_row.add_child(info)
+	_difficulty_name_label = _label("", 20, COLOR_BASE_DARK)
+	_difficulty_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.add_child(_difficulty_name_label)
+	_difficulty_description_label = _label("", 12, COLOR_SURFACE)
+	_difficulty_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_difficulty_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info.add_child(_difficulty_description_label)
+	_difficulty_effects_label = _label("", 12, COLOR_BASE_DARK)
+	_difficulty_effects_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_difficulty_effects_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_child(_difficulty_effects_label)
+	choice_row.add_child(_character_select_button("→", func() -> void: _cycle_difficulty(1), 96))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	stack.add_child(actions)
+	var back := _character_select_button("BACK" if english else "GERİ", _show_character_select.bind(_selected_run_is_endless), 60)
+	var begin := _character_select_button("START SHIFT" if english else "VARDİYAYI BAŞLAT", _confirm_difficulty_selection, 60)
+	begin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(back)
+	actions.add_child(begin)
+	choice_row.get_child(0).focus_neighbor_right = choice_row.get_child(1).get_path()
+	choice_row.get_child(0).focus_neighbor_bottom = begin.get_path()
+	choice_row.get_child(2).focus_neighbor_left = choice_row.get_child(1).get_path()
+	choice_row.get_child(2).focus_neighbor_bottom = begin.get_path()
+	back.focus_neighbor_right = begin.get_path()
+	begin.focus_neighbor_left = back.get_path()
+	begin.grab_focus.call_deferred()
+	_refresh_difficulty_selection()
+
+
+func _cycle_difficulty(direction: int) -> void:
+	_selected_difficulty_level = posmod(_selected_difficulty_level + direction, DIFFICULTY_CATALOG.MAX_LEVEL + 1)
+	_refresh_difficulty_selection()
+	BakkalAudio.play_sfx(&"ui_confirm")
+
+
+func _refresh_difficulty_selection() -> void:
+	if not is_instance_valid(_difficulty_name_label):
+		return
+	var profile: Dictionary = DIFFICULTY_CATALOG.get_profile(_selected_difficulty_level)
+	var english := I18n.current_locale == "en"
+	var locked := _selected_difficulty_level > _max_difficulty_unlocked
+	var tier_text := "SHIFT %d" % _selected_difficulty_level if english else "VARDİYA %d" % _selected_difficulty_level
+	var lock_text := "  ·  LOCKED" if english else "  ·  KİLİTLİ"
+	_difficulty_name_label.text = "%s  ·  %s%s" % [tier_text, profile.get("name" if english else "name_tr", ""), lock_text if locked else ""]
+	_difficulty_description_label.text = String(profile.get("description" if english else "description_tr", ""))
+	var health_pct := roundi((float(profile.enemy_health) - 1.0) * 100.0)
+	var damage_pct := roundi((float(profile.enemy_damage) - 1.0) * 100.0)
+	var pressure := int(profile.pressure_waves)
+	var enemies_line := "ENEMIES UNLOCKED: %d/5" % int(profile.new_enemy_tier) if english else "EK DÜŞMAN TÜRÜ: %d/5" % int(profile.new_enemy_tier)
+	var pressure_line := "PRESSURE WAVES: none" if english else "BASKI DALGASI: yok"
+	if pressure == 1:
+		pressure_line = "CHALLENGE: one random wave at 11 or 12 · 40% horde / 60% elite" if english else "BASKI: 11 veya 12. dalgada rastgele · %40 sürü / %60 elit"
+	elif pressure == 3:
+		pressure_line = "CHALLENGE: one at 11–12, 14–15, 17–18 · final is elite" if english else "BASKI: 11–12, 14–15, 17–18 aralığında birer dalga · sonuncusu elit"
+	var scaling_line := "ENEMY HP +%d%%  ·  ENEMY DAMAGE +%d%%" % [health_pct, damage_pct] if english else "DÜŞMAN CANI +%%%d  ·  DÜŞMAN HASARI +%%%d" % [health_pct, damage_pct]
+	if bool(profile.double_boss):
+		scaling_line += "\n" + ("FINAL WAVE: 2 BOSSES · 25% LESS HP EACH" if english else "FİNAL: 2 BOSS · HER BİRİ %25 DAHA AZ CAN")
+	var economy_line := "SHOP PRICES / PLAYER UPGRADES: unchanged" if english else "MAĞAZA FİYATI / OYUNCU GELİŞİMİ: değişmez"
+	if bool(profile.get("environmental_hazards", false)):
+		pressure_line += "\n" + ("NIGHTMARE: hazards + fog · enemy speed +10%" if english else "KÂBUS: çevresel atışlar + sis · düşman hızı +%10")
+	_difficulty_effects_label.text = "%s\n%s\n%s\n%s" % [enemies_line, pressure_line, scaling_line, economy_line]
+	for child: Node in _active_modal.find_children("", "Button", true, false):
+		if child is Button and child.text in ["START SHIFT", "VARDİYAYI BAŞLAT"]:
+			(child as Button).disabled = locked
+			(child as Button).tooltip_text = "Complete Wave 20 at the previous difficulty to unlock this one." if locked and english else ("Önceki zorluğu açmak için önceki zorlukta 20. dalgayı tamamla." if locked else "")
+
+
+func _confirm_difficulty_selection() -> void:
+	if _selected_difficulty_level > _max_difficulty_unlocked:
+		return
 	get_tree().set_meta("supermarket_endless_mode", _selected_run_is_endless)
-	get_tree().set_meta("supermarket_character_id", String(definition.id))
+	get_tree().set_meta("supermarket_character_id", String(_pending_character_id))
+	get_tree().set_meta("supermarket_difficulty_level", _selected_difficulty_level)
 	BakkalAudio.play_sfx(&"ui_confirm")
 	get_tree().change_scene_to_file(ARENA_PATH)
+
+
+func _load_max_difficulty_unlocked() -> int:
+	var config := ConfigFile.new()
+	if config.load(RECORD_PATH) == OK:
+		return clampi(int(config.get_value("progression", "max_difficulty_unlocked", 0)), 0, DIFFICULTY_CATALOG.MAX_LEVEL)
+	return 0
 
 
 func _last_character_id() -> StringName:
@@ -786,7 +912,8 @@ func _open_modal(title_text: String, min_size: Vector2i) -> VBoxContainer:
 
 	var margins := _margins(roundi(12.0 * scale_factor) if mobile else 18)
 	var settings_scroll := mobile and (title_text.to_upper().contains("OPTIONS") or title_text.to_upper().contains("AYARLAR"))
-	if settings_scroll:
+	var selection_scroll := (mobile or OS.has_feature("portmaster")) and (title_text.to_upper().contains("CHARACTER") or title_text.to_upper().contains("KARAKTER") or title_text.to_upper().contains("DIFFICULTY") or title_text.to_upper().contains("ZORLUĞ"))
+	if settings_scroll or selection_scroll:
 		var scroll := ScrollContainer.new()
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -910,7 +1037,11 @@ func _mobile_density_scale(viewport_size: Vector2) -> float:
 	if dpi <= 0.0:
 		dpi = 160.0 if _is_mobile_platform() else 96.0
 	var viewport_scale := viewport_size.x / maxf(window_width, 1.0)
-	return clampf(dpi / 160.0 * viewport_scale, 1.0, 4.0)
+	# Android may expose the panel's physical DPI while still presenting a
+	# 1080p-or-higher logical viewport. Multiplying those scales without a cap
+	# makes menu cards taller than the screen on dense devices. Keep touch
+	# controls comfortably large while letting selection dialogs fit.
+	return clampf(dpi / 160.0 * viewport_scale, 1.0, 1.5)
 
 
 func _show_exit_confirmation() -> void:
