@@ -74,5 +74,7 @@ with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED, compre
 PY
 fi
 
+chmod 0644 "$PACKAGE_PATH"
+
 echo "Created $PCK_PATH"
 echo "Created $PACKAGE_PATH"
