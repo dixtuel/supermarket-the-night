@@ -1,13 +1,9 @@
-# D-pad sends arrow keys to Godot's UI focus navigation. PortMaster gameplay
-# movement reads the left-stick WASD actions separately.
+# PortMaster UI is keyboard-driven through gptokeyb2. Do not enable key repeat:
+# a held D-pad direction moves focus once, then moves again only on a new press.
 up = up
-up = repeat
 down = down
-down = repeat
 left = left
-left = repeat
 right = right
-right = repeat
 
 # Left stick maps to the movement keys configured in project.godot.
 left_analog_up = w
@@ -15,17 +11,20 @@ left_analog_down = s
 left_analog_left = a
 left_analog_right = d
 
-# gptokeyb assigns one output per physical button: A/B are mouse clicks,
-# while the D-pad remains available for keyboard focus navigation.
-a = mouse_left
-b = mouse_right
+# Focus navigation lets A activate the selected Godot UI control reliably even
+# when the Weston cursor is not over it. B returns/cancels. X is the game's E
+# interaction key. Shoulder buttons provide pointer clicks when using the
+# right-stick mouse.
+a = enter
+b = esc
 x = e
 y = r
-# Start pauses/resumes the game; Select cancels UI.
 start = esc
 back = esc
+l1 = mouse_left
+r1 = mouse_right
 
-# Right stick moves the pointer; A/B provide left/right clicks.
+# Right stick moves the pointer; L1/R1 provide left/right clicks.
 right_analog_up = mouse_movement_up
 right_analog_down = mouse_movement_down
 right_analog_left = mouse_movement_left

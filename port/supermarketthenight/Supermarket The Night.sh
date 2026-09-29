@@ -64,7 +64,8 @@ fi
 
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 export XDG_CONFIG_HOME="$CONFDIR"
-$GPTOKEYB "$GODOT_EXECUTABLE" -c "$GAMEDIR/supermarketthenight/supermarketthenight.gptk" &
+KEYB_HELPER="${GPTOKEYB2:-$GPTOKEYB}"
+$KEYB_HELPER "$GODOT_EXECUTABLE" -c "$GAMEDIR/supermarketthenight/supermarketthenight.gptk" &
 pm_platform_helper "$GODOT_DIR/$GODOT_EXECUTABLE"
 
 $ESUDO env "$WESTON_DIR/westonwrap.sh" headless noop kiosk crusty_x11egl \

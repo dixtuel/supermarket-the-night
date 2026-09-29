@@ -13,7 +13,7 @@ The 640×480 layout was reviewed in an x86_64 Godot/Xvfb simulation. Title, help
 - 64-bit ARM (`aarch64`) handheld running a PortMaster-compatible firmware. This includes current R36S ArkOS-family builds when their PortMaster runtime supports the device.
 - PortMaster's Godot 4.7.1 and Westonpack 0.2 shared runtimes.
 - Compatibility renderer, ETC2 texture export, keyboard-emulated controller input through `gptokeyb`.
-- PortMaster input is isolated by the `portmaster` custom feature: left stick sends WASD to gameplay movement, D-pad arrows navigate focused menus, right stick moves the mouse pointer, A sends left-click, B sends right-click, X sends E for interaction, Y sends R to restart after a run, Start sends Escape to pause/resume, and Select sends Escape to cancel. `$GPTOKEYB` also supplies firmware-specific Start + Select exit behavior. The `gptokeyb` format assigns one output to each physical button, so A cannot simultaneously send Enter and left-click; use the right stick to point at a UI button and A to click it. Existing desktop and Android input paths remain in place.
+- PortMaster input is isolated by the `portmaster` custom feature: left stick sends WASD to gameplay movement, D-pad arrows navigate focused menus without auto-repeat, and native joypad events are removed from Godot's UI actions to prevent duplicate navigation. A sends Enter to activate the focused control; B sends Escape to cancel/go back; X sends E for interaction; Y sends R to restart after a run; Start sends Escape to pause/resume; L1/R1 send left/right mouse clicks while the right stick moves the pointer. The launcher uses PortMaster's `GPTOKEYB2` helper (falling back to `GPTOKEYB`) so keyboard and mouse events are delivered through its SDL/Weston path. The helper supplies firmware-specific Select + Start exit behavior. Existing desktop and Android input paths remain in place.
 - Internet access the first time the two shared runtimes are installed.
 
 The PortMaster New runtime manifest currently includes `godot_4.7.1.squashfs` and `weston_pkg_0.2.squashfs` in the `aarch64` runtime bundle. The Godot runtime contains `godot471.aarch64`; the Westonpack runtime contains `westonwrap.sh` and its `crusty_x11egl` renderer. The launcher uses those published filenames.
@@ -22,7 +22,7 @@ The game targets Godot 4.7 and the runtime registry currently exposes Godot 4.7.
 
 ## Controller mapping references
 
-The mapping follows the PortMaster `gptokeyb` configuration model: logical D-pad buttons map to keyboard arrows and the left analog directions map to WASD; the right analog directions map to mouse movement. A/B map to mouse left/right buttons. `$GPTOKEYB` chooses the firmware-specific exit hotkey and kill method; firmware supplies the SDL controller layout, so the port uses PortMaster logical button names instead of hard-coded raw event IDs. dArkOSRE documents standard D-pad navigation and A confirmation while supporting multiple R36S/clone board variants; the retired ArkOS-R3XS repository points R36S users to dArkOSRE.
+The mapping uses PortMaster's logical controller names, not raw button IDs: D-pad arrows drive Godot focus, left analog directions map to WASD, and right analog directions move the mouse. dArkOSRE's EmulationStation configuration records device-specific physical button/axis IDs for supported R36S board variants; PortMaster resolves those through its controller database before exposing the logical names to gptokeyb2. This is why the port does not hard-code a single R36S GUID. The legacy ArkOS-R3XS repository points R36S users to dArkOSRE.
 
 References: [PortMaster gptokeyb documentation](https://portmaster.games/gptokeyb-documentation.html), [dArkOSRE R36S wiki](https://github.com/southoz/dArkOSRE-R36/wiki/EmulationStation), [ArkOS-R3XS repository](https://github.com/AeolusUX/ArkOS-R3XS).
 
@@ -34,11 +34,11 @@ Install Godot 4.7.1 and set `GODOT_BIN` if the executable is not on `PATH`:
 GODOT_BIN=/path/to/godot-4.7.1 ./scripts/build_portmaster.sh
 ```
 
-The script imports project assets, exports the PCK into `port/supermarketthenight/supermarketthenight/`, and creates `builds/portmaster/supermarketthenight.zip`. It does not export or rewrite the Android, desktop Linux, or Windows presets.
+The script imports project assets, exports the PCK into `port/supermarketthenight/supermarketthenight/`, and creates `builds/portmaster/supermarketthenight.zip` with the launcher, runtime data, `port.json`, README, screenshot, and `gameinfo.xml`. The metadata includes the catalog description, release date, and installed screenshot path. It does not export or rewrite the Android, desktop Linux, or Windows presets.
 
 PortMaster catalog metadata is kept alongside the package in `port/supermarketthenight/`: `port.json`, `README.md`, the launcher, `gameinfo.xml`, 4:3 gameplay screenshot, controller mapping inside the port directory, and license notices. The Godot and Westonpack runtimes are installed by PortMaster and are not copied into the game archive.
 
-The launcher is tracked with mode `0644` per current PortMaster-New reviewer guidance. The catalog screenshot is a clean 640×480 gameplay capture; the runtime package does not include a second copy of that screenshot inside the game data directory.
+The launcher is tracked with mode `0644` per current PortMaster-New reviewer guidance. The catalog screenshot is a clean 640×480 gameplay capture. The local test ZIP carries `port.json`, README, `gameinfo.xml`, and the screenshot alongside the game data inside its `supermarketthenight/` folder, matching the paths produced by PortMaster-New.
 
 ## PortMaster-New submission steps
 
@@ -48,4 +48,4 @@ References: [PortMaster-New submission guide](https://github.com/PortsMaster/Por
 
 ## Controls
 
-The controller profile maps left stick to WASD gameplay actions, D-pad to repeating arrow keys for menu focus, right stick to mouse movement, A/B to left/right mouse clicks, X to E (nearby console interaction), Y to R (restart from results), Start to Escape (pause), and Select to Escape (cancel). The `gptokeyb` profile format allows one output per button, so A is a literal click rather than Enter; point the cursor at a UI control with the right stick to activate it. Menus retain D-pad focus navigation. WASD and arrow keys are separate in the PortMaster player movement path. The standard desktop keyboard movement and Android touch movement continue to use their original actions.
+The PortMaster controller profile maps left stick to WASD gameplay actions, D-pad to non-repeating arrow keys for menu focus, right stick to mouse movement, A to Enter (focused UI confirmation), B to Escape (back/cancel), X to E (nearby console interaction), Y to R (restart from results), Start to Escape (pause), and L1/R1 to left/right mouse clicks. The UI removes direct joypad events from its directional and accept/cancel actions on this export to avoid duplicate D-pad handling. WASD and arrow keys are separate in the PortMaster player movement path. The standard desktop, Linux, Windows, Android, and touch input paths remain unchanged.

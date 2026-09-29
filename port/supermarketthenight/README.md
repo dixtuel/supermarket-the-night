@@ -13,15 +13,18 @@ Thanks to Asrın Kılıç (dixtuel) for creating the game.
 | Left stick | Move the character |
 | D-pad | Navigate menus and choices with focus |
 | Right stick | Move the mouse pointer |
-| A | Left-click the pointed control |
-| B | Right-click |
+| A | Confirm the focused control |
+| B | Back or cancel |
 | Start | Pause or resume the shift |
 | Select | Go back or cancel |
 | X | Interact with nearby consoles |
 | Y | Restart after a run |
+| L1 / R1 | Left-click / right-click at the pointer |
 | Select + Start | PortMaster's exit shortcut |
 
-The game uses PortMaster's `gptokeyb` mapping: left-stick WASD moves the character, repeating D-pad arrows move menu focus, and the right stick moves the pointer. A/B send literal left/right mouse clicks. Since each physical button has one mapping, A is reserved for left-click; point at a UI control with the right stick to activate it. X remains E for nearby console interaction, Y remains R to restart after a run, Start pauses, and Select cancels. PortMaster's `$GPTOKEYB` helper supplies the firmware-specific Start + Select exit behavior. Desktop, Android, and touch movement keep the existing input path.
+The game uses PortMaster's `GPTOKEYB2` mapping (with the legacy helper as a fallback): left-stick WASD moves the character, D-pad arrows navigate menu focus without key repeat, and the right stick moves the pointer. A sends Enter to activate the focused control; B sends Escape to go back or cancel. X remains E for nearby console interaction, Y remains R to restart after a run, and L1/R1 send left/right mouse clicks. Start pauses and Select goes back; PortMaster's helper supplies the firmware-specific Select + Start exit behavior. Desktop, Linux, Windows, Android, and touch input keep their existing paths.
+
+The package includes `gameinfo.xml`, catalog screenshot, and `port.json` beside the game data so local installs can display the release date, description, and image in the PortMaster/EmulationStation metadata flow.
 
 ## Build
 

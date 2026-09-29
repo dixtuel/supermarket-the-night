@@ -216,6 +216,8 @@ class ClipboardClamp extends Control:
 
 
 func _ready() -> void:
+	if OS.has_feature("portmaster"):
+		_disable_native_gamepad_ui_events()
 	if display_font != null:
 		display_font = display_font.duplicate() as FontFile
 		var fallbacks: Array[Font] = display_font.fallbacks.duplicate()
@@ -228,6 +230,18 @@ func _ready() -> void:
 		I18n.language_changed.connect(func(_l: String) -> void:
 			_build_menu()
 		)
+
+
+func _disable_native_gamepad_ui_events() -> void:
+	# PortMaster routes the handheld controls through gptokeyb2 as keyboard input.
+	# Keep the D-pad's native SDL events out of Godot's built-in UI actions so one
+	# physical press cannot navigate once as a pad event and again as an arrow key.
+	for action: StringName in [&"ui_up", &"ui_down", &"ui_left", &"ui_right", &"ui_accept", &"ui_cancel"]:
+		if not InputMap.has_action(action):
+			continue
+		for event: InputEvent in InputMap.action_get_events(action):
+			if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+				InputMap.action_erase_event(action, event)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -311,8 +325,9 @@ func _build() -> void:
 	clerk_shadow.anchor_top = 0.70
 	clerk_shadow.anchor_bottom = 0.735
 	if OS.has_feature("portmaster"):
-		clerk_shadow.anchor_left -= 0.12
-		clerk_shadow.anchor_right -= 0.12
+		var shadow_character_center := _portmaster_character_center_ratio()
+		clerk_shadow.anchor_left = shadow_character_center - 0.045
+		clerk_shadow.anchor_right = shadow_character_center + 0.045
 	clerk_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var shadow_style := StyleBoxFlat.new()
 	shadow_style.bg_color = Color(0.0, 0.0, 0.0, 0.55)
@@ -327,8 +342,9 @@ func _build() -> void:
 	_clerk.anchor_top = 0.405
 	_clerk.anchor_bottom = 0.745
 	if OS.has_feature("portmaster"):
-		_clerk.anchor_left -= 0.12
-		_clerk.anchor_right -= 0.12
+		var clerk_character_center := _portmaster_character_center_ratio()
+		_clerk.anchor_left = clerk_character_center - 0.065
+		_clerk.anchor_right = clerk_character_center + 0.065
 	_clerk.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_clerk.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_clerk.modulate = Color(1.0, 0.99, 0.96, 0.98)
@@ -344,8 +360,11 @@ func _build() -> void:
 	_last_character_label.anchor_bottom = 0.39
 	_last_character_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if OS.has_feature("portmaster"):
-		_last_character_label.anchor_left -= 0.12
-		_last_character_label.anchor_right -= 0.12
+		var label_character_center := _portmaster_character_center_ratio()
+		_last_character_label.anchor_left = label_character_center - 0.18
+		_last_character_label.anchor_right = label_character_center + 0.18
+		_last_character_label.clip_text = true
+		_last_character_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	add_child(_last_character_label)
 
 	# 4. Left-side store sign and receipt menu from the concept composition.
@@ -488,6 +507,20 @@ func _build_compact_menu() -> void:
 	receipt_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(receipt_footer)
 	paper.queue_redraw()
+
+
+func _portmaster_character_center_ratio() -> float:
+	# Center the clerk and its caption in the open column to the right of the
+	# receipt. Derive the position from the same PortMaster sign sizing used below
+	# so it stays balanced across 4:3 and square handheld displays.
+	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var inset := 10.0 * _receipt_ui_scale() if _is_mobile_platform() else 26.0
+	var usable_width := maxf(220.0, viewport_size.x - safe.x - safe.z - inset * 2.0)
+	var sign_width := minf(usable_width * 0.66, 510.0)
+	var left := safe.x + (10.0 * _receipt_ui_scale() if _is_mobile_platform() else 26.0)
+	var paper_right := left + sign_width * 0.975
+	return clampf((paper_right + viewport_size.x) * 0.5 / viewport_size.x, 0.5, 0.90)
 
 
 func _build_menu() -> void:

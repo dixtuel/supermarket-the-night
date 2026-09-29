@@ -33,6 +33,9 @@ mkdir -p "$STAGE_DIR/supermarketthenight/licenses"
 cp "$PCK_PATH" "$STAGE_DIR/supermarketthenight/"
 cp "$GAME_ROOT/supermarketthenight.gptk" "$STAGE_DIR/supermarketthenight/"
 cp "$PORT_ROOT/screenshot.png" "$STAGE_DIR/supermarketthenight/"
+cp "$PORT_ROOT/port.json" "$STAGE_DIR/supermarketthenight/"
+cp "$PORT_ROOT/README.md" "$STAGE_DIR/supermarketthenight/"
+cp "$PORT_ROOT/gameinfo.xml" "$STAGE_DIR/supermarketthenight/"
 cp "$GAME_ROOT/licenses/"* "$STAGE_DIR/supermarketthenight/licenses/"
 # Root sessions may start with umask 077. Keep archive contents readable after
 # HarbourMaster installs them; launcher scripts intentionally remain mode 0644.
