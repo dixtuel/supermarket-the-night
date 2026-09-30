@@ -135,6 +135,7 @@ var _kills: int = 0
 var _boss_spawned: bool = false
 var _boss_defeated: bool = false
 var _pending_level_ups: int = 0
+var _stat_choice_transition_pending: bool = false
 var _currency: int = 10
 var _shop_reroll_count: int = 0
 var _shop_open_round: int = 0
@@ -2383,7 +2384,7 @@ func _roll_progression_tier(progress: int, is_level_up: bool) -> int:
 
 
 func _on_stat_choice_selected(choice_id: StringName) -> void:
-	if _state != RunState.LEVEL_UP:
+	if _state != RunState.LEVEL_UP or _stat_choice_transition_pending:
 		return
 	var selected_choice: Dictionary = {}
 	for choice: Dictionary in _active_stat_choices:
@@ -2392,12 +2393,14 @@ func _on_stat_choice_selected(choice_id: StringName) -> void:
 			break
 	if selected_choice.is_empty() or not _player.apply_level_choice(selected_choice):
 		return
+	_stat_choice_transition_pending = true
 	_active_stat_choices.clear()
 	_hud.hide_overlay()
 	if _pending_elite_crates > 0 or _pending_level_ups > 0:
 		_show_next_stat_choice()
 	else:
 		_open_shop()
+	_stat_choice_transition_pending = false
 
 
 func _open_shop() -> void:

@@ -14,10 +14,10 @@ size = Vector2(32.2, 543.5)
 size = Vector2(96.5, 145.4)
 
 [sub_resource type="RectangleShape2D" id="sub_4_backfreezerwall"]
-size = Vector2(836.7, 145.4)
+size = Vector2(836.7, 137.09999)
 
 [sub_resource type="RectangleShape2D" id="sub_5_backcheckoutwall"]
-size = Vector2(222, 145.4)
+size = Vector2(218.79999, 134.09998)
 
 [sub_resource type="RectangleShape2D" id="sub_6_bottomwall"]
 size = Vector2(1279.9, 88.8)
@@ -62,10 +62,10 @@ size = Vector2(45.9, 302.4)
 size = Vector2(46.849995, 302)
 
 [sub_resource type="RectangleShape2D" id="sub_20_checkoutfront"]
-size = Vector2(95.7, 49.8)
+size = Vector2(101, 43.500008)
 
 [sub_resource type="RectangleShape2D" id="sub_21_checkoutregisterside"]
-size = Vector2(35.099995, 78.7)
+size = Vector2(33.09998, 65.70001)
 
 [sub_resource type="RectangleShape2D" id="sub_22_checkoutredstand"]
 size = Vector2(23, 42.1)
@@ -152,11 +152,11 @@ position = Vector2(-559.6, -287.4)
 shape = SubResource("sub_3_backstaffwallleft")
 
 [node name="BackFreezerWall" type="CollisionShape2D" parent="Walls" unique_id=2083755193]
-position = Vector2(-32.5, -287.4)
+position = Vector2(-32.5, -291.55)
 shape = SubResource("sub_4_backfreezerwall")
 
 [node name="BackCheckoutWall" type="CollisionShape2D" parent="Walls" unique_id=107499688]
-position = Vector2(496.8, -287.4)
+position = Vector2(498.4, -293.05)
 shape = SubResource("sub_5_backcheckoutwall")
 
 [node name="BottomWall" type="CollisionShape2D" parent="Walls" unique_id=224505975]
@@ -219,11 +219,11 @@ position = Vector2(336.575, 16.999996)
 shape = SubResource("sub_19_aislefive")
 
 [node name="CheckoutFront" type="CollisionShape2D" parent="Fixtures" unique_id=1086709263]
-position = Vector2(471.9, -151.6)
+position = Vector2(477.5, -154.75)
 shape = SubResource("sub_20_checkoutfront")
 
 [node name="CheckoutRegisterSide" type="CollisionShape2D" parent="Fixtures" unique_id=1431724031]
-position = Vector2(406.55, -175.35)
+position = Vector2(407.55, -181.85)
 shape = SubResource("sub_21_checkoutregisterside")
 
 [node name="CheckoutRedStand" type="CollisionShape2D" parent="Fixtures" unique_id=2024024737]

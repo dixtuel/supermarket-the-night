@@ -33,9 +33,9 @@ Godot 4.7's Android guide lists JDK 17, Android SDK Platform 35, Build Tools
 35.0.1, Platform Tools 35.0.0 or newer, NDK r28b (28.1.13356709), CMake
 3.10.2.4988404, and current Command-line Tools. This host has those packages
 plus Android SDK Platform 36 and Build Tools 36.0.0 installed under
-`/mnt/SteamCompat/Projects/SDK/android-sdk`, with Temurin JDK 17 at
-`/mnt/SteamCompat/Projects/SDK/jdk-17`. Source
-`/mnt/SteamCompat/Projects/SDK/env.sh` to configure command-line exports.
+`/mnt/Sata SSD/Projects/SDK/android-sdk`, with Temurin JDK 17 at
+`/mnt/Sata SSD/Projects/SDK/jdk-17`. Source
+`/mnt/Sata SSD/Projects/SDK/env.sh` to configure command-line exports.
 Recheck the guide before updating the toolchain because required package
 versions can change.
 

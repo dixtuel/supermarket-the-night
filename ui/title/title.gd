@@ -324,6 +324,11 @@ func _build() -> void:
 	clerk_shadow.anchor_right = 0.77
 	clerk_shadow.anchor_top = 0.70
 	clerk_shadow.anchor_bottom = 0.735
+	if _is_mobile_landscape():
+		clerk_shadow.anchor_left = 0.69
+		clerk_shadow.anchor_right = 0.82
+		clerk_shadow.anchor_top = 0.76
+		clerk_shadow.anchor_bottom = 0.79
 	if OS.has_feature("portmaster"):
 		var shadow_character_center := _portmaster_character_center_ratio()
 		clerk_shadow.anchor_left = shadow_character_center - 0.045
@@ -341,6 +346,13 @@ func _build() -> void:
 	_clerk.anchor_right = 0.79
 	_clerk.anchor_top = 0.405
 	_clerk.anchor_bottom = 0.745
+	if _is_mobile_landscape():
+		# Use more of the open right-hand column on phones and tablets while
+		# keeping the clerk clear of the paper menu at narrow landscape ratios.
+		_clerk.anchor_left = 0.675
+		_clerk.anchor_right = 0.835
+		_clerk.anchor_top = 0.37
+		_clerk.anchor_bottom = 0.77
 	if OS.has_feature("portmaster"):
 		var clerk_character_center := _portmaster_character_center_ratio()
 		_clerk.anchor_left = clerk_character_center - 0.065
@@ -358,6 +370,12 @@ func _build() -> void:
 	_last_character_label.anchor_right = 0.82
 	_last_character_label.anchor_top = 0.35
 	_last_character_label.anchor_bottom = 0.39
+	if _is_mobile_landscape():
+		_last_character_label.anchor_left = 0.64
+		_last_character_label.anchor_right = 0.88
+		_last_character_label.anchor_top = 0.31
+		_last_character_label.anchor_bottom = 0.37
+		_last_character_label.add_theme_font_size_override("font_size", roundi(clampf(get_viewport().get_visible_rect().size.y * 0.018, 16.0, 20.0)))
 	_last_character_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if OS.has_feature("portmaster"):
 		var label_character_center := _portmaster_character_center_ratio()
@@ -388,9 +406,9 @@ func _build_compact_menu() -> void:
 	var inset := 10.0 * scale_factor if mobile else 26.0
 	var usable_width := maxf(220.0, viewport_size.x - safe.x - safe.z - inset * 2.0)
 	var desktop := not mobile and not portmaster
-	var sign_width := minf(usable_width * (0.39 if desktop else (0.44 if mobile_landscape else 0.92)), 720.0 * scale_factor)
-	var paper_width := minf(sign_width * 0.78, 560.0 * scale_factor)
-	var sign_height := 320.0 * scale_factor if desktop else (88.0 * scale_factor if mobile_landscape else 158.0 * scale_factor)
+	var sign_width := minf(usable_width * (0.39 if desktop else (0.50 if mobile_landscape else 0.92)), 720.0 * scale_factor)
+	var paper_width := minf(sign_width * (0.86 if mobile_landscape else 0.78), (620.0 if mobile_landscape else 560.0) * scale_factor)
+	var sign_height := 320.0 * scale_factor if desktop else (clampf(viewport_size.y * 0.13, 88.0, 142.0) if mobile_landscape else 158.0 * scale_factor)
 	var left := safe.x + (viewport_size.x * 0.05 if desktop else inset)
 	var top := safe.y + (viewport_size.y * 0.03 if desktop else inset)
 	if portmaster:
@@ -430,7 +448,7 @@ func _build_compact_menu() -> void:
 	header.add_theme_constant_override("separation", 0)
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_row.add_child(header)
-	var title_font_size := 42 if desktop else (19 if mobile_landscape else 30)
+	var title_font_size := 42 if desktop else (roundi(clampf(viewport_size.y * 0.026, 23.0, 30.0)) if mobile_landscape else 30)
 	var brand_title := _label("SUPERMARKET:", title_font_size, COLOR_RECEIPT_PAPER)
 	if display_font != null:
 		brand_title.add_theme_font_override("font", display_font)
@@ -443,7 +461,7 @@ func _build_compact_menu() -> void:
 	header.add_child(night_title)
 	var receipt_subtitle := _label(
 		"NIGHT SHIFT  /  CHOOSE YOUR ROUTE" if I18n.current_locale == "en" else "GECE VARDİYASI  /  ROTANI SEÇ",
-		8 if mobile_landscape else 11,
+		11 if mobile_landscape else 11,
 		COLOR_RECEIPT_PAPER
 	)
 	header.add_child(receipt_subtitle)
@@ -477,7 +495,7 @@ func _build_compact_menu() -> void:
 	paper.offset_top = top + sign_height + 6.0 * scale_factor
 	var has_saved_run := RunSaveManager != null and RunSaveManager.has_saved_run()
 	var resume_menu_extra := 68.0 * scale_factor if has_saved_run else 0.0
-	var paper_height := (430.0 * scale_factor + resume_menu_extra) if desktop else (minf(viewport_size.y * 0.51, 470.0) + resume_menu_extra if portrait else (250.0 * scale_factor + resume_menu_extra))
+	var paper_height := (430.0 * scale_factor + resume_menu_extra) if desktop else (minf(viewport_size.y * 0.51, 470.0) + resume_menu_extra if portrait else (clampf(viewport_size.y * 0.36, 250.0, 390.0) + resume_menu_extra))
 	if portmaster:
 		paper_height = 370.0 + (68.0 if has_saved_run else 0.0)
 	if portrait:
@@ -502,6 +520,32 @@ func _build_compact_menu() -> void:
 	stack.add_child(_menu)
 	_build_menu()
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_BASE_DARK, 0.42)))
+	if mobile_landscape and not portmaster:
+		var utility_row := HBoxContainer.new()
+		utility_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		utility_row.add_theme_constant_override("separation", 6)
+		var utility_height := clampf(viewport_size.y * 0.046, 44.0, 52.0)
+		for utility: Array in [
+			[I18n.t("TITLE_MANUAL", "HOW TO PLAY"), _show_controls],
+			[I18n.t("TITLE_CREDITS", "CREDITS"), _show_credits]
+		]:
+			var utility_button := Button.new()
+			utility_button.text = String(utility[0])
+			utility_button.custom_minimum_size = Vector2(0.0, utility_height)
+			utility_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			utility_button.focus_mode = Control.FOCUS_ALL
+			utility_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			utility_button.add_theme_font_size_override("font_size", roundi(11.0 * _receipt_ui_scale()))
+			utility_button.add_theme_color_override("font_color", COLOR_SURFACE)
+			utility_button.add_theme_color_override("font_hover_color", COLOR_ACCENT_CORAL)
+			utility_button.add_theme_color_override("font_focus_color", COLOR_ACCENT_CORAL)
+			utility_button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
+			utility_button.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+			utility_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+			utility_button.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+			utility_button.pressed.connect(_open_auxiliary_option.bind(Callable(utility[1])))
+			utility_row.add_child(utility_button)
+		stack.add_child(utility_row)
 	var day_number := posmod(Time.get_date_dict_from_system().day, 20) + 1
 	var receipt_footer := _label(("NIGHT %02d  ·  STORE CLOSED" if I18n.current_locale == "en" else "GECE %02d  ·  MAĞAZA KAPALI") % day_number, 9 if desktop else 8, COLOR_SURFACE)
 	receipt_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -601,11 +645,13 @@ func _show_auxiliary_menu() -> void:
 	for option: Array in options:
 		var button := _character_select_button(String(option[0]), _open_auxiliary_option.bind(Callable(option[1])), 54)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size.y = maxf(button.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
 		button.add_theme_stylebox_override("normal", _receipt_button_style(false, false, &"normal"))
 		button.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
 		stack.add_child(button)
 	var back := _character_select_button(I18n.t("MANUAL_CLOSE", "BACK TO SHIFT"), _close_modal, 44)
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	back.custom_minimum_size.y = maxf(back.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
 	back.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
 	stack.add_child(back)
 
@@ -739,7 +785,7 @@ func _add_menu_button(
 	var scale_factor := _receipt_ui_scale()
 	var touch_size := _mobile_touch_target(get_viewport().get_visible_rect().size)
 	var mobile_landscape := _is_mobile_landscape()
-	var landscape_row_height := minf(26.0 * scale_factor, get_viewport().get_visible_rect().size.y / 15.0)
+	var landscape_row_height := clampf(get_viewport().get_visible_rect().size.y * 0.055, 44.0, 60.0)
 	if mobile_landscape:
 		text = _mobile_menu_label(badge_text, text)
 		touch_size = minf(touch_size, landscape_row_height)
@@ -794,7 +840,7 @@ func _add_menu_button(
 
 	var main_lbl := Label.new()
 	main_lbl.text = text
-	var landscape_font_compaction := 0.85 if OS.has_feature("portmaster") else (0.50 if mobile_landscape else 1.0)
+	var landscape_font_compaction := 0.85 if OS.has_feature("portmaster") else (0.68 if mobile_landscape else 1.0)
 	main_lbl.add_theme_font_size_override("font_size", roundi(float(24 if is_primary else 22) * scale_factor * landscape_font_compaction))
 	main_lbl.add_theme_color_override("font_color", COLOR_RECEIPT_PAPER if use_receipt_style and is_primary else (COLOR_BASE_DARK if use_receipt_style else COLOR_RECEIPT_PAPER))
 	main_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -879,16 +925,28 @@ func _show_character_select(is_endless: bool) -> void:
 	var stack := _open_modal(title, Vector2i(840, 740))
 	_active_modal.set_meta("is_character_select", true)
 	var mode_text := "ENDLESS NIGHT" if is_endless else "20-ROUND CAMPAIGN"
-	stack.add_child(_label(mode_text, 15, COLOR_SURFACE))
+	var mode_label := _label(mode_text, 15, COLOR_SURFACE)
+	mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(mode_label)
 
 	var character_row := HBoxContainer.new()
+	character_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	character_row.add_theme_constant_override("separation", 14)
+	character_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	stack.add_child(character_row)
 	var previous := _character_select_button("←", func() -> void: _cycle_character(-1), 96)
 	character_row.add_child(previous)
 	_character_preview = TextureRect.new()
 	_character_preview.custom_minimum_size = Vector2(340, 360)
+	var viewport_size := get_viewport().get_visible_rect().size
+	var mobile := _is_mobile_platform()
+	var portrait := _is_portrait()
+	if mobile and portrait:
+		_character_preview.custom_minimum_size = Vector2(minf(340.0, viewport_size.x * 0.46), minf(420.0, viewport_size.y * 0.26))
+	elif mobile:
+		_character_preview.custom_minimum_size = Vector2(minf(380.0, viewport_size.x * 0.22), minf(330.0, viewport_size.y * 0.32))
 	_character_preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_character_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -907,6 +965,7 @@ func _show_character_select(is_endless: bool) -> void:
 	_character_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(_character_description_label)
 	var loadout := HBoxContainer.new()
+	loadout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	loadout.alignment = BoxContainer.ALIGNMENT_CENTER
 	loadout.add_theme_constant_override("separation", 12)
 	stack.add_child(loadout)
@@ -922,13 +981,18 @@ func _show_character_select(is_endless: bool) -> void:
 	_character_stats_label = _label("", 16, COLOR_BASE_DARK)
 	_character_stats_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_character_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if mobile:
+		_character_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	loadout.add_child(_character_stats_label)
 
 	var actions := HBoxContainer.new()
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	actions.add_theme_constant_override("separation", 10)
 	stack.add_child(actions)
 	var back := _character_select_button("BACK" if I18n.current_locale == "en" else "GERİ", _close_modal, 60)
 	var begin := _character_select_button("CHOOSE DIFFICULTY" if I18n.current_locale == "en" else "ZORLUK SEÇ", _confirm_character_selection, 60)
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	begin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(back)
 	actions.add_child(begin)
@@ -1021,15 +1085,20 @@ func _show_difficulty_select() -> void:
 	_active_modal.set_meta("is_difficulty_select", true)
 	var definition := CHARACTER_ROSTER.get_character(_pending_character_id)
 	var context := _label("%s     /     %s" % [definition.display_name if english else definition.display_name_tr, "ENDLESS NIGHT" if _selected_run_is_endless else ("20-ROUND CAMPAIGN" if english else "20 DALGALIK KAMPANYA")], 14, COLOR_SURFACE)
+	context.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	context.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	context.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _is_mobile_platform() else TextServer.AUTOWRAP_OFF
 	stack.add_child(context)
 	var selector_scroll := ScrollContainer.new()
 	selector_scroll.name = "DifficultySelectorScroll"
-	selector_scroll.custom_minimum_size.y = 104.0
+	selector_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	selector_scroll.custom_minimum_size.y = clampf(get_viewport().get_visible_rect().size.y * 0.105, 82.0, 124.0)
 	selector_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	selector_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	selector_scroll.follow_focus = true
 	stack.add_child(selector_scroll)
 	var selector := HBoxContainer.new()
+	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	selector.add_theme_constant_override("separation", 8)
 	selector.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	selector_scroll.add_child(selector)
@@ -1039,7 +1108,12 @@ func _show_difficulty_select() -> void:
 		var profile_name := String(profile.get("name" if english else "name_tr", ""))
 		var locked := level > _max_difficulty_unlocked
 		var tier_button := Button.new()
-		tier_button.custom_minimum_size = Vector2(116.0, 92.0)
+		var tier_width := 116.0
+		var tier_height := 92.0
+		if _is_mobile_platform():
+			tier_width = clampf(get_viewport().get_visible_rect().size.x * 0.075, 112.0, 154.0)
+			tier_height = clampf(get_viewport().get_visible_rect().size.y * 0.085, 92.0, 124.0)
+		tier_button.custom_minimum_size = Vector2(tier_width, tier_height)
 		tier_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tier_button.focus_mode = Control.FOCUS_ALL
 		tier_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -1055,12 +1129,18 @@ func _show_difficulty_select() -> void:
 		selector.add_child(tier_button)
 		_difficulty_buttons.append(tier_button)
 
-	var info_row := HBoxContainer.new()
+	var info_row: Control = HBoxContainer.new()
+	if _is_mobile_platform() and _is_portrait():
+		info_row = VBoxContainer.new()
+	info_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_row.add_theme_constant_override("separation", 18)
 	info_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(info_row)
 	var preview_panel := PanelContainer.new()
 	preview_panel.custom_minimum_size = Vector2(210, 160)
+	if _is_mobile_platform():
+		preview_panel.custom_minimum_size = Vector2(minf(210.0, get_viewport().get_visible_rect().size.x * 0.42), clampf(get_viewport().get_visible_rect().size.y * 0.15, 104.0, 168.0))
+		preview_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL if _is_portrait() else Control.SIZE_SHRINK_CENTER
 	preview_panel.add_theme_stylebox_override("panel", _stylebox(COLOR_SURFACE, COLOR_SURFACE_BORDER, 2))
 	info_row.add_child(preview_panel)
 	_difficulty_preview = TextureRect.new()
@@ -1072,25 +1152,32 @@ func _show_difficulty_select() -> void:
 	preview_panel.add_child(_difficulty_preview)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.alignment = BoxContainer.ALIGNMENT_CENTER
 	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	info.add_theme_constant_override("separation", 8)
 	info_row.add_child(info)
 	_difficulty_name_label = _label("", 24, COLOR_BASE_DARK)
-	_difficulty_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_difficulty_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if _is_mobile_platform() else HORIZONTAL_ALIGNMENT_LEFT
+	_difficulty_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_child(_difficulty_name_label)
 	_difficulty_description_label = _label("", 16, COLOR_SURFACE)
 	_difficulty_description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_difficulty_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_difficulty_description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if _is_mobile_platform() else HORIZONTAL_ALIGNMENT_LEFT
+	_difficulty_description_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_child(_difficulty_description_label)
 	_difficulty_effects_label = _label("", 16, COLOR_BASE_DARK)
-	_difficulty_effects_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_difficulty_effects_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if _is_mobile_platform() else HORIZONTAL_ALIGNMENT_LEFT
+	_difficulty_effects_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_difficulty_effects_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_child(_difficulty_effects_label)
 	var actions := HBoxContainer.new()
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	actions.add_theme_constant_override("separation", 12)
 	stack.add_child(actions)
 	var back := _character_select_button("BACK" if english else "GERİ", _show_character_select.bind(_selected_run_is_endless), 60)
 	_difficulty_start_button = _character_select_button("START SHIFT" if english else "VARDİYAYI BAŞLAT", _confirm_difficulty_selection, 60)
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_difficulty_start_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(back)
 	actions.add_child(_difficulty_start_button)
@@ -1313,22 +1400,31 @@ func _open_modal(title_text: String, min_size: Vector2i) -> VBoxContainer:
 
 	var margins := _margins(roundi(12.0 * scale_factor) if mobile else 18)
 	margins.add_theme_constant_override("margin_top", roundi((44.0 if not mobile else 34.0) * scale_factor))
+	margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var settings_scroll := mobile and (title_text.to_upper().contains("OPTIONS") or title_text.to_upper().contains("AYARLAR"))
 	var selection_scroll := mobile and (title_text.to_upper().contains("CHARACTER") or title_text.to_upper().contains("KARAKTER") or title_text.to_upper().contains("DIFFICULTY") or title_text.to_upper().contains("ZORLUĞ"))
-	if settings_scroll or selection_scroll:
+	var auxiliary_scroll := mobile and (title_text.to_upper().contains("STORE OFFICE") or title_text.to_upper().contains("RECORDS") or title_text.to_upper().contains("CREDITS"))
+	if settings_scroll or selection_scroll or auxiliary_scroll:
 		var scroll := ScrollContainer.new()
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 		scroll.add_child(margins)
 		card.add_child(scroll)
 	else:
 		card.add_child(margins)
 
 	var stack := VBoxContainer.new()
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.add_theme_constant_override("separation", roundi(8.0 * scale_factor))
 	margins.add_child(stack)
 
 	var title_lbl := _label(title_text, 22, COLOR_BASE_DARK)
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if mobile:
+		title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(title_lbl)
 
 	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DOUBLE, Color(COLOR_SURFACE, 0.45)))
@@ -1593,158 +1689,25 @@ func _add_controls_row(parent: Control, heading: String, description: String, sy
 
 
 func _show_settings() -> void:
-	var stack := _open_modal(I18n.t("SETTINGS_TITLE", "OPTIONS — SOUND, DISPLAY & LANGUAGE"), Vector2i(760, 600))
+	var title_text := I18n.t("SETTINGS_TITLE", "AYARLAR — SES, EKRAN & DİL")
+	var stack := _open_modal(title_text, Vector2i(760, 600))
 	if stack == null:
 		return
 	_active_modal.set_meta("is_settings", true)
 
-	# 1. Language selection
-	var portrait := _is_portrait()
-	var lang_row: Control = VBoxContainer.new() if portrait else HBoxContainer.new()
-	lang_row.add_theme_constant_override("separation", 12)
-	stack.add_child(lang_row)
-
-	var lang_title := _label(I18n.t("SETTINGS_LANGUAGE", "DİL / LANGUAGE"), 16, COLOR_SURFACE)
-	lang_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lang_row.add_child(lang_title)
-
-	var tr_btn := Button.new()
-	tr_btn.text = "TÜRKÇE"
-	tr_btn.custom_minimum_size = Vector2(100, 36)
-	tr_btn.custom_minimum_size.y = maxf(tr_btn.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
-	tr_btn.disabled = (I18n.current_locale == "tr")
-	_style_setting_choice(tr_btn, tr_btn.disabled)
-	tr_btn.focus_mode = Control.FOCUS_ALL
-	tr_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	tr_btn.pressed.connect(func() -> void:
-		I18n.set_language("tr")
-		BakkalAudio.play_sfx(&"ui_confirm")
+	var settings := SharedSettingsPanel.new()
+	stack.add_child(settings)
+	settings.configure(false, display_font)
+	settings.close_requested.connect(_close_modal)
+	settings.language_changed.connect(func() -> void:
 		_build_menu()
 		_modal_return_focus = _buttons[0] if not _buttons.is_empty() else null
 		_show_settings()
 	)
-	var language_buttons: Control = HBoxContainer.new() if portrait else lang_row
-	if portrait:
-		lang_row.add_child(language_buttons)
-	language_buttons.add_child(tr_btn)
-
-	var en_btn := Button.new()
-	en_btn.text = "ENGLISH"
-	en_btn.custom_minimum_size = Vector2(100, 36)
-	en_btn.custom_minimum_size.y = maxf(en_btn.custom_minimum_size.y, _mobile_touch_target(get_viewport().get_visible_rect().size))
-	en_btn.disabled = (I18n.current_locale == "en")
-	_style_setting_choice(en_btn, en_btn.disabled)
-	en_btn.focus_mode = Control.FOCUS_ALL
-	en_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	en_btn.pressed.connect(func() -> void:
-		I18n.set_language("en")
-		BakkalAudio.play_sfx(&"ui_confirm")
-		_build_menu()
-		_modal_return_focus = _buttons[0] if not _buttons.is_empty() else null
-		_show_settings()
-	)
-	language_buttons.add_child(en_btn)
-
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
-
-	if not OS.has_feature("portmaster"):
-		# 2. Resolution selection
-		var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 16, COLOR_SURFACE)
-		stack.add_child(res_label)
-
-		var res_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
-		if portrait:
-			(res_row as GridContainer).columns = 2
-		res_row.add_theme_constant_override("separation", 8)
-		stack.add_child(res_row)
-
-		var resolutions := ["1920x1080", "1600x900", "1366x768", "1280x720"]
-		for r_idx: int in range(resolutions.size()):
-			var r_btn := Button.new()
-			r_btn.text = resolutions[r_idx]
-			r_btn.custom_minimum_size = Vector2(110, maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size)))
-			r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
-			_style_setting_choice(r_btn, r_btn.disabled)
-			r_btn.focus_mode = Control.FOCUS_ALL
-			r_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			r_btn.pressed.connect(func() -> void:
-				DisplayManager.set_resolution_index(r_idx)
-				BakkalAudio.play_sfx(&"ui_confirm")
-				_close_modal()
-				_show_settings()
-			)
-			r_btn.custom_minimum_size.y = maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
-			res_row.add_child(r_btn)
-
-		# 3. Window Mode selection
-		var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 16, COLOR_SURFACE)
-		stack.add_child(mode_label)
-
-		var mode_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
-		if portrait:
-			(mode_row as GridContainer).columns = 2
-		mode_row.add_theme_constant_override("separation", 8)
-		stack.add_child(mode_row)
-
-		var mode_names := [
-			I18n.t("WINDOW_FULLSCREEN", "Tam Ekran"),
-			I18n.t("WINDOW_BORDERLESS", "Kenarlıksız"),
-			I18n.t("WINDOW_WINDOWED", "Pencereli")
-		]
-		for m_idx: int in range(mode_names.size()):
-			var m_btn := Button.new()
-			m_btn.text = mode_names[m_idx]
-			m_btn.custom_minimum_size = Vector2(140, maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size)))
-			m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
-			_style_setting_choice(m_btn, m_btn.disabled)
-			m_btn.focus_mode = Control.FOCUS_ALL
-			m_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			m_btn.pressed.connect(func() -> void:
-				DisplayManager.set_window_mode(m_idx)
-				BakkalAudio.play_sfx(&"ui_confirm")
-				_close_modal()
-				_show_settings()
-			)
-			m_btn.custom_minimum_size.y = maxf(36.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
-			mode_row.add_child(m_btn)
-
-	if not OS.has_feature("portmaster") and not _is_native_mobile_platform():
-		_add_touch_controls_setting(stack)
-
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
-
-	# 4. Audio settings
-	var music := _volume_control(stack, I18n.t("SETTINGS_MUSIC", "NIGHT SHIFT MUSIC"), float(BakkalAudio.music_volume_db))
-	var sfx := _volume_control(stack, I18n.t("SETTINGS_SFX", "GAME FEEDBACK (SFX)"), float(BakkalAudio.sfx_volume_db))
-	music.value_changed.connect(BakkalAudio.set_music_volume)
-	sfx.value_changed.connect(BakkalAudio.set_sfx_volume)
-
-	stack.add_child(ReceiptRule.new(ReceiptRule.RuleType.DASHED, Color(COLOR_MUTED, 0.4)))
-
-	# 5. Save & Close
-	var done := Button.new()
-	done.text = I18n.t("SETTINGS_SAVE", "SAVE AND CLOSE")
-	done.custom_minimum_size.y = maxf(44.0, _mobile_touch_target(get_viewport().get_visible_rect().size))
-	done.focus_mode = Control.FOCUS_ALL
-	done.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	done.add_theme_color_override("font_color", COLOR_BASE_DARK)
-	done.add_theme_color_override("font_focus_color", COLOR_BASE_DARK)
-	if display_font != null:
-		done.add_theme_font_override("font", display_font)
-	done.add_theme_stylebox_override("normal", _receipt_button_style(true, false, &"normal"))
-	done.add_theme_stylebox_override("hover", _receipt_button_style(true, false, &"hover"))
-	done.add_theme_stylebox_override("focus", _receipt_button_style(true, false, &"focus"))
-	done.add_theme_stylebox_override("pressed", _receipt_button_style(true, false, &"pressed"))
-	done.pressed.connect(func() -> void:
-		BakkalAudio.play_sfx(&"ui_confirm")
-		BakkalAudio.save_settings()
-		DisplayManager.save_settings()
+	settings.display_changed.connect(func() -> void:
 		_close_modal()
+		_show_settings()
 	)
-	stack.add_child(done)
-	done.grab_focus.call_deferred()
 
 
 func _show_records() -> void:

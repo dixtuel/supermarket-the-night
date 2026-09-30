@@ -16,8 +16,7 @@
     "inst": "Requires the PortMaster Godot 4.7.1 and Westonpack 0.2 runtimes. Internet access is needed the first time each runtime is installed.",
     "inst_md": null,
     "genres": [
-      "action",
-      "arcade"
+      "action"
     ],
     "image": null,
     "rtr": true,
@@ -26,9 +25,17 @@
       "godot_4.7.1.squashfs",
       "weston_pkg_0.2.squashfs"
     ],
-    "store": [],
+    "store": [
+      {
+        "name": "itch.io",
+        "gameurl": "https://dixtuel.itch.io/supermarket-the-night",
+        "developerurl": ""
+      }
+    ],
     "availability": "full",
-    "reqs": [],
+    "reqs": [
+      "!lowres"
+    ],
     "arch": [
       "aarch64"
     ],

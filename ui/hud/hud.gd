@@ -385,6 +385,9 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	var mobile_layout := _is_mobile_platform()
 	var portmaster := OS.has_feature("portmaster")
 	var viewport_size := get_viewport().get_visible_rect().size
+	var safe := _safe_insets(viewport_size)
+	var available_height := maxf(1.0, viewport_size.y - safe.y - safe.w)
+	var compact_landscape := mobile_layout and not portrait and not portmaster
 	var layout: Control = HBoxContainer.new()
 	var stacked_mobile := mobile_layout and portrait
 	if portmaster or stacked_mobile:
@@ -402,9 +405,8 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cards.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	if mobile_layout:
-		var safe := _safe_insets(viewport_size)
 		var inner_width := viewport_size.x - safe.x - safe.z - _mobile_spacing(32)
-		cards.custom_minimum_size.x = inner_width - (260.0 if mobile_layout and not (portmaster or stacked_mobile) else 0.0) - _mobile_spacing(16)
+		cards.custom_minimum_size.x = inner_width - _mobile_spacing(16)
 	layout.add_child(cards)
 	var choice_count: int = mini(choices.size(), 4)
 	for index: int in range(choice_count):
@@ -414,7 +416,10 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var card := PanelContainer.new()
 		var rarity_tier := clampi(int(choice.get("rarity_tier", 1)), 1, 4)
 		var columns := 1 if portrait else 2
-		var choice_height := clampf(viewport_size.y * (0.40 if portmaster else 0.47), 240.0, 380.0) if mobile_layout else 380.0
+		# Four choices remain visible as a 2×2 grid on landscape phones/tablets.
+		# Derive card height from the actual safe viewport so the second row and
+		# inventory strip fit without relying on a 1080p reference size.
+		var choice_height := clampf(available_height * (0.235 if compact_landscape else 0.36), 100.0, 260.0) if mobile_layout else 380.0
 		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(8 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -428,14 +433,15 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var icon_texture := _stat_icon(choice)
 		if icon_texture != null:
 			var icon_panel := PanelContainer.new()
-			icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(54) if mobile_layout else 72)
+			icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(42 if compact_landscape else 54) if mobile_layout else 72)
 			icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
 			var icon_rect := TextureRect.new()
 			icon_rect.texture = icon_texture
 			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_rect.custom_minimum_size = Vector2(_mobile_spacing(48), _mobile_spacing(48)) if mobile_layout else Vector2(56, 56)
+			var icon_size := 38 if compact_landscape else 48
+			icon_rect.custom_minimum_size = Vector2(_mobile_spacing(icon_size), _mobile_spacing(icon_size)) if mobile_layout else Vector2(56, 56)
 			icon_panel.add_child(_center_control(icon_rect))
 			content.add_child(icon_panel)
 		var title := _label(String(choice.get("name", "Stat adjustment")), 22, TEXT)
@@ -447,7 +453,7 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details.add_theme_constant_override("separation", 6)
 		var details_scroll := ScrollContainer.new()
-		details_scroll.custom_minimum_size.y = _mobile_spacing(84) if mobile_layout else 112
+		details_scroll.custom_minimum_size.y = _mobile_spacing(58 if compact_landscape else 84) if mobile_layout else 112
 		details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -474,19 +480,21 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 			BakkalAudio.play_sfx(&"ui_confirm")
 			stat_choice_selected.emit(choice_id)
 		)
+		if mobile_layout:
+			# The general touch target is scaled for physical DPI. In the logical
+			# game viewport that becomes too tall and pushes the second row off small
+			# landscape screens, so size this action against the available viewport.
+			choose_button.custom_minimum_size.y = clampf(available_height * 0.055, 42.0, 64.0)
 		cards.add_child(card)
 		choice_buttons.append(choose_button)
 		if index == 0 and (portmaster or not mobile_layout):
 			choose_button.grab_focus.call_deferred()
 
-	var ledger := _build_stat_ledger(player_summary)
-	if mobile_layout:
-		ledger.custom_minimum_size.y = viewport_size.y * (0.30 if (portmaster or stacked_mobile) else 0.58)
-		ledger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		if portmaster or stacked_mobile:
-			ledger.custom_minimum_size.x = 0.0
-			ledger.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layout.add_child(ledger)
+	# The full stat ledger is useful on desktop but is taller than a phone's
+	# choice viewport. The choice cards already show their exact deltas; keep the
+	# mobile inventory strip below them and give the cards the full grid width.
+	if not mobile_layout:
+		layout.add_child(_build_stat_ledger(player_summary))
 	_overlay_body.add_child(_build_choice_inventory_strip(player_summary))
 	_link_horizontal_focus(choice_buttons)
 	if portmaster:
@@ -789,150 +797,14 @@ func show_pause_menu() -> void:
 
 
 func _show_in_game_settings() -> void:
-	_open_overlay(&"in_game_settings", I18n.t("SETTINGS_TITLE", "AYARLAR — SES, EKRAN & DİL"), "")
-
-	# Language toggle row
-	var portrait := _is_portrait()
-	var lang_row: Control = VBoxContainer.new() if portrait else HBoxContainer.new()
-	lang_row.add_theme_constant_override("separation", 12)
-	_overlay_body.add_child(lang_row)
-
-	var lang_title := _label(I18n.t("SETTINGS_LANGUAGE", "DİL / LANGUAGE"), 13, GOLD)
-	lang_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lang_row.add_child(lang_title)
-
-	var tr_btn := Button.new()
-	tr_btn.text = "TÜRKÇE"
-	tr_btn.custom_minimum_size = Vector2(100, 36)
-	_style_settings_button(tr_btn)
-	tr_btn.disabled = (I18n.current_locale == "tr")
-	tr_btn.pressed.connect(func() -> void:
-		I18n.set_language("tr")
-		BakkalAudio.play_sfx(&"ui_confirm")
-		_show_in_game_settings()
-	)
-	var language_buttons: Control = HBoxContainer.new() if portrait else lang_row
-	if portrait:
-		lang_row.add_child(language_buttons)
-	language_buttons.add_child(tr_btn)
-
-	var en_btn := Button.new()
-	en_btn.text = "ENGLISH"
-	en_btn.custom_minimum_size = Vector2(100, 36)
-	_style_settings_button(en_btn)
-	en_btn.disabled = (I18n.current_locale == "en")
-	en_btn.pressed.connect(func() -> void:
-		I18n.set_language("en")
-		BakkalAudio.play_sfx(&"ui_confirm")
-		_show_in_game_settings()
-	)
-	language_buttons.add_child(en_btn)
-
-	var div1 := HSeparator.new()
-	_overlay_body.add_child(div1)
-
-	if not OS.has_feature("portmaster"):
-		# Resolution selection row
-		var res_label := _label(I18n.t("SETTINGS_RESOLUTION", "ÇÖZÜNÜRLÜK"), 13, GOLD)
-		_overlay_body.add_child(res_label)
-
-		var res_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
-		if portrait:
-			(res_row as GridContainer).columns = 2
-		res_row.add_theme_constant_override("separation", 8)
-		_overlay_body.add_child(res_row)
-
-		var resolutions := ["1920x1080", "1600x900", "1366x768", "1280x720"]
-		for r_idx: int in range(resolutions.size()):
-			var r_btn := Button.new()
-			r_btn.text = resolutions[r_idx]
-			r_btn.custom_minimum_size = Vector2(110, 34)
-			r_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			_style_settings_button(r_btn)
-			r_btn.disabled = (DisplayManager.current_resolution_index == r_idx)
-			r_btn.pressed.connect(func() -> void:
-				DisplayManager.set_resolution_index(r_idx)
-				BakkalAudio.play_sfx(&"ui_confirm")
-				_show_in_game_settings()
-			)
-			r_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
-			res_row.add_child(r_btn)
-
-		# Window Mode row
-		var mode_label := _label(I18n.t("SETTINGS_WINDOW_MODE", "EKRAN MODU"), 13, GOLD)
-		_overlay_body.add_child(mode_label)
-
-		var mode_row: Control = GridContainer.new() if portrait else HBoxContainer.new()
-		if portrait:
-			(mode_row as GridContainer).columns = 2
-		mode_row.add_theme_constant_override("separation", 8)
-		_overlay_body.add_child(mode_row)
-
-		var mode_names := [
-			I18n.t("WINDOW_FULLSCREEN", "Tam Ekran"),
-			I18n.t("WINDOW_BORDERLESS", "Kenarlıksız"),
-			I18n.t("WINDOW_WINDOWED", "Pencereli")
-		]
-		for m_idx: int in range(mode_names.size()):
-			var m_btn := Button.new()
-			m_btn.text = mode_names[m_idx]
-			m_btn.custom_minimum_size = Vector2(140, 34)
-			m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			_style_settings_button(m_btn)
-			m_btn.disabled = (DisplayManager.current_window_mode == m_idx)
-			m_btn.pressed.connect(func() -> void:
-				DisplayManager.set_window_mode(m_idx)
-				BakkalAudio.play_sfx(&"ui_confirm")
-				_show_in_game_settings()
-			)
-			m_btn.custom_minimum_size.y = _touch_target_size(get_viewport().get_visible_rect().size) if _is_mobile_platform() else 34
-			mode_row.add_child(m_btn)
-
-	if not OS.has_feature("portmaster") and not _is_native_mobile_platform():
-		_add_touch_controls_setting(_overlay_body)
-
-	var div2 := HSeparator.new()
-	_overlay_body.add_child(div2)
-
-	# Music slider
-	var music_row := HBoxContainer.new()
-	music_row.add_theme_constant_override("separation", 10)
-	_overlay_body.add_child(music_row)
-	var music_label := _label(I18n.t("SETTINGS_MUSIC", "Müzik Sesi"), 13, TEXT)
-	music_label.custom_minimum_size = Vector2(180, 0)
-	music_row.add_child(music_label)
-	var music_slider := HSlider.new()
-	music_slider.min_value = -40.0
-	music_slider.max_value = 0.0
-	music_slider.step = 1.0
-	music_slider.value = BakkalAudio.music_volume_db
-	music_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	music_slider.value_changed.connect(func(v: float) -> void:
-		BakkalAudio.set_music_volume(v)
-		BakkalAudio.save_settings()
-	)
-	music_row.add_child(music_slider)
-
-	# SFX slider
-	var sfx_row := HBoxContainer.new()
-	sfx_row.add_theme_constant_override("separation", 10)
-	_overlay_body.add_child(sfx_row)
-	var sfx_label := _label(I18n.t("SETTINGS_SFX", "Efekt Sesi"), 13, TEXT)
-	sfx_label.custom_minimum_size = Vector2(180, 0)
-	sfx_row.add_child(sfx_label)
-	var sfx_slider := HSlider.new()
-	sfx_slider.min_value = -40.0
-	sfx_slider.max_value = 0.0
-	sfx_slider.step = 1.0
-	sfx_slider.value = BakkalAudio.sfx_volume_db
-	sfx_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sfx_slider.value_changed.connect(func(v: float) -> void:
-		BakkalAudio.set_sfx_volume(v)
-		BakkalAudio.save_settings()
-	)
-	sfx_row.add_child(sfx_slider)
-
-	_add_menu_button(I18n.t("MANUAL_CLOSE", "Geri Dön"), func() -> void: show_pause_menu(), true)
+	var title_text := I18n.t("SETTINGS_TITLE", "AYARLAR — SES, EKRAN & DİL")
+	_open_overlay(&"in_game_settings", title_text, "")
+	var settings := SharedSettingsPanel.new()
+	_overlay_body.add_child(settings)
+	settings.configure(true, display_font)
+	settings.close_requested.connect(show_pause_menu)
+	settings.language_changed.connect(_show_in_game_settings)
+	settings.display_changed.connect(_show_in_game_settings)
 
 
 func show_results(report: Dictionary, victory: bool) -> void:
@@ -1328,7 +1200,8 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	var body_margin := _mobile_spacing(8) if _is_mobile_platform() else 24
 	var body_margins := _margin_content(_overlay_body, body_margin)
 	_overlay_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var body_width := available_width * 0.92 if portmaster and mode == &"results" else (available_width * 0.66 if _is_mobile_platform() and mode == &"results" else available_width)
+	var panel_content_width := maxf(0.0, panel.custom_minimum_size.x - 12.0)
+	var body_width := available_width * 0.92 if portmaster and mode == &"results" else (available_width * 0.66 if _is_mobile_platform() and mode == &"results" else (panel_content_width if _is_mobile_platform() else available_width))
 	_overlay_body.custom_minimum_size.x = maxf(0.0, body_width - body_margin * 2.0)
 	body_margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_margins.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1341,7 +1214,9 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-		scroll.follow_focus = portmaster and is_choice
+		# The pause settings' return button is last in a long scroll view; keeping
+		# focus-follow enabled would jump the view to it and clip the section title.
+		scroll.follow_focus = is_choice
 		scroll.add_child(body_margins)
 		panel.add_child(scroll)
 	else:
