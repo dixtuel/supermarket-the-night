@@ -1,0 +1,50 @@
+Instructions to install the Testing Zip:
+Download the ZIP from the link below, place it in PortMaster's autoinstall folder, and run PortMaster.
+ZIP: https://drive.google.com/open?id=1BHDfpw5EOcP74w9oTMRSjm_JI9v6m93I
+
+Game Information
+Title: Supermarket: The Night
+Game: https://github.com/dixtuel/supermarket-the-night
+Store: https://dixtuel.itch.io/supermarket-the-night
+
+Instructions:
+Ready to run. Requires PortMaster's Godot 4.7.1 and Westonpack 0.2 runtimes. PortMaster may need internet access to download them on first launch.
+
+Controls
+| Button | Action |
+|--|--|
+|Left stick|Move|
+|D-pad|Navigate menus and choices|
+|Right stick|Move the pointer|
+|A|Confirm|
+|B|Back / cancel|
+|Start|Pause / resume|
+|Select|Back / cancel|
+|X|Interact|
+|Y|Restart after a run|
+|L1 / R1|Left / right click|
+
+CFW Tests
+[ ] ArkOS
+[ ] AmberELEC (optional)
+[ ] ROCKNIX (Wayland/Sway, Panfrost or libmali)
+[ ] muOS (fbdev)
+[ ] muOS (libmali)
+[ ] dArkOS (KMSDRM, current libmali)
+[ ] Knulli (KMSDRM, libmali)
+[ ] dArkOSRE-R36 (R36S)
+
+Resolution Tests
+[ ] 640x480
+[ ] 1024x768
+[ ] 1280x720
+[ ] 720x720 (optional)
+[ ] 320x240 (excluded by this port's low-resolution requirement)
+
+Previous test note:
+A previous build was reported working on a physical R36S running dArkOSRE-R36 at 640x480. This package has since been repackaged and switched to a gptokeyb2 INI profile, so please retest the current ZIP. UI text may look small on the R36S screen.
+
+When reporting a result, include the device and SoC, CFW/version, PortMaster version, resolution, runtime download result, and launch, controls, gameplay, audio, and suspend/resume behavior.
+
+AI assistance disclosure:
+AI assisted with port development and package preparation. The maintainer should review the final launch script and be able to explain every non-standard line before submitting a GitHub PR.

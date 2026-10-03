@@ -28,3 +28,4 @@ charge_speed = 235.0
 telegraph_duration = 0.6
 recovery_duration = 0.75
 spawn_weight = 0.4
+room_pursuit_weight = 0.58

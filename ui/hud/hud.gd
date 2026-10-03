@@ -265,7 +265,7 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		var definition := upgrades[index]
 		var card := Button.new()
 		var columns := 1 if portrait else 2
-		var choice_height := clampf(viewport_size.y * (0.40 if portmaster else 0.46), 208.0, 380.0) if mobile_layout else 370.0
+		var choice_height := _portmaster_choice_card_height(viewport_size) if portmaster else (clampf(viewport_size.y * 0.46, 208.0, 380.0) if mobile_layout else 370.0)
 		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(12 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -276,37 +276,50 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		card.add_theme_stylebox_override("normal", _rarity_style(1))
 		card.add_theme_stylebox_override("hover", _style(Color("fffdf4"), GOLD, 0, 2))
 		card.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
-		card.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+		card.add_theme_stylebox_override("focus", _style(Color("cbe6f3", 0.28) if portmaster else Color.TRANSPARENT, Color("48a8d8") if portmaster else TEAL, 0, 5 if portmaster else 3))
 		var content := VBoxContainer.new()
-		content.add_theme_constant_override("separation", _mobile_spacing(6) if mobile_layout else 12)
+		content.add_theme_constant_override("separation", 3 if portmaster else (_mobile_spacing(6) if mobile_layout else 12))
 		var content_margins := MarginContainer.new()
 		content_margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		content_margins.add_theme_constant_override("margin_left", _mobile_spacing(8) if mobile_layout else 12)
-		content_margins.add_theme_constant_override("margin_right", _mobile_spacing(8) if mobile_layout else 12)
-		content_margins.add_theme_constant_override("margin_top", _mobile_spacing(8) if mobile_layout else 14)
-		content_margins.add_theme_constant_override("margin_bottom", _mobile_spacing(8) if mobile_layout else 14)
+		var card_margin := 5 if portmaster else (_mobile_spacing(8) if mobile_layout else 12)
+		content_margins.add_theme_constant_override("margin_left", card_margin)
+		content_margins.add_theme_constant_override("margin_right", card_margin)
+		content_margins.add_theme_constant_override("margin_top", card_margin)
+		content_margins.add_theme_constant_override("margin_bottom", card_margin)
 		var number := _label("SHELF %02d  /  KEY %d" % [index + 1, index + 1], 14, GOLD)
+		number.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			number.add_theme_font_size_override("font_size", 10)
 		var icon := TextureRect.new()
 		icon.texture = definition.icon
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		icon.custom_minimum_size = Vector2(78, 78)
 		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if icon.texture != null:
+		if icon.texture != null and not portmaster:
 			var icon_center := _center_control(icon)
 			icon_center.custom_minimum_size.y = _mobile_spacing(58) if mobile_layout else 82
 			content.add_child(icon_center)
 		var title := _label(definition.display_name, 23, TEXT)
-		if mobile_layout:
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			title.add_theme_font_size_override("font_size", 14)
+		elif mobile_layout:
 			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 21.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var value_text := _upgrade_choice_summary(definition)
 		var value_label := _label(value_text, 21, TEAL if definition.value >= 0.0 else RED)
+		value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			value_label.add_theme_font_size_override("font_size", 12)
 		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		value_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var description := _label(definition.description, 17, MUTED)
-		if mobile_layout:
+		description.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			description.add_theme_font_size_override("font_size", 10)
+		elif mobile_layout:
 			description.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 17.0)))
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		description.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -315,6 +328,9 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		content.add_child(value_label)
 		content.add_child(description)
 		var choose_hint := _label("CHOOSE   /   %d" % (index + 1), 15, TEAL)
+		choose_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			choose_hint.add_theme_font_size_override("font_size", 10)
 		choose_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		content.add_child(choose_hint)
 		content_margins.add_child(content)
@@ -324,8 +340,11 @@ func show_level_up(upgrades: Array[UpgradeDefinition]) -> void:
 		choice_buttons.append(card)
 		if index == 0 and (portmaster or not mobile_layout):
 			card.grab_focus.call_deferred()
-	_link_horizontal_focus(choice_buttons)
-	if not _last_player_summary.is_empty():
+	if portmaster:
+		_link_grid_focus(choice_buttons, 2)
+	else:
+		_link_horizontal_focus(choice_buttons)
+	if not _last_player_summary.is_empty() and not portmaster:
 		var ledger := _build_stat_ledger(_last_player_summary)
 		if mobile_layout:
 			ledger.custom_minimum_size.y = viewport_size.y * 0.58
@@ -413,25 +432,39 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 		var choice: Dictionary = choices[index]
 		var choice_id := StringName(String(choice.get("id", "")))
 		_stat_choice_ids.append(choice_id)
-		var card := PanelContainer.new()
+		var card: Control = Button.new() if portmaster else PanelContainer.new()
 		var rarity_tier := clampi(int(choice.get("rarity_tier", 1)), 1, 4)
 		var columns := 1 if portrait else 2
 		# Four choices remain visible as a 2×2 grid on landscape phones/tablets.
 		# Derive card height from the actual safe viewport so the second row and
 		# inventory strip fit without relying on a 1080p reference size.
-		var choice_height := clampf(available_height * (0.235 if compact_landscape else 0.36), 100.0, 260.0) if mobile_layout else 380.0
+		var choice_height := _portmaster_choice_card_height(viewport_size) if portmaster else (clampf(available_height * (0.235 if compact_landscape else 0.36), 100.0, 260.0) if mobile_layout else 380.0)
 		card.custom_minimum_size = Vector2((cards.custom_minimum_size.x - _mobile_spacing(8 * (columns + 1))) / float(columns) if mobile_layout else 0, choice_height)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		card.add_theme_stylebox_override("panel", _rarity_style(rarity_tier))
+		if portmaster:
+			var focus_card := card as Button
+			focus_card.focus_mode = Control.FOCUS_ALL
+			focus_card.add_theme_color_override("font_color", TEXT)
+			focus_card.add_theme_color_override("font_hover_color", TEXT)
+			focus_card.add_theme_stylebox_override("normal", _rarity_style(rarity_tier))
+			focus_card.add_theme_stylebox_override("hover", _style(Color("f1eddc"), GOLD, 0, 2))
+			focus_card.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
+			focus_card.add_theme_stylebox_override("focus", _style(Color("cbe6f3", 0.30), Color("48a8d8"), 0, 5))
+		else:
+			card.add_theme_stylebox_override("panel", _rarity_style(rarity_tier))
 		var content := VBoxContainer.new()
-		content.add_theme_constant_override("separation", _mobile_spacing(6) if mobile_layout else 10)
-		card.add_child(_margin_content(content, _mobile_spacing(8) if mobile_layout else 12))
+		content.add_theme_constant_override("separation", 3 if portmaster else (_mobile_spacing(6) if mobile_layout else 10))
+		card.add_child(_margin_content(content, 4 if portmaster else (_mobile_spacing(8) if mobile_layout else 12)))
 		var tier_names := ["I", "II", "III", "IV"]
 		var tier_colors := [MUTED, TEAL, Color("aa8db8"), GOLD]
-		content.add_child(_label("PICK %02d  /  KEY %d   ·   TIER %s" % [index + 1, index + 1, tier_names[rarity_tier - 1]], 14, tier_colors[rarity_tier - 1]))
+		var tier_label := _label("PICK %02d  /  KEY %d   ·   TIER %s" % [index + 1, index + 1, tier_names[rarity_tier - 1]], 14, tier_colors[rarity_tier - 1])
+		tier_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			tier_label.add_theme_font_size_override("font_size", 10)
+		content.add_child(tier_label)
 		var icon_texture := _stat_icon(choice)
-		if icon_texture != null:
+		if icon_texture != null and not portmaster:
 			var icon_panel := PanelContainer.new()
 			icon_panel.custom_minimum_size = Vector2(0, _mobile_spacing(42 if compact_landscape else 54) if mobile_layout else 72)
 			icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
@@ -445,58 +478,90 @@ func show_stat_choices(choices: Array[Dictionary], player_summary: Dictionary = 
 			icon_panel.add_child(_center_control(icon_rect))
 			content.add_child(icon_panel)
 		var title := _label(String(choice.get("name", "Stat adjustment")), 22, TEXT)
-		if mobile_layout:
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			title.add_theme_font_size_override("font_size", 14)
+		elif mobile_layout:
 			title.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 21.0)))
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(title)
 		var details := VBoxContainer.new()
 		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		details.add_theme_constant_override("separation", 6)
-		var details_scroll := ScrollContainer.new()
-		details_scroll.custom_minimum_size.y = _mobile_spacing(58 if compact_landscape else 84) if mobile_layout else 112
-		details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		details_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-		details_scroll.follow_focus = true
-		details_scroll.add_child(details)
-		content.add_child(details_scroll)
+		details.add_theme_constant_override("separation", 2 if portmaster else 6)
+		if portmaster:
+			details.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			content.add_child(details)
+		else:
+			var details_scroll := ScrollContainer.new()
+			details_scroll.custom_minimum_size.y = _mobile_spacing(58 if compact_landscape else 84) if mobile_layout else 112
+			details_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			details_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			details_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+			details_scroll.follow_focus = true
+			details_scroll.add_child(details)
+			content.add_child(details_scroll)
 		var effects: Array = choice.get("effects", [])
 		for effect: Variant in effects:
 			if effect is Dictionary:
 				var delta_row := _label(_format_stat_delta(effect), 18, TEAL if float(effect.get("value", 0.0)) >= 0.0 else RED)
-				if mobile_layout:
+				delta_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				if portmaster:
+					delta_row.add_theme_font_size_override("font_size", 12)
+				elif mobile_layout:
 					delta_row.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 19.0)))
 				delta_row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				details.add_child(delta_row)
 		if effects.is_empty():
-			details.add_child(_label("No lasting stat change.", 16, MUTED))
+			var no_effect_label := _label("No lasting stat change.", 16, MUTED)
+			no_effect_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			if portmaster:
+				no_effect_label.add_theme_font_size_override("font_size", 11)
+			details.add_child(no_effect_label)
 		var reason := _label(String(choice.get("description", "")), 15, MUTED)
-		if mobile_layout:
+		reason.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if portmaster:
+			reason.add_theme_font_size_override("font_size", 10)
+		elif mobile_layout:
 			reason.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(get_viewport().get_visible_rect().size, 17.0)))
 		reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		details.add_child(reason)
-		var choose_button := _add_card_button(content, "Choose", func() -> void:
+		var choice_callback := func() -> void:
 			BakkalAudio.play_sfx(&"ui_confirm")
 			stat_choice_selected.emit(choice_id)
-		)
-		if mobile_layout:
+		var choose_button: Button
+		if portmaster:
+			var choose_hint := _label("A  /  CHOOSE", 14, TEAL)
+			choose_hint.add_theme_font_size_override("font_size", 10)
+			choose_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			choose_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			content.add_child(choose_hint)
+			var focus_card := card as Button
+			focus_card.pressed.connect(choice_callback)
+			choice_buttons.append(focus_card)
+		else:
+			choose_button = _add_card_button(content, "Choose", choice_callback)
+			choice_buttons.append(choose_button)
+		if mobile_layout and not portmaster:
 			# The general touch target is scaled for physical DPI. In the logical
 			# game viewport that becomes too tall and pushes the second row off small
 			# landscape screens, so size this action against the available viewport.
 			choose_button.custom_minimum_size.y = clampf(available_height * 0.055, 42.0, 64.0)
 		cards.add_child(card)
-		choice_buttons.append(choose_button)
 		if index == 0 and (portmaster or not mobile_layout):
-			choose_button.grab_focus.call_deferred()
+			choice_buttons.back().grab_focus.call_deferred()
 
 	# The full stat ledger is useful on desktop but is taller than a phone's
 	# choice viewport. The choice cards already show their exact deltas; keep the
 	# mobile inventory strip below them and give the cards the full grid width.
 	if not mobile_layout:
 		layout.add_child(_build_stat_ledger(player_summary))
-	_overlay_body.add_child(_build_choice_inventory_strip(player_summary))
-	_link_horizontal_focus(choice_buttons)
+	if not portmaster:
+		_overlay_body.add_child(_build_choice_inventory_strip(player_summary))
+	if portmaster:
+		_link_grid_focus(choice_buttons, 2 if not portrait else 1)
+	else:
+		_link_horizontal_focus(choice_buttons)
 	if portmaster:
 		var scroll := _overlay.find_child("OverlayContentScroll", true, false) as ScrollContainer
 		if is_instance_valid(scroll):
@@ -608,6 +673,36 @@ func _link_horizontal_focus(buttons: Array[Button]) -> void:
 		buttons[index].focus_neighbor_right = buttons[next].get_path()
 
 
+func _link_grid_focus(buttons: Array[Button], columns: int) -> void:
+	if buttons.is_empty():
+		return
+	var safe_columns := maxi(1, columns)
+	var rows := ceili(float(buttons.size()) / float(safe_columns))
+	for index in range(buttons.size()):
+		var row := floori(float(index) / float(safe_columns))
+		var column := index % safe_columns
+		var row_start := row * safe_columns
+		var row_count := mini(safe_columns, buttons.size() - row_start)
+		var left_column := (column - 1 + row_count) % row_count
+		var right_column := (column + 1) % row_count
+		var up_row := (row - 1 + rows) % rows
+		var down_row := (row + 1) % rows
+		var up_index := mini(up_row * safe_columns + column, buttons.size() - 1)
+		var down_index := mini(down_row * safe_columns + column, buttons.size() - 1)
+		buttons[index].focus_neighbor_left = buttons[row_start + left_column].get_path()
+		buttons[index].focus_neighbor_right = buttons[row_start + right_column].get_path()
+		buttons[index].focus_neighbor_top = buttons[up_index].get_path()
+		buttons[index].focus_neighbor_bottom = buttons[down_index].get_path()
+
+
+func _portmaster_choice_card_height(viewport_size: Vector2) -> float:
+	# Four choices remain readable in the centered letterboxed 4:3 handheld view.
+	# Scale each of the two rows to the space left after the heading/subtitle.
+	var safe := _safe_insets(viewport_size)
+	var usable_height := viewport_size.y - safe.y - safe.w
+	return clampf((usable_height * 0.92 * 0.84 - 90.0) / 2.0, 104.0, 180.0)
+
+
 func _stat_icon(choice: Dictionary) -> Texture2D:
 	match String(choice.get("id", "")):
 		"health":
@@ -681,7 +776,7 @@ func _add_card_button(parent: Control, button_text: String, callback: Callable) 
 	button.add_theme_stylebox_override("normal", _style(RED, RED.darkened(0.2), 0, 1))
 	button.add_theme_stylebox_override("hover", _style(RED.lightened(0.1), GOLD, 0, 1))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
-	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 3))
 	button.pressed.connect(func() -> void: callback.call())
 	parent.add_child(button)
 	return button
@@ -867,7 +962,7 @@ func _result_action_button(text: String, primary: bool, callback: Callable) -> B
 	button.add_theme_stylebox_override("normal", _style(GOLD.lightened(0.24) if primary else RECEIPT_LIGHT, GOLD if primary else PANEL_EDGE, 0, 1))
 	button.add_theme_stylebox_override("hover", _style(GOLD.lightened(0.32) if primary else Color("fffdf4"), GOLD, 0, 2))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
-	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 3))
 	button.pressed.connect(func() -> void:
 		BakkalAudio.play_sfx(&"ui_confirm")
 		callback.call()
@@ -1169,14 +1264,16 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	var portmaster := OS.has_feature("portmaster")
 	var available_width := viewport_size.x - safe.x - safe.z
 	var available_height := viewport_size.y - safe.y - safe.w
+	var letterbox_height := available_height * 0.92 if portmaster and is_choice else available_height
+	var letterbox_bar_height := maxf(0.0, (available_height - letterbox_height) * 0.5)
 	center.offset_left = safe.x
 	center.offset_right = -safe.z
-	center.offset_top = safe.y
-	center.offset_bottom = -safe.w
+	center.offset_top = safe.y + letterbox_bar_height
+	center.offset_bottom = -safe.w - letterbox_bar_height
 	if portmaster:
 		var width_ratio := 0.96 if is_choice else 0.92
-		var height_ratio := 0.90 if is_choice or mode == &"results" else 0.86
-		panel.custom_minimum_size = Vector2(available_width * width_ratio, available_height * height_ratio)
+		var height_ratio := 0.98 if is_choice else (0.90 if mode == &"results" else 0.86)
+		panel.custom_minimum_size = Vector2(available_width * width_ratio, (letterbox_height if is_choice else available_height) * height_ratio)
 	elif _is_mobile_platform():
 		if is_choice:
 			panel.custom_minimum_size = Vector2(available_width * 0.96, available_height * 0.88)
@@ -1195,6 +1292,24 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 		receipt_style.shadow_offset = Vector2(3.0, 7.0) * _mobile_layout_scale(viewport_size)
 		panel.add_theme_stylebox_override("panel", receipt_style)
 	center.add_child(panel)
+	if portmaster and is_choice and letterbox_bar_height > 0.0:
+		var top_bar := ColorRect.new()
+		top_bar.name = "ChoiceLetterboxTop"
+		top_bar.color = Color.BLACK
+		top_bar.anchor_right = 1.0
+		top_bar.offset_bottom = safe.y + letterbox_bar_height
+		top_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+		_overlay.add_child(top_bar)
+		var bottom_bar := ColorRect.new()
+		bottom_bar.name = "ChoiceLetterboxBottom"
+		bottom_bar.color = Color.BLACK
+		bottom_bar.anchor_left = 0.0
+		bottom_bar.anchor_top = 1.0
+		bottom_bar.anchor_right = 1.0
+		bottom_bar.anchor_bottom = 1.0
+		bottom_bar.offset_top = -safe.w - letterbox_bar_height
+		bottom_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+		_overlay.add_child(bottom_bar)
 	_overlay_body = VBoxContainer.new()
 	_overlay_body.add_theme_constant_override("separation", _mobile_spacing(8) if _is_mobile_platform() else 16)
 	var body_margin := _mobile_spacing(8) if _is_mobile_platform() else 24
@@ -1208,7 +1323,8 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	if _is_mobile_platform():
 		var scroll := ScrollContainer.new()
 		var scroll_height_ratio := 0.84 if is_choice or (portmaster and mode == &"results") else (0.60 if mode == &"results" else 0.86)
-		scroll.custom_minimum_size.y = maxf(120.0, available_height * scroll_height_ratio - body_margin * 2.0)
+		var scroll_available_height := letterbox_height if portmaster and is_choice else available_height
+		scroll.custom_minimum_size.y = maxf(120.0, scroll_available_height * scroll_height_ratio - body_margin * 2.0)
 		scroll.name = "OverlayContentScroll"
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1229,14 +1345,18 @@ func _open_overlay(mode: StringName, title: String, subtitle: String) -> void:
 	receipt.visible = not is_choice
 	_overlay_body.add_child(receipt)
 	var heading := _label(title, 34, RECEIPT_LIGHT if is_choice else TEXT, true)
-	if _is_mobile_platform():
+	if portmaster and is_choice:
+		heading.add_theme_font_size_override("font_size", 19)
+	elif _is_mobile_platform():
 		heading.add_theme_font_size_override("font_size", roundi(clampf(viewport_size.y * 0.032, 24.0, 34.0)))
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _is_mobile_platform() else TextServer.AUTOWRAP_OFF
 	_overlay_body.add_child(heading)
 	if not subtitle.is_empty():
 		var description := _label(subtitle, 19, RECEIPT_LIGHT if is_choice else MUTED)
-		if _is_mobile_platform():
+		if portmaster and is_choice:
+			description.add_theme_font_size_override("font_size", 12)
+		elif _is_mobile_platform():
 			description.add_theme_font_size_override("font_size", roundi(_mobile_overlay_font(viewport_size, 19.0)))
 		description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1268,7 +1388,7 @@ func _add_menu_button(text: String, callback: Callable, primary: bool = false) -
 	button.add_theme_stylebox_override("normal", _style(RED if primary else RECEIPT_LIGHT, RED.darkened(0.2) if primary else PANEL_EDGE, 0, 1))
 	button.add_theme_stylebox_override("hover", _style(RED.lightened(0.1) if primary else Color("fffdf4"), GOLD, 0, 2))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
-	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 3))
 	button.pressed.connect(func() -> void: BakkalAudio.play_sfx(&"ui_confirm"); callback.call())
 	_overlay_body.add_child(button)
 	if primary:
@@ -1286,7 +1406,7 @@ func _style_settings_button(button: Button) -> void:
 	button.add_theme_color_override("font_pressed_color", INK)
 	button.add_theme_stylebox_override("normal", _style(RECEIPT_LIGHT, PANEL_EDGE, 0, 1))
 	button.add_theme_stylebox_override("hover", _style(Color("fffdf4"), GOLD, 0, 2))
-	button.add_theme_stylebox_override("focus", _style(RECEIPT_LIGHT, TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _style(RECEIPT_LIGHT, TEAL, 0, 3))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 
 

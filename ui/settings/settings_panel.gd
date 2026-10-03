@@ -233,12 +233,12 @@ func _style_button(
 		_button_style(
 			PAPER if selected else (CORAL if primary else PAPER),
 			TEAL if selected else (CORAL if primary else PAPER_EDGE),
-			2 if selected else 1
+			3 if selected else 1
 		)
 	)
-	button.add_theme_stylebox_override("hover", _button_style(PAPER.lightened(0.08), TEAL, 2))
-	button.add_theme_stylebox_override("focus", _button_style(PAPER, TEAL, 2))
-	button.add_theme_stylebox_override("pressed", _button_style(Color("d8e5d2"), TEAL, 2))
+	button.add_theme_stylebox_override("hover", _button_style(PAPER.lightened(0.08), TEAL, 3))
+	button.add_theme_stylebox_override("focus", _button_style(PAPER, TEAL, 3))
+	button.add_theme_stylebox_override("pressed", _button_style(Color("d8e5d2"), TEAL, 3))
 	if primary:
 		button.add_theme_color_override("font_hover_color", INK)
 		button.add_theme_color_override("font_focus_color", INK)

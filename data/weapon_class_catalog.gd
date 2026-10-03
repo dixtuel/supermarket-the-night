@@ -1,6 +1,6 @@
 class_name WeaponClassCatalog
 extends RefCounted
-## Brotato-informed, supermarket-themed set bonuses.
+## Supermarket-themed weapon family set bonuses.
 
 const DEFINITIONS: Array[WeaponClassDefinition] = [
 	preload("res://data/weapon_classes/blade.tres"),

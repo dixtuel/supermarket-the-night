@@ -139,6 +139,20 @@ func _unhandled_input(event: InputEvent) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	# Modal close/back input belongs in _input so focused inventory rows cannot
+	# consume ui_cancel before the shop's _unhandled_input handler sees it.
+	var back_pressed := event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause")
+	if event is InputEventKey and event.pressed and not event.echo:
+		back_pressed = back_pressed or (event as InputEventKey).keycode in [KEY_ESCAPE, KEY_BACK]
+	if back_pressed:
+		if is_instance_valid(_inventory_overlay) and _inventory_overlay.visible:
+			_close_inventory()
+		elif is_instance_valid(_weapon_detail_overlay) and _weapon_detail_overlay.visible:
+			_close_weapon_detail()
+		else:
+			_on_continue_pressed()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
@@ -199,7 +213,11 @@ func show_shop(round_number: int, currency: int, offers: Array, prices: Array[in
 	set_shop_state(currency, offers, prices, reroll_cost, purchased_indices)
 	_update_shop_sidebar()
 	visible = true
-	if is_instance_valid(_continue_button):
+	if OS.has_feature("portmaster"):
+		var first_offer := find_child("OfferBuyButton", true, false) as Button
+		if is_instance_valid(first_offer):
+			first_offer.grab_focus.call_deferred()
+	elif is_instance_valid(_continue_button):
 		_continue_button.grab_focus.call_deferred()
 
 
@@ -275,6 +293,11 @@ func _build_shop() -> void:
 	var portrait := viewport_size.x < viewport_size.y
 	var mobile := _is_mobile_platform()
 	var portmaster := OS.has_feature("portmaster")
+	if portmaster:
+		_build_portmaster_shop(root, viewport_size, safe)
+		_update_shop_sidebar()
+		_update_inventory_strip()
+		return
 	var density_scale := _mobile_density_scale(viewport_size) if mobile else 1.0
 	var layout_scale := _mobile_layout_scale(viewport_size) if mobile else 1.0
 	var usable_width := maxf(280.0, viewport_size.x - safe.x - safe.z)
@@ -443,6 +466,201 @@ func _build_shop() -> void:
 	_update_inventory_strip()
 
 
+func _build_portmaster_shop(root: Control, viewport_size: Vector2, safe: Vector4) -> void:
+	# R36S uses a 640×480 panel. Fill the screen smoothly with minimal padding
+	# so the three offers, stats, inventory and continue button are clear and legible.
+	var panel := PanelContainer.new()
+	panel.name = "PortMasterShopPanel"
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	var usable_width := maxf(320.0, viewport_size.x - safe.x - safe.z)
+	var usable_height := maxf(320.0, viewport_size.y - safe.y - safe.w)
+	var panel_width := minf(usable_width - 8.0, 1600.0)
+	var panel_height := minf(usable_height - 6.0, 980.0)
+	panel.offset_left = -panel_width * 0.5 + (safe.x - safe.z) * 0.5
+	panel.offset_right = panel_width * 0.5 + (safe.x - safe.z) * 0.5
+	panel.offset_top = -panel_height * 0.5 + (safe.y - safe.w) * 0.5
+	panel.offset_bottom = panel_height * 0.5 + (safe.y - safe.w) * 0.5
+	panel.add_theme_stylebox_override("panel", _style(PANEL, PANEL_EDGE, 0, 2))
+	root.add_child(panel)
+
+	var margins := MarginContainer.new()
+	for side: String in ["left", "top", "right", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 4)
+	panel.add_child(margins)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 3)
+	margins.add_child(content)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	content.add_child(header)
+	var title_stack := VBoxContainer.new()
+	title_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_stack.add_theme_constant_override("separation", 1)
+	header.add_child(title_stack)
+	_title_label = _label("The stockroom", 20, TEXT)
+	title_stack.add_child(_title_label)
+	_subline_label = _label("Pick supplies for the next wave.", 11, MUTED)
+	_subline_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title_stack.add_child(_subline_label)
+	var market_status := VBoxContainer.new()
+	market_status.add_theme_constant_override("separation", 1)
+	header.add_child(market_status)
+	_round_label = _label("SHOP (WAVE 000)", 12, GOLD)
+	_round_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	market_status.add_child(_round_label)
+	_currency_label = _label("00 stock tokens", 13, TEXT)
+	_currency_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	market_status.add_child(_currency_label)
+	_reroll_button = _button("Refresh · 0", false)
+	_reroll_button.custom_minimum_size = Vector2(150, 30)
+	_reroll_button.add_theme_font_size_override("font_size", 12)
+	_reroll_button.pressed.connect(_on_reroll_pressed)
+	header.add_child(_reroll_button)
+
+	content.add_child(_line_divider())
+	_cards_row = HBoxContainer.new()
+	_cards_row.name = "OfferCards"
+	_cards_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cards_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_cards_row.add_theme_constant_override("separation", 6)
+	content.add_child(_cards_row)
+	_shop_sidebar = _build_portmaster_stats_panel()
+	content.add_child(_shop_sidebar)
+	content.add_child(_build_portmaster_inventory_strip(viewport_size))
+
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 8)
+	content.add_child(footer)
+	_note_label = _label("Offers restock after each wave.", 11, MUTED)
+	_note_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_note_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_note_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	footer.add_child(_note_label)
+	_continue_button = _button("Return to aisles", true)
+	_continue_button.custom_minimum_size = Vector2(170, 32)
+	_continue_button.add_theme_font_size_override("font_size", 13)
+	_continue_button.pressed.connect(_on_continue_pressed)
+	footer.add_child(_continue_button)
+
+
+func _line_divider() -> HSeparator:
+	var divider := HSeparator.new()
+	var line := StyleBoxLine.new()
+	line.color = PANEL_EDGE
+	line.thickness = 1
+	divider.add_theme_stylebox_override("separator", line)
+	return divider
+
+
+func _build_portmaster_stats_panel() -> VBoxContainer:
+	var sidebar := VBoxContainer.new()
+	sidebar.name = "PortMasterStats"
+	sidebar.add_theme_constant_override("separation", 3)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _style(Color("e4dbb6"), PANEL_EDGE, 0, 1))
+	sidebar.add_child(panel)
+	var content := VBoxContainer.new()
+	content.name = "StatsContent"
+	content.add_theme_constant_override("separation", 3)
+	panel.add_child(_margin(content, 5))
+	var heading := HBoxContainer.new()
+	content.add_child(heading)
+	var title := _label("SHIFT STATS", 13, TEXT)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(title)
+	heading.add_child(_label("CURRENT RUN", 11, MUTED))
+	var grid := GridContainer.new()
+	grid.name = "StatsGrid"
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 9)
+	grid.add_theme_constant_override("v_separation", 1)
+	content.add_child(grid)
+	var keys := ["level", "health", "damage", "melee_damage", "ranged_damage", "attack_speed", "crit_chance", "elemental_damage", "engineering", "speed", "lifesteal", "dodge", "protection", "armor", "harvesting", "luck", "xp_gain"]
+	for key: String in keys:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 3)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var stat_label := _label(_portmaster_stat_short_name(key), 11, MUTED)
+		stat_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stat_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		row.add_child(stat_label)
+		var value := _label("—", 12, TEAL)
+		value.name = "Value_" + key
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(value)
+		grid.add_child(row)
+	var training := _label("", 10, GOLD)
+	training.name = "WeaponTraining"
+	training.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	content.add_child(training)
+	var class_bonuses := _label("", 10, TEAL)
+	class_bonuses.name = "WeaponClassBonuses"
+	class_bonuses.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	content.add_child(class_bonuses)
+	return sidebar
+
+
+func _portmaster_stat_short_name(key: String) -> String:
+	var names := {
+		"level": "LVL", "health": "HP", "damage": "DAMAGE", "melee_damage": "MELEE",
+		"ranged_damage": "RANGED", "attack_speed": "ATK SPEED", "crit_chance": "CRIT",
+		"elemental_damage": "ELEMENT", "engineering": "ENGINEER", "speed": "SPEED",
+		"lifesteal": "LIFESTEAL", "dodge": "DODGE", "protection": "PROTECT",
+		"armor": "ARMOR", "harvesting": "HARVEST", "luck": "LUCK", "xp_gain": "XP GAIN"
+	}
+	return String(names.get(key, key.to_upper()))
+
+
+func _build_portmaster_inventory_strip(viewport_size: Vector2) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "PortMasterInventoryStrip"
+	panel.custom_minimum_size.y = 66
+	panel.add_theme_stylebox_override("panel", _style(Color("e4dbb6"), PANEL_EDGE, 0, 1))
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	panel.add_child(_margin(body, 4))
+	var inventory_column := VBoxContainer.new()
+	inventory_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inventory_column.add_theme_constant_override("separation", 2)
+	body.add_child(inventory_column)
+	_inventory_open_button = _button(_ui_text("ENVANTER", "INVENTORY") + "   ›", false)
+	_inventory_open_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_inventory_open_button.custom_minimum_size.y = 28
+	_inventory_open_button.add_theme_font_size_override("font_size", 12)
+	_inventory_open_button.pressed.connect(_open_inventory)
+	inventory_column.add_child(_inventory_open_button)
+	_inventory_upgrades_row = HBoxContainer.new()
+	_inventory_deployables_row = HBoxContainer.new()
+	_inventory_items_label = _label("UPGRADES 0  ·  DEPLOYABLES 0", 10, MUTED)
+	_inventory_items_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	inventory_column.add_child(_inventory_items_label)
+	var weapons_column := VBoxContainer.new()
+	weapons_column.custom_minimum_size.x = minf(viewport_size.x * 0.48, 308.0)
+	weapons_column.add_theme_constant_override("separation", 2)
+	body.add_child(weapons_column)
+	_inventory_weapons_label = _label("WEAPONS (0/6)", 11, TEXT)
+	weapons_column.add_child(_inventory_weapons_label)
+	_inventory_weapons_row = HBoxContainer.new()
+	weapons_column.add_child(_portmaster_inventory_scroll(_inventory_weapons_row, 44))
+	return panel
+
+
+func _portmaster_inventory_scroll(row: HBoxContainer, height: float) -> ScrollContainer:
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = height
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(row)
+	return scroll
+
+
 func _build_shop_sidebar() -> VBoxContainer:
 	var sidebar := VBoxContainer.new()
 	var viewport_size := get_viewport().get_visible_rect().size
@@ -592,16 +810,19 @@ func _update_inventory_strip() -> void:
 	_clear_inventory_row(_inventory_deployables_row)
 	_clear_inventory_row(_inventory_weapons_row)
 	var upgrades: Array = inventory.get("upgrades", [])
-	for upgrade: Variant in upgrades:
-		if upgrade is Dictionary:
-			_add_inventory_chip(_inventory_upgrades_row, upgrade, "UPGRADE", int(upgrade.get("rank", 1)))
 	var deployables: Array = inventory.get("deployables", [])
-	for deployed: Variant in deployables:
-		if deployed is Dictionary:
-			_add_inventory_chip(_inventory_deployables_row, deployed, String(deployed.get("kind", "DEPLOYABLE")).to_upper(), int(deployed.get("count", 0)))
+	if not OS.has_feature("portmaster"):
+		for upgrade: Variant in upgrades:
+			if upgrade is Dictionary:
+				_add_inventory_chip(_inventory_upgrades_row, upgrade, "UPGRADE", int(upgrade.get("rank", 1)))
+		for deployed: Variant in deployables:
+			if deployed is Dictionary:
+				_add_inventory_chip(_inventory_deployables_row, deployed, String(deployed.get("kind", "DEPLOYABLE")).to_upper(), int(deployed.get("count", 0)))
+	if is_instance_valid(_inventory_items_label):
+		_inventory_items_label.text = "UPGRADES %d  ·  DEPLOYABLES %d" % [upgrades.size(), deployables.size()]
 	var weapons: Array = inventory.get("weapons", [])
 	if is_instance_valid(_inventory_weapons_label):
-		_inventory_weapons_label.text = I18n.t("SHOP_WEAPONS_COUNT", "WEAPONS (%d/6)  ·  select for details") % [mini(weapons.size(), MAX_WEAPON_SLOTS)]
+		_inventory_weapons_label.text = ("WEAPONS %d/6" % [mini(weapons.size(), MAX_WEAPON_SLOTS)]) if OS.has_feature("portmaster") else (I18n.t("SHOP_WEAPONS_COUNT", "WEAPONS (%d/6)  ·  select for details") % [mini(weapons.size(), MAX_WEAPON_SLOTS)])
 	for weapon: Variant in weapons:
 		if weapon is Dictionary:
 			_add_weapon_chip(weapon)
@@ -625,7 +846,7 @@ func _add_inventory_chip(row: HBoxContainer, record: Dictionary, kind: String, c
 	var name := String(record.get("name", id.replace("_", " ").capitalize()))
 	var button := Button.new()
 	var icon_only := kind in ["TURRET", "MINE", "UPGRADE"]
-	button.custom_minimum_size = Vector2(72, 62) if icon_only else Vector2(108, 52)
+	button.custom_minimum_size = Vector2(42, 34) if OS.has_feature("portmaster") else (Vector2(72, 62) if icon_only else Vector2(108, 52))
 	button.text = "" if icon_only else ("%s  ×%d" % [name, count] if count > 0 else name)
 	button.tooltip_text = "%s · %s" % [kind, name]
 	if kind == "WEAPON":
@@ -693,40 +914,56 @@ func _add_weapon_chip(weapon: Dictionary) -> void:
 	if not is_instance_valid(_inventory_weapons_row):
 		return
 	var tier := clampi(int(weapon.get("tier", 1)), 1, 4)
-	var id := StringName(String(weapon.get("id", "")))
+	var id := String(weapon.get("id", ""))
 	var name := String(weapon.get("name", "Weapon"))
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(68, 60)
+	button.focus_mode = Control.FOCUS_ALL
+	button.custom_minimum_size = Vector2(46, 42) if OS.has_feature("portmaster") else Vector2(68, 60)
 	button.text = ""
 	button.tooltip_text = "%s %s · %s — tap for stats or sell" % [name, _tier_suffix(tier), String(weapon.get("weapon_class_name", ""))]
 	var icon := weapon.get("icon") as Texture2D
+	if icon == null and not id.is_empty():
+		var weapon_path := "res://data/weapons/%s.tres" % id
+		if ResourceLoader.exists(weapon_path):
+			var definition := load(weapon_path) as WeaponDefinition
+			icon = definition.sprite if definition != null else null
+	if icon == null and not id.is_empty() and ResourceLoader.exists("res://assets/generated/weapons/%s.png" % id):
+		icon = load("res://assets/generated/weapons/%s.png" % id) as Texture2D
 	if icon != null:
 		var image := TextureRect.new()
 		image.texture = icon
-		image.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		image.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		image.offset_left = 5
+		image.set_anchors_preset(Control.PRESET_FULL_RECT)
+		image.offset_left = 4
 		image.offset_top = 4
-		image.offset_right = -5
+		image.offset_right = -4
 		image.offset_bottom = -4
 		image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		image.z_index = 1
 		button.add_child(image)
 	var tier_tag := Label.new()
 	tier_tag.text = _tier_suffix(tier)
 	tier_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tier_tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	tier_tag.add_theme_font_size_override("font_size", 12)
+	tier_tag.add_theme_font_size_override("font_size", 10)
 	tier_tag.add_theme_color_override("font_color", INK)
 	tier_tag.add_theme_stylebox_override("normal", _style(Color("f8f5e9", 0.92), PANEL_EDGE, 2, 1))
 	tier_tag.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tier_tag.position = Vector2(-24, 2)
-	tier_tag.size = Vector2(21, 18)
+	tier_tag.offset_left = -18
+	tier_tag.offset_top = 2
+	tier_tag.offset_right = -2
+	tier_tag.offset_bottom = 16
 	tier_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tier_tag.z_index = 2
 	button.add_child(tier_tag)
 	button.add_theme_stylebox_override("normal", _tier_style(tier))
-	button.add_theme_stylebox_override("hover", _tier_style(tier).duplicate())
+	var hover_style := _tier_style(tier).duplicate() as StyleBoxFlat
+	hover_style.border_color = GOLD
+	hover_style.set_border_width_all(2)
+	button.add_theme_stylebox_override("hover", hover_style)
+	button.add_theme_stylebox_override("focus", _focus_outline_style(2, 3))
 	button.pressed.connect(_on_weapon_chip_pressed.bind(weapon))
 	_inventory_weapons_row.add_child(button)
 
@@ -734,14 +971,18 @@ func _add_weapon_chip(weapon: Dictionary) -> void:
 func _add_empty_weapon_slot(slot_index: int) -> void:
 	if not is_instance_valid(_inventory_weapons_row):
 		return
-	var slot := PanelContainer.new()
-	slot.custom_minimum_size = Vector2(68, 60)
+	var slot := Button.new()
+	slot.focus_mode = Control.FOCUS_ALL
+	slot.custom_minimum_size = Vector2(46, 42) if OS.has_feature("portmaster") else Vector2(68, 60)
 	slot.tooltip_text = _ui_text("Boş silah yuvası", "Empty weapon slot")
-	slot.add_theme_stylebox_override("panel", _style(Color("eee7d3"), Color("b5a88e"), 2, 1))
-	var mark := _label("+\n%02d" % (slot_index + 1), 12, MUTED)
-	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	slot.add_child(mark)
+	slot.text = "+\n%02d" % (slot_index + 1)
+	slot.add_theme_font_size_override("font_size", 10 if OS.has_feature("portmaster") else 12)
+	slot.add_theme_color_override("font_color", MUTED)
+	slot.add_theme_color_override("font_focus_color", INK)
+	slot.add_theme_stylebox_override("normal", _style(Color("eee7d3"), Color("b5a88e"), 2, 1))
+	slot.add_theme_stylebox_override("hover", _style(Color("f4efe2"), Color("b5a88e"), 2, 1))
+	slot.add_theme_stylebox_override("pressed", _style(Color("eee7d3"), Color("b5a88e"), 2, 1))
+	slot.add_theme_stylebox_override("focus", _focus_outline_style(2, 3))
 	_inventory_weapons_row.add_child(slot)
 
 
@@ -1482,6 +1723,7 @@ func _rebuild_offer_cards() -> void:
 	for index: int in range(card_count):
 		var card := _make_offer_card(index, _current_offers[index])
 		_cards_row.add_child(card)
+	_link_shop_focus()
 
 
 func _make_offer_card(index: int, offer: Variant) -> Control:
@@ -1490,7 +1732,7 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	var mobile := _is_mobile_platform()
 	var portmaster := OS.has_feature("portmaster")
 	var layout_scale := _mobile_layout_scale(viewport_size)
-	var card_height := maxf(268.0, viewport_size.y * 0.40) if portmaster else (maxf(318.0, viewport_size.y * 0.39) if mobile else clampf(viewport_size.y * 0.46, 430.0, 510.0))
+	var card_height := clampf(viewport_size.y * 0.46, 215.0, 240.0) if portmaster else (maxf(318.0, viewport_size.y * 0.39) if mobile else clampf(viewport_size.y * 0.46, 430.0, 510.0))
 	card.custom_minimum_size = Vector2(0, card_height)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.size_flags_stretch_ratio = 1.0
@@ -1499,11 +1741,11 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 
 	var margins := MarginContainer.new()
 	for side: String in ["left", "top", "right", "bottom"]:
-		margins.add_theme_constant_override("margin_" + side, roundi(8.0 * layout_scale) if mobile else 14)
+		margins.add_theme_constant_override("margin_" + side, 4 if portmaster else (roundi(8.0 * layout_scale) if mobile else 14))
 	card.add_child(margins)
 
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", roundi(6.0 * layout_scale) if mobile else 8)
+	stack.add_theme_constant_override("separation", 2 if portmaster else (roundi(6.0 * layout_scale) if mobile else 8))
 	margins.add_child(stack)
 
 	var type_name := I18n.t("SHOP_UPGRADE", "SHIFT UPGRADE")
@@ -1576,16 +1818,21 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	if texture == null:
 		texture = load("res://assets/generated/pickups/pickup_stock_bundle.png") as Texture2D
 
-	var mobile_type_size := _mobile_shop_font(viewport_size, 16.0)
-	var mobile_body_size := _mobile_shop_font(viewport_size, 19.0)
+	var mobile_type_size := 11.0 if portmaster else _mobile_shop_font(viewport_size, 16.0)
 	var type_label := _label("SHELF %02d   /   %s" % [index + 1, type_name], 17, GOLD)
-	if mobile:
+	if portmaster:
+		type_label.add_theme_font_size_override("font_size", 11)
+		type_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		type_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	elif mobile:
 		type_label.add_theme_font_size_override("font_size", roundi(mobile_type_size))
 		type_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	type_label.autowrap_mode = TextServer.AUTOWRAP_OFF if mobile else TextServer.AUTOWRAP_WORD_SMART
+		type_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	else:
+		type_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(type_label)
 	var icon_panel := PanelContainer.new()
-	icon_panel.custom_minimum_size = Vector2(0, (88.0 * layout_scale) if mobile else (112 if viewport_size.y <= 800.0 else 136))
+	icon_panel.custom_minimum_size = Vector2(0, 36 if portmaster else ((88.0 * layout_scale) if mobile else (112 if viewport_size.y <= 800.0 else 136)))
 	icon_panel.add_theme_stylebox_override("panel", _style(Color("e5e0cd"), PANEL_EDGE, 0, 1))
 	stack.add_child(icon_panel)
 	if texture != null:
@@ -1593,35 +1840,41 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 		icon.texture = texture
 		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.custom_minimum_size = Vector2(64, 64) * layout_scale if mobile else (Vector2(76, 76) if viewport_size.y <= 800.0 else Vector2(96, 96))
+		icon.custom_minimum_size = Vector2(30, 30) if portmaster else (Vector2(64, 64) * layout_scale if mobile else (Vector2(76, 76) if viewport_size.y <= 800.0 else Vector2(96, 96)))
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		icon.offset_left = 10
-		icon.offset_right = -10
-		icon.offset_top = 8
-		icon.offset_bottom = -8
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.offset_left = 4
+		icon.offset_right = -4
+		icon.offset_top = 2
+		icon.offset_bottom = -2
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon_panel.add_child(icon)
 
-	var title := _label(display_name, 28, TEXT)
+	var title := _label(display_name, 17 if portmaster else 28, TEXT)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	title.custom_minimum_size.y = (44.0 * layout_scale) if mobile else 48
-	if mobile:
+	title.custom_minimum_size.y = 20 if portmaster else ((44.0 * layout_scale) if mobile else 48)
+	if portmaster:
+		title.add_theme_font_size_override("font_size", 14)
+	elif mobile:
 		title.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 30.0)))
 	stack.add_child(title)
 	var detail := _label(description, 19, MUTED)
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	if mobile:
+	if portmaster:
+		detail.add_theme_font_size_override("font_size", 11)
+	elif mobile:
 		detail.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 20.0)))
 	stack.add_child(detail)
 	var offer_value_lines := _offer_value_lines(offer)
 	var values := _label("\n".join(offer_value_lines), 17, TEXT)
 	values.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	values.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	values.custom_minimum_size.y = maxf(26.0, float(offer_value_lines.size()) * (21.0 if mobile else 22.0))
-	if mobile:
+	values.custom_minimum_size.y = maxf(15.0 if portmaster else 20.0, float(offer_value_lines.size()) * (13.0 if portmaster else (21.0 if mobile else 22.0)))
+	if portmaster:
+		values.add_theme_font_size_override("font_size", 11)
+	elif mobile:
 		values.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 17.0)))
 	stack.add_child(values)
 
@@ -1630,29 +1883,40 @@ func _make_offer_card(index: int, offer: Variant) -> Control:
 	var price_text := I18n.t("SHOP_PURCHASED", "SATIN ALINDI") if is_purchased else ("%d " % price + I18n.t("SHOP_TOKENS", "stok jetonu") if price >= 0 else "---")
 	var price_label := _label(price_text, 20, TEAL if is_purchased else (GOLD if price >= 0 else MUTED))
 	price_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if portmaster:
+		price_label.add_theme_font_size_override("font_size", 13)
 	if mobile:
 		price_label.add_theme_font_size_override("font_size", roundi(_mobile_shop_font(viewport_size, 21.0)))
 	stack.add_child(price_label)
 
 	var actions := VBoxContainer.new()
-	actions.add_theme_constant_override("separation", roundi(5.0 * layout_scale) if mobile else 6)
+	actions.add_theme_constant_override("separation", 3 if portmaster else (roundi(5.0 * layout_scale) if mobile else 6))
 	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.add_child(actions)
 	var secondary_actions := HBoxContainer.new()
 	secondary_actions.add_theme_constant_override("separation", 6)
 	actions.add_child(secondary_actions)
 	var details_button := _button(I18n.t("SHOP_DETAILS", "DETAYLAR"), false)
+	details_button.name = "OfferDetailsButton"
 	details_button.custom_minimum_size.y = (54.0 if mobile and not portmaster else _touch_target_size(viewport_size)) if mobile else 38
+	if portmaster:
+		details_button.custom_minimum_size.y = 22
+		details_button.add_theme_font_size_override("font_size", 11)
 	details_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details_button.pressed.connect(_show_offer_detail.bind(offer, index))
 	secondary_actions.add_child(details_button)
 	var lock_button := _button(I18n.t("SHOP_LOCK", "KİLİTLE") if not _locked_indices.has(index) else I18n.t("SHOP_UNLOCK", "KİLİDİ AÇ"), false)
+	lock_button.name = "OfferLockButton"
 	lock_button.custom_minimum_size.y = details_button.custom_minimum_size.y
 	lock_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lock_button.pressed.connect(_on_offer_lock_pressed.bind(index))
 	secondary_actions.add_child(lock_button)
 	var buy_button := _button(purchase_text, true)
+	buy_button.name = "OfferBuyButton"
 	buy_button.custom_minimum_size.y = (54.0 if mobile and not portmaster else _touch_target_size(viewport_size)) if mobile else 48
+	if portmaster:
+		buy_button.custom_minimum_size.y = 26
+		buy_button.add_theme_font_size_override("font_size", 12)
 	buy_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if is_purchased:
 		buy_button.text = I18n.t("SHOP_PURCHASED", "SATIN ALINDI")
@@ -1709,6 +1973,20 @@ func _ui_text(turkish: String, english: String) -> String:
 	return turkish if I18n.current_locale == "tr" else english
 
 
+func _focus_outline_style(corner_radius: int = 2, border_width: int = 3, bg_color: Color = Color(1.0, 0.85, 0.2, 0.16)) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.draw_center = true
+	style.bg_color = bg_color
+	style.border_color = Color("ffd43b")
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(corner_radius)
+	style.expand_margin_left = 2
+	style.expand_margin_top = 2
+	style.expand_margin_right = 2
+	style.expand_margin_bottom = 2
+	return style
+
+
 func _button(text: String, primary: bool) -> Button:
 	var button := Button.new()
 	button.text = text
@@ -1716,17 +1994,100 @@ func _button(text: String, primary: bool) -> Button:
 	button.add_theme_font_size_override("font_size", _responsive_font_size(17))
 	button.add_theme_color_override("font_color", PANEL if primary else TEXT)
 	button.add_theme_color_override("font_hover_color", PANEL if primary else RED)
-	button.add_theme_color_override("font_focus_color", PANEL if primary else TEXT)
+	button.add_theme_color_override("font_focus_color", PANEL if primary else INK)
 	button.add_theme_color_override("font_pressed_color", PANEL)
 	button.add_theme_color_override("font_disabled_color", MUTED)
 	button.add_theme_stylebox_override("normal", _style(RED if primary else CARD, RED.darkened(0.2) if primary else PANEL_EDGE, 0, 1))
 	button.add_theme_stylebox_override("hover", _style(RED.lightened(0.1) if primary else Color("fffdf4"), GOLD, 0, 2))
 	button.add_theme_stylebox_override("pressed", _style(Color("d8e5d2"), TEAL, 0, 2))
 	button.add_theme_stylebox_override("disabled", _style(Color("ded9c7"), PANEL_EDGE, 0, 1))
-	button.add_theme_stylebox_override("focus", _style(Color.TRANSPARENT, TEAL, 0, 2))
+	button.add_theme_stylebox_override("focus", _focus_outline_style(2, 3, Color(1.0, 0.85, 0.2, 0.24) if primary else Color(1.0, 0.85, 0.2, 0.16)))
 	if display_font != null:
 		button.add_theme_font_override("font", display_font)
 	return button
+
+
+func _link_shop_focus() -> void:
+	if not is_instance_valid(_cards_row):
+		return
+	var card_actions: Array[Dictionary] = []
+	for card: Node in _cards_row.get_children():
+		var details := card.find_child("OfferDetailsButton", true, false) as Button
+		var lock := card.find_child("OfferLockButton", true, false) as Button
+		var buy := card.find_child("OfferBuyButton", true, false) as Button
+		if is_instance_valid(details) and is_instance_valid(lock) and is_instance_valid(buy):
+			card_actions.append({"details": details, "lock": lock, "buy": buy})
+
+	var weapon_buttons: Array[Button] = []
+	if is_instance_valid(_inventory_weapons_row):
+		for child: Node in _inventory_weapons_row.get_children():
+			if child is Button:
+				weapon_buttons.append(child as Button)
+
+	var first_weapon: Button = weapon_buttons[0] if not weapon_buttons.is_empty() else null
+
+	if not card_actions.is_empty():
+		var first_actions: Dictionary = card_actions[0]
+		var first_details: Button = first_actions["details"]
+		for index in range(card_actions.size()):
+			var actions: Dictionary = card_actions[index]
+			var previous: Dictionary = card_actions[maxi(0, index - 1)]
+			var next: Dictionary = card_actions[mini(card_actions.size() - 1, index + 1)]
+			var details: Button = actions["details"]
+			var lock: Button = actions["lock"]
+			var buy: Button = actions["buy"]
+			var previous_details: Button = previous["details"]
+			var next_details: Button = next["details"]
+			var previous_lock: Button = previous["lock"]
+			var next_lock: Button = next["lock"]
+			var previous_buy: Button = previous["buy"]
+			var next_buy: Button = next["buy"]
+			details.focus_neighbor_left = previous_details.get_path()
+			details.focus_neighbor_right = lock.get_path()
+			details.focus_neighbor_up = _reroll_button.get_path() if is_instance_valid(_reroll_button) else details.get_path()
+			details.focus_neighbor_bottom = buy.get_path()
+			lock.focus_neighbor_left = details.get_path()
+			lock.focus_neighbor_right = next_details.get_path()
+			lock.focus_neighbor_up = _reroll_button.get_path() if is_instance_valid(_reroll_button) else lock.get_path()
+			lock.focus_neighbor_bottom = buy.get_path()
+			buy.focus_neighbor_left = previous_buy.get_path()
+			buy.focus_neighbor_right = next_buy.get_path()
+			buy.focus_neighbor_top = details.get_path()
+			if index == 0:
+				buy.focus_neighbor_bottom = _inventory_open_button.get_path() if is_instance_valid(_inventory_open_button) else (_continue_button.get_path() if is_instance_valid(_continue_button) else buy.get_path())
+			else:
+				var target_weapon: Button = weapon_buttons[mini(index - 1, weapon_buttons.size() - 1)] if not weapon_buttons.is_empty() else null
+				buy.focus_neighbor_bottom = target_weapon.get_path() if is_instance_valid(target_weapon) else (_continue_button.get_path() if is_instance_valid(_continue_button) else buy.get_path())
+
+		if is_instance_valid(_reroll_button):
+			_reroll_button.focus_neighbor_bottom = first_details.get_path()
+			_reroll_button.focus_neighbor_left = _reroll_button.get_path()
+			_reroll_button.focus_neighbor_right = _reroll_button.get_path()
+
+	if is_instance_valid(_inventory_open_button):
+		if not card_actions.is_empty():
+			_inventory_open_button.focus_neighbor_top = (card_actions[0]["buy"] as Button).get_path()
+		_inventory_open_button.focus_neighbor_bottom = _continue_button.get_path() if is_instance_valid(_continue_button) else _inventory_open_button.get_path()
+		_inventory_open_button.focus_neighbor_left = _inventory_open_button.get_path()
+		_inventory_open_button.focus_neighbor_right = first_weapon.get_path() if is_instance_valid(first_weapon) else (_continue_button.get_path() if is_instance_valid(_continue_button) else _inventory_open_button.get_path())
+
+	for w_idx in range(weapon_buttons.size()):
+		var w_btn: Button = weapon_buttons[w_idx]
+		w_btn.focus_neighbor_top = (card_actions[mini(w_idx + 1, card_actions.size() - 1)]["buy"] as Button).get_path() if not card_actions.is_empty() else w_btn.get_path()
+		w_btn.focus_neighbor_bottom = _continue_button.get_path() if is_instance_valid(_continue_button) else w_btn.get_path()
+		if w_idx == 0:
+			w_btn.focus_neighbor_left = _inventory_open_button.get_path() if is_instance_valid(_inventory_open_button) else w_btn.get_path()
+		else:
+			w_btn.focus_neighbor_left = weapon_buttons[w_idx - 1].get_path()
+		if w_idx < weapon_buttons.size() - 1:
+			w_btn.focus_neighbor_right = weapon_buttons[w_idx + 1].get_path()
+		else:
+			w_btn.focus_neighbor_right = w_btn.get_path()
+
+	if is_instance_valid(_continue_button):
+		_continue_button.focus_neighbor_top = _inventory_open_button.get_path() if is_instance_valid(_inventory_open_button) else (_continue_button.get_path())
+		_continue_button.focus_neighbor_left = _inventory_open_button.get_path() if is_instance_valid(_inventory_open_button) else _continue_button.get_path()
+		_continue_button.focus_neighbor_right = first_weapon.get_path() if is_instance_valid(first_weapon) else _continue_button.get_path()
 
 
 func _label(text: String, size: int, color: Color) -> Label:

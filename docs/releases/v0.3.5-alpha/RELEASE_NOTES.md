@@ -23,14 +23,3 @@ Platforms: Windows x86_64, Linux x86_64, Android 8+, and PortMaster (aarch64).
 ### Launcher & PortMaster Standard Compliance
 - Updated `Supermarket The Night.sh` launcher script according to PortMaster upstream packaging guidelines, removing redundant control checks and using standard runtime bindings.
 - Switched to official `gptokeyb2` `.ini` format and added upstream license files for `gptokeyb2` and `inih`.
-
-## Previous release changes (v0.3.4-alpha)
-- Shop offers now use the full available landscape height without putting offer-card text in a broken scroll view.
-- Android shop details and inventory panels use wider layouts with explicit label/value columns, readable wrapping, working touch close actions, and touch swipe scrolling.
-- Reduced oversized Android shop action buttons so more offer content stays visible.
-
-## PortMaster Testing Package
-- **Package Archive:** `supermarketthenight.zip` (available on Google Drive testing link).
-- **Runtimes:** Requires PortMaster's Godot 4.7.1 and Westonpack 0.2 squashfs runtimes.
-
-This is an alpha build. Save data and balance may change before the first stable release.

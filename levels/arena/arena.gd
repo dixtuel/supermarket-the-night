@@ -539,43 +539,22 @@ func _migrate_enemies_between_rooms(source_room_id: StringName, target_room_id: 
 	if source_room_id == target_room_id or not is_instance_valid(_player):
 		return
 	var candidates: Array[EnemyActor] = []
-	for actor: Node in _actor_layer.get_children():
+	for actor: Node in get_tree().get_nodes_in_group(&"enemies"):
 		if (
 			actor is EnemyActor
+			and not actor.is_queued_for_deletion()
 			and actor.has_meta("room_id")
 			and StringName(actor.get_meta("room_id")) == source_room_id
 		):
 			candidates.append(actor as EnemyActor)
 	if candidates.is_empty():
 		return
-	var progress := clampf(
-		float(_round_number - 1) * 0.006 + float(_player.current_level - 1) * 0.003, 0.0, 0.18
-	)
 	var weighted_candidates: Array[Dictionary] = []
 	for enemy: EnemyActor in candidates:
 		var definition := enemy.get_definition()
-		if definition == null or definition.role == EnemyDefinition.Role.BOSS:
+		if definition == null or definition.room_pursuit_weight <= 0.0:
 			continue
-		var weight := 0.0
-		match definition.role:
-			EnemyDefinition.Role.CHASER:
-				weight = 0.52
-			EnemyDefinition.Role.CHARGER:
-				weight = 0.36
-			EnemyDefinition.Role.RANGED:
-				weight = 0.16
-			EnemyDefinition.Role.AREA_DENIAL:
-				weight = 0.08
-		var enemy_id := String(definition.id)
-		if (
-			enemy_id.contains("runner")
-			or enemy_id.contains("sprinter")
-			or enemy_id.contains("pusher")
-		):
-			weight += 0.08
-		weight = clampf(weight + progress, 0.0, 0.72)
-		if weight > 0.0:
-			weighted_candidates.append({"enemy": enemy, "weight": weight})
+		weighted_candidates.append({"enemy": enemy, "weight": definition.room_pursuit_weight})
 	if weighted_candidates.is_empty():
 		return
 	var seed_value := (
@@ -585,11 +564,31 @@ func _migrate_enemies_between_rooms(source_room_id: StringName, target_room_id: 
 		^ (_player.current_level * 73856093)
 	)
 	_room_migration_rng.seed = maxi(1, absi(seed_value))
-	var available_slots := maxi(0, _current_max_alive() - _alive_enemy_count())
-	var population_cap := maxi(1, floori(float(maxi(1, candidates.size() - 1)) * 0.5))
-	var max_migrants := mini(available_slots, mini(2, population_cap))
+	var target_room_slots := maxi(
+		0, _current_max_alive() - _room_enemy_count(target_room_id)
+	)
+	if target_room_slots == 0:
+		return
+	# Keep one pursuer when possible; higher wave/level/difficulty and larger
+	# source crowds add followers without exceeding the target room's live cap.
+	var pressure := clampf(
+		0.18
+		+ minf(0.14, float(_round_number - 1) * 0.007)
+		+ minf(0.05, float(_player.current_level - 1) * 0.002)
+		+ minf(0.06, float(_difficulty_level) * 0.015),
+		0.18,
+		0.38
+	)
+	var progression_cap := (
+		1 + floori(float(_round_number - 1) / 7.0) + floori(float(_player.current_level - 1) / 12.0)
+	)
+	var max_migrants := clampi(progression_cap, 1, 4)
+	var desired_migrants := mini(
+		target_room_slots,
+		mini(max_migrants, maxi(1, ceili(float(weighted_candidates.size()) * pressure)))
+	)
 	var migrated: Array[EnemyActor] = []
-	while not weighted_candidates.is_empty() and migrated.size() < max_migrants:
+	while not weighted_candidates.is_empty() and migrated.size() < desired_migrants:
 		var total_weight := 0.0
 		for entry: Dictionary in weighted_candidates:
 			total_weight += float(entry["weight"])
@@ -601,12 +600,6 @@ func _migrate_enemies_between_rooms(source_room_id: StringName, target_room_id: 
 				selected_index = index
 				break
 		var selected: Dictionary = weighted_candidates.pop_at(selected_index)
-		if migrated.is_empty() and weighted_candidates.size() > 0:
-			# With a crowd, one eligible pursuer follows while the cap guarantees the
-			# remaining actors stay behind. A lone candidate still gets a real chance.
-			pass
-		elif _room_migration_rng.randf() > float(selected["weight"]):
-			break
 		migrated.append(selected["enemy"] as EnemyActor)
 	for enemy: EnemyActor in migrated:
 		var spawn_point := _room_migration_spawn_point()
@@ -1726,9 +1719,8 @@ func _on_enemy_defeated(definition: EnemyDefinition, death_position: Vector2) ->
 	if _is_difficulty_elite(definition):
 		_hud.set_phase_name("ELITE DEFEATED")
 		_hud.hide_boss_health()
-		# Campaign elites guarantee a Legendary crate in Brotato. This project
-		# maps it to a free Tier IV pick plus a 100 HP pickup. Endless changes elite
-		# drops to ordinary, non-guaranteed crates, so grant no guaranteed choice.
+		# Campaign elites grant a free Tier IV pick plus a 100 HP pickup. Endless
+		# changes elite drops to ordinary, non-guaranteed crates.
 		if _round_number <= CAMPAIGN_WAVE_COUNT:
 			_pending_elite_crates += 1
 			_spawn_consumable(
@@ -3040,8 +3032,8 @@ func _inflated_shop_price(base_price: int) -> int:
 			float(base_price) + endless_wave + float(base_price) * endless_wave * 0.1
 		)
 		return maxi(1, floori(endless_base_price * _endless_price_factor()))
-	# Brotato's reference depends on base price, wave and price modifiers.
-	# This project's lower token scale uses a softer, still wave-linked curve.
+	# The price curve scales with base price, wave and active price modifiers.
+	# The lower token scale uses a softer, still wave-linked curve.
 	var wave := _shop_economy_wave()
 	var inflation := floori(float(wave) * (0.70 + float(base_price) * 0.05))
 	var endless_factor := _endless_price_factor()
@@ -3243,6 +3235,11 @@ func _on_shop_continue_requested() -> void:
 	if _state != RunState.SHOP:
 		return
 	_shop.visible = false
+	# Shop buttons live on an always-processing CanvasLayer while the arena is
+	# paused. Release their GUI focus before unpausing so controller navigation
+	# cannot remain attached to a now-hidden control in the next wave.
+	_hud.hide_overlay()
+	get_viewport().gui_release_focus()
 	_round_number += 1
 	_round_elapsed = 0.0
 	_health_regen_elapsed = 0.0
@@ -3419,10 +3416,21 @@ func _weapon_names() -> PackedStringArray:
 
 func _alive_enemy_count() -> int:
 	var count := 0
-	for actor: Node in _actor_layer.get_children():
+	# Enemies remain stored in inactive rooms; count them globally so room hopping
+	# cannot multiply a wave's authored max_alive budget.
+	for actor: Node in get_tree().get_nodes_in_group(&"enemies"):
+		if actor is EnemyActor and not actor.is_queued_for_deletion():
+			count += 1
+	return count
+
+
+func _room_enemy_count(room_id: StringName) -> int:
+	var count := 0
+	for actor: Node in get_tree().get_nodes_in_group(&"enemies"):
 		if (
 			actor is EnemyActor
-			and StringName(actor.get_meta("room_id", &"market")) == _current_room_id
+			and not actor.is_queued_for_deletion()
+			and StringName(actor.get_meta("room_id", &"market")) == room_id
 		):
 			count += 1
 	return count

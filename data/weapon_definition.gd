@@ -33,7 +33,7 @@ enum WeaponClass { BLADE, GUN, ELEMENTAL, HEAVY, TOOL, SUPPORT }
 @export var damage_type: DamageType = DamageType.PHYSICAL
 ## Set-bonus family. This is separate from the damage stat used by this weapon.
 @export var weapon_class: WeaponClass = WeaponClass.GUN
-## Brotato-style flat stat scaling; structures use Engineering separately.
+## Flat stat scaling; structures use Engineering separately.
 @export var damage_scaling_stat: DamageScalingStat = DamageScalingStat.RANGED
 @export_range(0.0, 2.0, 0.05) var damage_scaling_coefficient: float = 0.5
 ## Some elemental weapons scale only from Elemental Damage and ignore weapon-damage upgrades.

@@ -22,14 +22,14 @@
     "rtr": true,
     "exp": false,
     "runtime": [
-      "godot_4.7.1.squashfs",
-      "weston_pkg_0.2.squashfs"
+      "weston_pkg_0.2.squashfs",
+      "godot_4.7.1.squashfs"
     ],
     "store": [
       {
         "name": "itch.io",
         "gameurl": "https://dixtuel.itch.io/supermarket-the-night",
-        "developerurl": ""
+        "developerurl": "https://dixtuel.itch.io"
       }
     ],
     "availability": "full",

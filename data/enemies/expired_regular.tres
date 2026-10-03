@@ -22,3 +22,4 @@ xp_reward = 1
 attack_type = 0
 attack_interval = 1.1
 spawn_weight = 1.0
+room_pursuit_weight = 0.72

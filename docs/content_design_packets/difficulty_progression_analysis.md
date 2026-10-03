@@ -2,9 +2,9 @@
 
 ## Sources and limits
 
-This pass uses the repository wiki snapshot (`research/brotato/wiki_inventory.json`), its scope/freshness notes (`research/brotato/COVERAGE.md` and `capture_reconciliation.json`), and a live cross-check of the current Danger Levels, Elite and Horde Waves, Materials, Shop, Enemies, and Endless Mode pages. The checkout contains normalized JSON tables, not the separate raw `.txt` exports mentioned in earlier notes. The wiki is community-maintained, so version-dependent values below are tied to the cited pages and their current revisions.
+This pass uses the locally collected wiki tables and their scope/freshness notes, with a cross-check of the current Danger Levels, Elite and Horde Waves, Materials, Shop, Enemies, and Endless Mode pages. The collection contains normalized JSON tables, not the separate raw `.txt` exports mentioned in earlier notes. The wiki is community-maintained, so version-dependent values below are tied to the captured page revisions.
 
-Sources: [Danger Levels](https://brotato.wiki.spellsandguns.com/Danger_Levels), [Elite and Horde Waves](https://brotato.wiki.spellsandguns.com/Elite_and_Horde_Waves), [Materials](https://brotato.wiki.spellsandguns.com/Materials), [Shop](https://brotato.wiki.spellsandguns.com/Shop), [Enemies](https://brotato.wiki.spellsandguns.com/Enemies), [Endless Mode](https://brotato.wiki.spellsandguns.com/Endless_Mode).
+Source pages reviewed: Danger Levels, Elite and Horde Waves, Materials, Shop, Enemies, and Endless Mode.
 
 ## What the reference difficulty system changes
 
@@ -14,7 +14,7 @@ Each Danger level inherits the previous level’s mechanics. The health and dama
 |---|---|---:|---|
 | Danger 0 | No difficulty modifiers | 0% | — |
 | Danger 1 | New enemies appear | 0% | — |
-| Danger 2 | One elite or horde wave, on wave 11 or 12; new enemies | 0% | Elites on wave 11–12 have 75% health and drop a high-value crate in Brotato |
+| Danger 2 | One elite or horde wave, on wave 11 or 12; new enemies | 0% | Elites on wave 11–12 have 75% health and drop a high-value crate |
 | Danger 3 | Danger 2 plus stronger enemies | +12% | — |
 | Danger 4 | Three elite/horde waves distributed across 11–18 | +26% | First two may be hordes (40%) or elites (60%); third is guaranteed elite on 17 or 18 |
 | Danger 5 | Danger 4 plus two wave-20 bosses | +40% | Each final boss has 75% of its usual health |
@@ -42,11 +42,11 @@ This project has authored immutable `WaveDefinition` resources (campaign: `data/
 | 5 — Closing Time | Adds the Night Shift Supervisor to the enemy mix; total enemy health and damage ×1.40; same three challenge windows; two wave-20 bosses at 75% normal health. | The DNZ Manager remains character-specific and is not duplicated as an immortal boss. |
 | 6 — Nightmare | Inherits Closing Time; enemy health and damage ×1.60, movement speed ×1.10, low-opacity fog, and periodic environmental shots that travel toward the player. | Fog remains faint for readability; the game has no accessibility sliders in this pass. |
 
-Project-side roster tuning, which is not a Brotato value: each unlocked added archetype enters from `max(3, 9 - tier)` and receives a 3.5% spawn weight on eligible rounds; the remaining authored weights are normalized to 96.5%. Horde waves multiply the authored planned count by 1.6, the live-enemy cap by 1.5 (bounded by the game's 54-enemy cap), and divide spawn interval by 1.6 (bounded at 0.35 seconds). The 1.6 factor is the project's density setting for a fixed 60-second round; it is not claimed to be the source game's exact Horde count.
+Project-side roster tuning: each unlocked added archetype enters from `max(3, 9 - tier)` and receives a 3.5% spawn weight on eligible rounds; the remaining authored weights are normalized to 96.5%. Horde waves multiply the authored planned count by 1.6, the live-enemy cap by 1.5 (bounded by the game's 54-enemy cap), and divide spawn interval by 1.6 (bounded at 0.35 seconds). The 1.6 factor is the project's density setting for a fixed 60-second round; it is not claimed to match the source game's exact Horde count.
 
 Challenge-wave rounds and campaign Elite choices are rolled once per run, saved, and shown before the wave. Endless challenge rounds are rolled once per 10-wave block and saved; Endless Elites may repeat, as the reference allows. Every wave is duplicated before its changes. Horde converts this game's fixed-duration spawn budget and cadence into a denser encounter, and the exact 0.65 material-drop chance factor is applied independently of the existing custom token reward scale. Existing three elite `.tres` definitions supply the encounter behaviors; their authored HP/damage growth remains in effect. The Endless Factor is applied to enemy HP, damage, speed, material-drop chance, item prices, and reroll costs. Endless boss rounds also spawn the reference-counted extra Elites. The code is in `levels/arena/arena.gd`; tier values are in `data/difficulty_catalog.gd`.
 
-The direct player-side systems do not have Brotato's rarity tables. Campaign difficulty does not add shop inflation or modify weapon damage, player stats, or upgrade effects; the wiki likewise lists no current Danger modifiers for these. The project's existing wave/level progression remains authoritative. Endless shop prices and reroll costs do change with the Endless Factor, as in the Endless reference, while offer rarity remains on the existing project progression.
+The direct player-side systems use their own rarity tables. Campaign difficulty does not add shop inflation or modify weapon damage, player stats, or upgrade effects; the reviewed wiki pages likewise list no current Danger modifiers for these. The project's existing wave/level progression remains authoritative. Endless shop prices and reroll costs do change with the Endless Factor, while offer rarity remains on the existing project progression.
 
 ## Unlock and selection flow
 

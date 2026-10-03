@@ -20,4 +20,5 @@ xp_reward = 2
 material_reward = 2
 attack_type = 0
 spawn_weight = 0.14
+room_pursuit_weight = 0.82
 sprite = ExtResource("2_sprite")

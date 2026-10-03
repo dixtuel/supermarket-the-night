@@ -833,8 +833,8 @@ func _effective_fire_interval(state: Dictionary) -> float:
 	var player_rate_bonus := 0.0
 	if is_instance_valid(_owner_actor) and _owner_actor.has_method("get_attack_speed_bonus"):
 		player_rate_bonus = float(_owner_actor.call("get_attack_speed_bonus"))
-	# Brotato's reference caps weapon rate at 12 hits per second. Use the same
-	# readable safety ceiling for handheld weapons and thrown beacon skills.
+	# Cap attack frequency at 12 hits per second to keep weapons and thrown
+	# beacon skills readable on handheld displays.
 	return maxf(1.0 / 12.0, float(state.get("fire_interval", fire_interval)) / ((1.0 + rate_bonus) * (1.0 + player_rate_bonus)))
 
 

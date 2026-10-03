@@ -1,6 +1,6 @@
 class_name DifficultyCatalog
 extends RefCounted
-## Difficulty profiles inspired by Brotato's cumulative Danger Levels.
+## Cumulative difficulty profiles for progressively harder shifts.
 ## The authored campaign economy and player upgrade values remain unchanged.
 
 const MAX_LEVEL := 6

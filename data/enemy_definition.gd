@@ -65,3 +65,6 @@ enum AttackType {
 @export_range(0.0, 30.0, 0.1) var zone_duration: float = 0.0
 @export_range(0.05, 1.0, 0.05) var zone_speed_multiplier: float = 1.0
 @export_range(0.0, 100.0, 0.05) var spawn_weight: float = 1.0
+## Relative priority for following the player through a room portal. Zero keeps
+## an enemy local to its room; positive values make it eligible to migrate.
+@export_range(0.0, 1.0, 0.05) var room_pursuit_weight: float = 0.0
