@@ -79,6 +79,7 @@ $GPTOKEYB2 "godot471" -c "$GAMEDIR/$ini_filename" &
 $ESUDO env CRUSTY_BLOCK_INPUT=1 $weston_dir/westonwrap.sh headless noop kiosk crusty_x11egl \
   LD_PRELOAD= XDG_DATA_HOME=$CONFDIR $godot_dir/$godot_executable \
   --resolution ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} -f \
+  --max-fps 60 \
   --rendering-driver opengl3_es --audio-driver ALSA --main-pack $GAMEDIR/$pck_filename
 
 # Clean up after ourselves

@@ -68,6 +68,9 @@ func _configure_portmaster_canvas() -> void:
 	root_window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	root_window.content_scale_size = logical_size
 
+	Engine.max_fps = 60
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+
 
 func get_resolution_label(index: int) -> String:
 	if index >= 0 and index < RESOLUTION_LABELS.size():
