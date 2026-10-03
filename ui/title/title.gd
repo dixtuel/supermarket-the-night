@@ -257,10 +257,13 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_active_modal):
 		var focus_owner := get_viewport().gui_get_focus_owner()
-		var on_action_buttons := is_instance_valid(focus_owner) and (
-			focus_owner == _difficulty_start_button or
-			focus_owner.text in ["BACK", "GERİ", "CHOOSE DIFFICULTY", "ZORLUK SEÇ", "START SHIFT", "VARDİYAYI BAŞLAT"]
-		)
+		var on_action_buttons: bool = false
+		if is_instance_valid(focus_owner):
+			if focus_owner == _difficulty_start_button:
+				on_action_buttons = true
+			elif focus_owner is Button:
+				var btn_text: String = (focus_owner as Button).text
+				on_action_buttons = btn_text in ["BACK", "GERİ", "CHOOSE DIFFICULTY", "ZORLUK SEÇ", "START SHIFT", "VARDİYAYI BAŞLAT"]
 		if _active_modal.has_meta("is_character_select") and not on_action_buttons:
 			if event.is_action_pressed("ui_left"):
 				_cycle_character(-1)
