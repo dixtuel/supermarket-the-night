@@ -26,6 +26,7 @@ I18n="*res://data/i18n.gd"
 DisplayManager="*res://data/display_manager.gd"
 RunSaveManager="*res://data/run_save_manager.gd"
 MobileLifecycle="*res://data/mobile_lifecycle.gd"
+PortMasterCursor="*res://ui/portmaster_cursor.gd"
 
 [display]
 

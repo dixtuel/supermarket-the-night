@@ -1,13 +1,13 @@
 extends Node
 ## Central Internationalization (I18n) Singleton.
-## Manages Turkish and English translations and persists language preference.
+## Manages English and Turkish translations and persists language preference.
 
 signal language_changed(new_locale: String)
 
 const SETTINGS_PATH := "user://settings.cfg"
-const DEFAULT_LOCALE := "tr"
+const DEFAULT_LOCALE := "en"
 
-var current_locale: String = "tr"
+var current_locale: String = "en"
 
 const TRANSLATIONS: Dictionary = {
 	"tr": {
